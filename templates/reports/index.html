@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Reports</h4>
+  <a href="{% url 'export_csv' %}" class="btn btn-sm btn-outline-success">
+    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export to CSV
+  </a>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-primary">{{ tickets_30_count }}</div>
+        <div class="text-muted small">Tickets (last 30 days)</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-success">{{ resolved_count }}</div>
+        <div class="text-muted small">Resolved (last 30 days)</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-danger">{{ breached_count }}</div>
+        <div class="text-muted small">SLA Breached (last 30 days)</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-info">{{ avg_resolution_hours|default:"—" }}{% if avg_resolution_hours %}h{% endif %}</div>
+        <div class="text-muted small">Avg. Resolution Time</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- By Status -->
+  <div class="col-12 col-md-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold small">By Status</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for row in by_status %}
+            <tr>
+              <td>{{ row.status|title|cut:"_" }}</td>
+              <td class="text-end fw-semibold">{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- By Assignee -->
+  <div class="col-12 col-md-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold small">Top Assignees (all time)</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for row in by_assignee %}
+            <tr>
+              <td>{{ row.assignee__display_name|default:row.assignee__email }}</td>
+              <td class="text-end fw-semibold">{{ row.count }}</td>
+            </tr>
+            {% empty %}
+            <tr><td class="text-muted">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

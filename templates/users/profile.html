@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white"><h5 class="mb-0"><i class="bi bi-person-circle me-2"></i>My Profile</h5></div>
+      <div class="card-body">
+        <dl class="row mb-4">
+          <dt class="col-sm-4">Name</dt><dd class="col-sm-8">{{ user.display_name|default:"—" }}</dd>
+          <dt class="col-sm-4">Email</dt><dd class="col-sm-8">{{ user.email }}</dd>
+          <dt class="col-sm-4">Role</dt><dd class="col-sm-8">{% if user.is_admin %}Admin{% else %}User{% endif %}</dd>
+          <dt class="col-sm-4">Last Sync</dt><dd class="col-sm-8">{{ user.last_sync|date:"d M Y H:i"|default:"—" }}</dd>
+        </dl>
+
+        <h6 class="fw-semibold">Email Notification Preferences</h6>
+        <form method="post">
+          {% csrf_token %}
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="notify_on_assign" id="notify_assign" {% if user.notify_on_assign %}checked{% endif %}>
+            <label class="form-check-label" for="notify_assign">Notify me when a ticket is assigned to me</label>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="notify_on_update" id="notify_update" {% if user.notify_on_update %}checked{% endif %}>
+            <label class="form-check-label" for="notify_update">Notify me when a ticket assigned to me is updated</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="notify_on_sla_breach" id="notify_sla" {% if user.notify_on_sla_breach %}checked{% endif %}>
+            <label class="form-check-label" for="notify_sla">Notify me of SLA warnings and breaches</label>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Save Preferences</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

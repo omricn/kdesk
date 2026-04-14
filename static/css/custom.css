@@ -1,0 +1,358 @@
+/* ── Kramer Brand — GT Eesti Fonts ───────────────────────────────────────────
+   Place your GT Eesti .woff2 files in /static/fonts/ and uncomment below.
+   Until then the UI falls back to system sans-serif.
+──────────────────────────────────────────────────────────────────────────── */
+/*
+@font-face {
+  font-family: 'GT Eesti Display Lt';
+  src: url('../fonts/GTEestiDisplay-Light.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'GT Eesti Display Md';
+  src: url('../fonts/GTEestiDisplay-Medium.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+*/
+
+/* ── Kramer Brand Variables ───────────────────────────────────────────────── */
+:root {
+  --kramer-purple:  #8200B4;
+  --kramer-mint:    #68FFC3;
+  --kramer-pink:    #BE0078;
+  --kramer-neutral: #DCDDDE;
+  --kramer-dark:    #1f1f1f;
+  --kramer-surface: #2c2c2c;
+  --kramer-surface2: #383838;
+  --kramer-border:  #484848;
+
+  --font-body:    'GT Eesti Display Lt', 'GT Eesti Display', system-ui, sans-serif;
+  --font-heading: 'GT Eesti Display Md', 'GT Eesti Display', system-ui, sans-serif;
+  --fs-body:      17px;
+  --fs-subhead:   23px;
+  --fs-title:     29px;
+
+  /* Override Bootstrap 5 color tokens */
+  --bs-primary:         #8200B4;
+  --bs-primary-rgb:     130,0,180;
+  --bs-success:         #68FFC3;
+  --bs-success-rgb:     104,255,195;
+  --bs-danger:          #BE0078;
+  --bs-danger-rgb:      190,0,120;
+  --bs-warning:         #f59e0b;
+  --bs-warning-rgb:     245,158,11;
+  --bs-info:            #8200B4;
+  --bs-info-rgb:        130,0,180;
+  --bs-body-bg:         #1f1f1f;
+  --bs-body-color:      #DCDDDE;
+  --bs-border-color:    #484848;
+  --bs-secondary-color: #DCDDDE;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+  background-color: var(--kramer-dark);
+  color: var(--kramer-neutral);
+}
+
+h1 {
+  font-family: var(--font-heading);
+  font-size: var(--fs-title);
+  line-height: 1.2;
+  color: var(--kramer-neutral);
+}
+
+h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-size: var(--fs-subhead);
+  line-height: 1.2;
+  color: var(--kramer-neutral);
+}
+
+a { color: var(--kramer-mint); }
+a:hover { color: #a0ffdb; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar {
+  background-color: #0a0a0a !important;
+  border-right: 1px solid var(--kramer-border);
+  width: 220px !important;
+}
+
+#sidebar .brand-title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-subhead);
+  color: var(--kramer-neutral);
+  letter-spacing: 0.04em;
+}
+
+#sidebar .nav-link {
+  color: #999 !important;
+  font-size: var(--fs-body);
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: background 0.15s, color 0.15s;
+}
+
+#sidebar .nav-link:hover {
+  background-color: rgba(130, 0, 180, 0.15) !important;
+  color: var(--kramer-neutral) !important;
+}
+
+#sidebar .nav-link.active {
+  background-color: rgba(130, 0, 180, 0.3) !important;
+  color: var(--kramer-mint) !important;
+  border-left: 3px solid var(--kramer-purple);
+}
+
+#sidebar hr { border-color: var(--kramer-border); }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.card {
+  background-color: var(--kramer-surface);
+  border: 1px solid var(--kramer-border) !important;
+  border-radius: 10px;
+  color: var(--kramer-neutral);
+  overflow: hidden;
+}
+
+.card-header {
+  background-color: var(--kramer-surface2) !important;
+  border-bottom: 1px solid var(--kramer-border);
+  color: var(--kramer-neutral);
+  font-family: var(--font-heading);
+  font-size: var(--fs-body);
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+}
+
+.card-footer {
+  background-color: var(--kramer-surface2) !important;
+  border-top: 1px solid var(--kramer-border);
+  color: #888;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.table {
+  color: var(--kramer-neutral);
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: rgba(255,255,255,0.02);
+  --bs-table-hover-bg: rgba(130, 0, 180, 0.08);
+  --bs-table-border-color: var(--kramer-border);
+  font-size: var(--fs-body);
+}
+
+.table-light {
+  --bs-table-bg: var(--kramer-surface2);
+  --bs-table-color: var(--kramer-neutral);
+  --bs-table-border-color: var(--kramer-border);
+}
+
+.table-danger {
+  --bs-table-bg: rgba(190, 0, 120, 0.12) !important;
+  --bs-table-color: var(--kramer-neutral) !important;
+}
+
+.table-warning {
+  --bs-table-bg: rgba(245, 158, 11, 0.1) !important;
+  --bs-table-color: var(--kramer-neutral) !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn-primary {
+  background-color: var(--kramer-purple);
+  border-color: var(--kramer-purple);
+  color: #fff;
+}
+.btn-primary:hover, .btn-primary:focus {
+  background-color: #9a00d6;
+  border-color: #9a00d6;
+  color: #fff;
+}
+
+.btn-outline-primary {
+  border-color: var(--kramer-purple);
+  color: var(--kramer-purple);
+}
+.btn-outline-primary:hover {
+  background-color: var(--kramer-purple);
+  color: #fff;
+}
+
+.btn-outline-secondary {
+  border-color: var(--kramer-border);
+  color: var(--kramer-neutral);
+}
+.btn-outline-secondary:hover {
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-border);
+  color: var(--kramer-neutral);
+}
+
+.btn-outline-success {
+  border-color: var(--kramer-mint);
+  color: var(--kramer-mint);
+}
+.btn-outline-success:hover {
+  background-color: var(--kramer-mint);
+  color: var(--kramer-dark);
+}
+
+.btn-outline-dark {
+  border-color: var(--kramer-border);
+  color: var(--kramer-neutral);
+  background-color: var(--kramer-surface);
+}
+.btn-outline-dark:hover {
+  background-color: var(--kramer-surface2);
+  color: var(--kramer-mint);
+  border-color: var(--kramer-purple);
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge {
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+/* Status badges */
+.badge.bg-primary   { background-color: var(--kramer-purple) !important; color: #fff; }
+.badge.bg-info      { background-color: #1a4a6e !important; color: var(--kramer-neutral); }
+.badge.bg-warning   { background-color: #7a4d00 !important; color: var(--kramer-neutral); }
+.badge.bg-success   { background-color: rgba(104,255,195,0.15) !important; color: var(--kramer-mint); border: 1px solid rgba(104,255,195,0.3); }
+.badge.bg-secondary { background-color: var(--kramer-surface2) !important; color: #888; }
+.badge.bg-danger    { background-color: var(--kramer-pink) !important; color: #fff; }
+
+/* ── Forms ───────────────────────────────────────────────────────────────── */
+.form-control, .form-select {
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-border);
+  color: var(--kramer-neutral);
+  font-size: var(--fs-body);
+}
+
+.form-control:disabled, .form-select:disabled {
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-border);
+  color: #666;
+  opacity: 1;
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-purple);
+  color: var(--kramer-neutral);
+  box-shadow: 0 0 0 0.15rem rgba(130, 0, 180, 0.25);
+}
+
+.form-control::placeholder { color: #555; }
+.form-label { color: var(--kramer-neutral); font-size: var(--fs-body); }
+.form-text  { color: #666; }
+.form-check-input:checked { background-color: var(--kramer-purple); border-color: var(--kramer-purple); }
+
+/* ── Alerts ──────────────────────────────────────────────────────────────── */
+.alert-danger  { background-color: rgba(190,0,120,0.15); border-color: rgba(190,0,120,0.3); color: #f8b4d9; }
+.alert-success { background-color: rgba(104,255,195,0.1); border-color: rgba(104,255,195,0.2); color: var(--kramer-mint); }
+.alert-info    { background-color: rgba(130,0,180,0.15); border-color: rgba(130,0,180,0.3); color: #d7a8f0; }
+.alert-warning { background-color: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.2); color: #fcd34d; }
+
+/* ── Dropdowns ───────────────────────────────────────────────────────────── */
+.dropdown-menu {
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-border);
+}
+.dropdown-item { color: var(--kramer-neutral); font-size: var(--fs-body); }
+.dropdown-item:hover { background-color: rgba(130,0,180,0.2); color: var(--kramer-mint); }
+.dropdown-divider { border-color: var(--kramer-border); }
+
+/* ── Multi-select filter buttons (match form-select appearance) ────────────── */
+.filter-multi-btn {
+  font-size: var(--fs-body);
+  font-family: var(--font-body);
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-border);
+  color: var(--kramer-neutral);
+  padding: .25rem .5rem;
+}
+.filter-multi-btn:hover,
+.filter-multi-btn:focus,
+.filter-multi-btn.show {
+  background-color: var(--kramer-surface2);
+  border-color: var(--kramer-purple);
+  color: var(--kramer-neutral);
+  box-shadow: 0 0 0 0.15rem rgba(130, 0, 180, 0.25);
+}
+
+/* ── Stat cards ──────────────────────────────────────────────────────────── */
+.stat-card-value {
+  font-family: var(--font-heading);
+  font-size: 37px;
+  line-height: 1.1;
+}
+
+/* ── SLA progress bar ────────────────────────────────────────────────────── */
+.progress { background-color: var(--kramer-surface2); }
+.progress-bar.bg-success { background-color: var(--kramer-mint) !important; }
+.progress-bar.bg-warning { background-color: #f59e0b !important; }
+.progress-bar.bg-danger  { background-color: var(--kramer-pink) !important; }
+
+/* ── Table row alignment ─────────────────────────────────────────────────── */
+.table thead th {
+  height: 44px;
+  vertical-align: middle;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.table tbody td {
+  height: 52px;
+  vertical-align: middle;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ── Column filter row ───────────────────────────────────────────────────── */
+.col-filter-row th {
+  padding: 4px 6px;
+  height: auto;
+}
+.col-filter-row .form-control-sm {
+  font-size: 13px;
+  height: 28px;
+  padding: 2px 6px;
+}
+
+/* ── Description block ───────────────────────────────────────────────────── */
+.description-body {
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: var(--kramer-surface2) !important;
+  border-color: var(--kramer-border) !important;
+  color: var(--kramer-neutral);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+/* ── Breadcrumb ──────────────────────────────────────────────────────────── */
+.breadcrumb-item + .breadcrumb-item::before { color: #555; }
+.breadcrumb-item.active { color: #888; }
+
+/* ── Text utilities ──────────────────────────────────────────────────────── */
+.text-muted { color: #666 !important; }
+.text-dark  { color: var(--kramer-neutral) !important; }
+.bg-light   { background-color: var(--kramer-surface2) !important; }
+.bg-white   { background-color: var(--kramer-surface) !important; }
+.border     { border-color: var(--kramer-border) !important; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--kramer-dark); }
+::-webkit-scrollbar-thumb { background: var(--kramer-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--kramer-purple); }

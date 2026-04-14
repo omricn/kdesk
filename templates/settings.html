@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-gear me-2"></i>Settings</h4>
+
+<!-- Requester Notifications -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-bell me-1"></i>Requester Notifications</div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="notifications">
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" role="switch"
+               name="notify_requester_on_close" id="notify_close"
+               {% if notify_requester_on_close %}checked{% endif %}>
+        <label class="form-check-label" for="notify_close">
+          Send email to requester when their ticket is closed
+        </label>
+      </div>
+      <div class="text-muted small mb-3">
+        Confirmation emails on ticket creation are always sent and cannot be disabled here.
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </div>
+</div>
+
+<!-- Info -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white fw-semibold">System Info</div>
+  <div class="card-body small text-muted">
+    <p><strong>Service Desk Mailbox:</strong> {{ servicedesk_email }}</p>
+    <p class="mb-0">To manage users, SLA logs, and raw data use the <a href="/admin/" target="_blank">Admin Panel</a>.</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${DB_NAME:-kdesk}
+      POSTGRES_USER: ${DB_USER:-kdesk}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-kdesk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+
+  web:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/app/media
+      - ./static:/app/static
+      - ./templates:/app/templates
+      - ./kdesk:/app/kdesk
+      - ./tickets:/app/tickets
+      - ./users:/app/users
+      - ./tasks:/app/tasks
+      - ./integrations:/app/integrations
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn kdesk.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --log-level debug"
+
+  celery:
+    build: .
+    restart: always
+    volumes:
+      - media_data:/app/media
+      - ./kdesk:/app/kdesk
+      - ./tickets:/app/tickets
+      - ./users:/app/users
+      - ./tasks:/app/tasks
+      - ./integrations:/app/integrations
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    command: celery -A kdesk worker -l info -Q default
+
+  celery-beat:
+    build: .
+    restart: always
+    volumes:
+      - ./kdesk:/app/kdesk
+      - ./tasks:/app/tasks
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    command: celery -A kdesk beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:

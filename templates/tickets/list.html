@@ -1,0 +1,416 @@
+{% extends 'base.html' %}
+{% load ticket_tags %}
+
+{% block title %}Tickets{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-ticket-detailed me-2"></i>Tickets</h4>
+  <a href="{% url 'ticket_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Ticket
+  </a>
+</div>
+
+<!-- Filters -->
+<form id="filter-form" method="get" class="card border-0 shadow-sm mb-3" style="overflow:visible;">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <input type="text" name="q" class="form-control form-control-sm" placeholder="Search by #, subject, requester…" value="{{ current_filters.q }}">
+      </div>
+      <!-- Status multi-select -->
+      <div class="col-6 col-md-2">
+        <div class="dropdown w-100">
+          <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+            <span id="status-btn-label">{% if current_filters.status %}{{ current_filters.status|length }} Status{% if current_filters.status|length > 1 %}es{% endif %}{% else %}All Statuses{% endif %}</span>
+          </button>
+          <ul class="dropdown-menu shadow-sm p-1" style="min-width:210px;">
+            {% for val, label in status_choices %}
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
+                <input type="checkbox" name="status" value="{{ val }}" class="form-check-input flex-shrink-0 status-ck"
+                       {% if val in current_filters.status %}checked{% endif %}>
+                {{ label }}
+              </label>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      <!-- Assignee multi-select -->
+      <div class="col-6 col-md-2">
+        <div class="dropdown w-100">
+          <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+            <span id="assignee-btn-label">{% if current_filters.assignee %}{{ current_filters.assignee|length }} Assignee{% if current_filters.assignee|length > 1 %}s{% endif %}{% else %}All Assignees{% endif %}</span>
+          </button>
+          <ul class="dropdown-menu shadow-sm p-1" style="min-width:200px; max-height:280px; overflow-y:auto;">
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
+                <input type="checkbox" name="assignee" value="me" class="form-check-input flex-shrink-0 assignee-ck"
+                       {% if 'me' in current_filters.assignee %}checked{% endif %}>
+                Me
+              </label>
+            </li>
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
+                <input type="checkbox" name="assignee" value="unassigned" class="form-check-input flex-shrink-0 assignee-ck"
+                       {% if 'unassigned' in current_filters.assignee %}checked{% endif %}>
+                Unassigned
+              </label>
+            </li>
+            {% if admins %}<li><hr class="dropdown-divider my-1"></li>{% endif %}
+            {% for admin in admins %}
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
+                <input type="checkbox" name="assignee" value="{{ admin.pk }}" class="form-check-input flex-shrink-0 assignee-ck"
+                       {% if admin.pk|stringformat:'s' in current_filters.assignee %}checked{% endif %}>
+                {{ admin }}
+              </label>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      <!-- SLA multi-select -->
+      <div class="col-6 col-md-1">
+        <div class="dropdown w-100">
+          <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+            <span id="sla-btn-label">{% if current_filters.sla %}{% if current_filters.sla|length == 1 %}SLA: Breached{% else %}{{ current_filters.sla|length }} SLAs{% endif %}{% else %}SLA: All{% endif %}</span>
+          </button>
+          <ul class="dropdown-menu shadow-sm p-1" style="min-width:145px;">
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
+                <input type="checkbox" name="sla" value="breached" class="form-check-input flex-shrink-0 sla-ck"
+                       {% if 'breached' in current_filters.sla %}checked{% endif %}>
+                Breached
+              </label>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-funnel"></i> Filter</button>
+        <a href="{% url 'ticket_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- Bulk form wraps the action bar + table -->
+<form id="bulk-form" method="post" action="{% url 'ticket_bulk_action' %}">
+  {% csrf_token %}
+  <input type="hidden" name="action"      id="bulk-action-type">
+  <input type="hidden" name="assignee_id" id="bulk-assignee-id">
+  <input type="hidden" name="new_status"  id="bulk-new-status">
+
+  <!-- Bulk action bar (hidden until checkboxes selected) -->
+  <div id="bulk-bar" class="card border-0 shadow-sm mb-3 d-none" style="border-left: 3px solid var(--kramer-purple) !important;">
+    <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+      <span class="small fw-semibold" id="bulk-count-label">0 selected</span>
+      <div class="vr"></div>
+
+      <button type="button" class="btn btn-sm btn-danger" id="bulk-delete-btn">
+        <i class="bi bi-trash me-1"></i>Delete
+      </button>
+      <div class="vr"></div>
+
+      <div class="d-flex gap-1 align-items-center">
+        <select class="form-select form-select-sm" id="bulk-assignee-sel" style="width:160px;">
+          <option value="">— Unassign —</option>
+          {% for admin in admins %}
+            <option value="{{ admin.pk }}">{{ admin }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="bulk-assign-btn">Assign</button>
+      </div>
+      <div class="vr"></div>
+
+      <div class="d-flex gap-1 align-items-center">
+        <select class="form-select form-select-sm" id="bulk-status-sel" style="width:150px;">
+          <option value="">— Status —</option>
+          {% for val, label in status_choices %}
+            <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="bulk-status-btn">Change</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+          <thead class="table-light">
+            <tr>
+              <th style="width:36px;"><input type="checkbox" id="select-all" class="form-check-input"></th>
+              <th style="width:70px">#</th>
+              <th>Subject</th>
+              <th>Requester</th>
+              <th>Status</th>
+              <th>Assignee</th>
+              <th>Category</th>
+              <th>SLA</th>
+              <th>Created</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th></th>
+              <th><input type="text" name="col_id" form="filter-form" class="form-control form-control-sm" placeholder="#" value="{{ current_filters.col_id }}"></th>
+              <th><input type="text" name="col_subject" form="filter-form" class="form-control form-control-sm" placeholder="Filter subject…" value="{{ current_filters.col_subject }}"></th>
+              <th><input type="text" name="col_requester" form="filter-form" class="form-control form-control-sm" placeholder="Filter requester…" value="{{ current_filters.col_requester }}"></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tickets %}
+            <tr class="{{ t|sla_row_class }}">
+              <td><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
+              <td>
+                <a href="{% url 'ticket_detail' t.pk %}" class="fw-semibold text-decoration-none">
+                  #{{ t.pk|stringformat:"04d" }}
+                </a>
+              </td>
+              <td class="text-truncate" style="max-width:220px;">
+                <a href="{% url 'ticket_detail' t.pk %}" class="text-dark text-decoration-none">{{ t.title }}</a>
+                {% if t.source == 'email' %}<i class="bi bi-envelope text-muted ms-1" title="Created from email"></i>{% endif %}
+              </td>
+              <td class="text-truncate" style="max-width:140px;" title="{{ t.requester_email }}">
+                {{ t.requester_name|default:t.requester_email }}
+              </td>
+              <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
+              <td class="assignee-cell">{{ t.assignee|default:"—" }}</td>
+              <td class="cat-cell" style="min-width:130px;">
+                <span class="cat-label">
+                  {% if t.ticket_item %}{{ t.category.name }} / {{ t.subcategory.name }} / {{ t.ticket_item.name }}{% else %}<span class="text-muted">—</span>{% endif %}
+                </span>
+                <i class="bi bi-pencil-square cat-edit-btn ms-1 text-muted" style="cursor:pointer;font-size:12px;" title="Set category" data-pk="{{ t.pk }}" data-cat="{{ t.category_id|default:'' }}" data-sub="{{ t.subcategory_id|default:'' }}" data-item="{{ t.ticket_item_id|default:'' }}"></i>
+              </td>
+              <td>
+                {% if t.sla_deadline %}
+                  {% with s=t.sla_status %}
+                  <span class="badge {% if s == 'breached' %}bg-danger{% elif s == 'warning' %}bg-warning text-dark{% elif s == 'resolved' %}bg-secondary{% else %}bg-success{% endif %}" title="{{ t.sla_deadline }}">
+                    {% if s == 'breached' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% endif %}
+                    {{ t.sla_deadline|date:"d M H:i" }}
+                  </span>
+                  {% endwith %}
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-nowrap">{{ t.created_at|date:"d M Y" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-2 d-block mb-2"></i>No tickets found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer text-muted small">
+      {{ tickets|length }} ticket(s) found
+    </div>
+  </div>
+</form>
+
+<!-- Category modal -->
+<div class="modal fade" id="catModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <span class="modal-title small fw-semibold"><i class="bi bi-tag me-1"></i>Set Category</span>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-3">
+        <select id="catModal-cat" class="form-select form-select-sm mb-2">
+          <option value="">— Category —</option>
+        </select>
+        <select id="catModal-sub" class="form-select form-select-sm mb-2" disabled>
+          <option value="">— Sub-category —</option>
+        </select>
+        <select id="catModal-item" class="form-select form-select-sm" disabled>
+          <option value="">— Item —</option>
+        </select>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" id="catModal-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block extra_js %}
+<script>
+// ── Category modal ────────────────────────────────────────────────────────────
+const CAT_DATA = {{ categories_json|safe }};
+let _catModalTicketPk = null;
+
+function buildCatOptions(selectEl, items, placeholder) {
+  selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+  items.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.id;
+    opt.textContent = item.name;
+    selectEl.appendChild(opt);
+  });
+}
+
+const selCat  = document.getElementById('catModal-cat');
+const selSub  = document.getElementById('catModal-sub');
+const selItem = document.getElementById('catModal-item');
+
+buildCatOptions(selCat, CAT_DATA.categories, '— Category —');
+
+selCat.addEventListener('change', function() {
+  const catId = parseInt(this.value) || null;
+  buildCatOptions(selSub, catId ? CAT_DATA.subcategories.filter(s => s.cat_id === catId) : [], '— Sub-category —');
+  selSub.disabled = !catId;
+  buildCatOptions(selItem, [], '— Item —');
+  selItem.disabled = true;
+});
+
+selSub.addEventListener('change', function() {
+  const subId = parseInt(this.value) || null;
+  buildCatOptions(selItem, subId ? CAT_DATA.items.filter(i => i.sub_id === subId) : [], '— Item —');
+  selItem.disabled = !subId;
+});
+
+document.querySelectorAll('.cat-edit-btn').forEach(btn => {
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _catModalTicketPk = this.dataset.pk;
+    const catId  = parseInt(this.dataset.cat)  || null;
+    const subId  = parseInt(this.dataset.sub)  || null;
+    const itemId = parseInt(this.dataset.item) || null;
+    selCat.value = catId || '';
+    selCat.dispatchEvent(new Event('change'));
+    if (subId) {
+      selSub.value = subId;
+      selSub.dispatchEvent(new Event('change'));
+      if (itemId) selItem.value = itemId;
+    }
+    new bootstrap.Modal(document.getElementById('catModal')).show();
+  });
+});
+
+document.getElementById('catModal-save').addEventListener('click', function() {
+  if (!_catModalTicketPk) return;
+  const btn = this;
+  btn.disabled = true;
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fd.append('category',    selCat.value  || '');
+  fd.append('subcategory', selSub.value  || '');
+  fd.append('ticket_item', selItem.value || '');
+  fetch(`/tickets/${_catModalTicketPk}/categorize/`, {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        const editBtn = document.querySelector(`.cat-edit-btn[data-pk="${_catModalTicketPk}"]`);
+        if (editBtn) {
+          editBtn.dataset.cat  = selCat.value  || '';
+          editBtn.dataset.sub  = selSub.value  || '';
+          editBtn.dataset.item = selItem.value || '';
+          editBtn.closest('.cat-cell').querySelector('.cat-label').innerHTML =
+            data.label ? data.label : '<span class="text-muted">—</span>';
+          if (data.assignee) {
+            editBtn.closest('tr').querySelector('.assignee-cell').textContent = data.assignee;
+          }
+        }
+        bootstrap.Modal.getInstance(document.getElementById('catModal')).hide();
+      }
+    })
+    .finally(() => { btn.disabled = false; });
+});
+
+// ── Multi-select filter labels ────────────────────────────────────────────────
+function updateMultiLabel(cls, labelId, allText, singularText, pluralText) {
+  const checked = [...document.querySelectorAll('.' + cls + ':checked')];
+  const el = document.getElementById(labelId);
+  if (checked.length === 0) {
+    el.textContent = allText;
+  } else if (checked.length === 1) {
+    el.textContent = checked[0].closest('label').textContent.trim();
+  } else {
+    el.textContent = checked.length + ' ' + pluralText;
+  }
+}
+
+document.querySelectorAll('.status-ck').forEach(cb => {
+  cb.addEventListener('change', () => updateMultiLabel('status-ck', 'status-btn-label', 'All Statuses', 'Status', 'Statuses'));
+});
+document.querySelectorAll('.assignee-ck').forEach(cb => {
+  cb.addEventListener('change', () => updateMultiLabel('assignee-ck', 'assignee-btn-label', 'All Assignees', 'Assignee', 'Assignees'));
+});
+document.querySelectorAll('.sla-ck').forEach(cb => {
+  cb.addEventListener('change', function() {
+    const el = document.getElementById('sla-btn-label');
+    el.textContent = this.checked ? 'SLA: Breached' : 'SLA: All';
+  });
+});
+
+// ── Bulk selection ────────────────────────────────────────────────────────────
+const bulkBar       = document.getElementById('bulk-bar');
+const bulkCount     = document.getElementById('bulk-count-label');
+const selectAll     = document.getElementById('select-all');
+const rowChecks     = () => document.querySelectorAll('.row-check');
+
+function updateBulkBar() {
+  const checked = [...rowChecks()].filter(c => c.checked);
+  const n = checked.length;
+  if (n > 0) {
+    bulkBar.classList.remove('d-none');
+    bulkCount.textContent = `${n} ticket${n > 1 ? 's' : ''} selected`;
+  } else {
+    bulkBar.classList.add('d-none');
+  }
+  const total = rowChecks().length;
+  selectAll.indeterminate = n > 0 && n < total;
+  selectAll.checked = total > 0 && n === total;
+}
+
+selectAll.addEventListener('change', function() {
+  rowChecks().forEach(c => c.checked = this.checked);
+  updateBulkBar();
+});
+
+document.addEventListener('change', function(e) {
+  if (e.target.classList.contains('row-check')) updateBulkBar();
+});
+
+// Bulk action button handlers
+document.getElementById('bulk-delete-btn').addEventListener('click', function() {
+  const n = [...rowChecks()].filter(c => c.checked).length;
+  if (confirm(`Permanently delete ${n} ticket${n > 1 ? 's' : ''}? This cannot be undone.`)) {
+    document.getElementById('bulk-action-type').value = 'delete';
+    document.getElementById('bulk-form').submit();
+  }
+});
+
+document.getElementById('bulk-assign-btn').addEventListener('click', function() {
+  document.getElementById('bulk-action-type').value = 'assign';
+  document.getElementById('bulk-assignee-id').value = document.getElementById('bulk-assignee-sel').value;
+  document.getElementById('bulk-form').submit();
+});
+
+document.getElementById('bulk-status-btn').addEventListener('click', function() {
+  const status = document.getElementById('bulk-status-sel').value;
+  if (!status) { alert('Please select a status.'); return; }
+  document.getElementById('bulk-action-type').value = 'status';
+  document.getElementById('bulk-new-status').value = status;
+  document.getElementById('bulk-form').submit();
+});
+</script>
+{% endblock %}
+{% endblock %}

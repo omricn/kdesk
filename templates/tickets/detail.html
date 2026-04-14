@@ -1,0 +1,282 @@
+{% extends 'base.html' %}
+{% load ticket_tags %}
+
+{% block title %}#{{ ticket.pk|stringformat:"04d" }} {{ ticket.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'ticket_list' %}">Tickets</a></li>
+      <li class="breadcrumb-item active">#{{ ticket.pk|stringformat:"04d" }}</li>
+    </ol>
+  </nav>
+  {% with s=ticket.sla_status %}
+  {% if s == 'breached' %}
+    <span class="badge bg-danger fs-6"><i class="bi bi-exclamation-triangle-fill me-1"></i>SLA Breached</span>
+  {% elif s == 'warning' %}
+    <span class="badge bg-warning text-dark fs-6"><i class="bi bi-clock me-1"></i>SLA Warning</span>
+  {% endif %}
+  {% endwith %}
+</div>
+
+<div class="row g-4">
+
+  <!-- Left: ticket details + comments -->
+  <div class="col-12 col-lg-8">
+
+    <!-- Ticket header -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <h5 class="card-title mb-1">{{ ticket.title }}</h5>
+          <div class="d-flex gap-1 ms-2 flex-shrink-0">
+            <span class="badge {{ ticket.status|status_badge }}">{{ ticket.get_status_display }}</span>
+          </div>
+        </div>
+        <div class="text-muted small mb-3">
+          <i class="bi bi-person me-1"></i>{{ ticket.requester_name|default:ticket.requester_email }}
+          &nbsp;·&nbsp;
+          <i class="bi bi-envelope me-1"></i>{{ ticket.requester_email }}
+          &nbsp;·&nbsp;
+          <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
+          {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
+        </div>
+        <div class="description-body border rounded p-3 bg-light" style="white-space:pre-wrap;word-break:break-word;">{{ ticket.description|default:"(no description)" }}</div>
+      </div>
+    </div>
+
+    <!-- Attachments -->
+    {% if ticket.attachments.exists %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white small fw-semibold"><i class="bi bi-paperclip me-1"></i>Attachments</div>
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-2">
+          {% for att in ticket.attachments.all %}
+          <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Comments -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white fw-semibold small"><i class="bi bi-chat-left-text me-1"></i>Activity</div>
+      <div class="card-body p-0">
+        {% for comment in ticket.comments.all %}
+        <div class="p-3 border-bottom {% if comment.is_internal %}bg-warning bg-opacity-10{% endif %}">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="fw-semibold small">{{ comment.author|default:"System" }}</span>
+            <span class="text-muted small">
+              {{ comment.created_at|date:"d M Y H:i" }}
+              {% if comment.is_internal %}<span class="badge bg-warning text-dark ms-1">Internal</span>{% endif %}
+            </span>
+          </div>
+          <div style="white-space:pre-wrap;">{{ comment.body }}</div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-3 small">No comments yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Add comment form -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white fw-semibold small"><i class="bi bi-plus-circle me-1"></i>Add Comment</div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="comment">
+          {{ comment_form.body }}
+          <div class="form-check mt-2 mb-3">
+            {{ comment_form.is_internal }}
+            <label class="form-check-label small" for="{{ comment_form.is_internal.id_for_label }}">
+              {{ comment_form.is_internal.label }}
+            </label>
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary">Post Comment</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Upload attachment -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white fw-semibold small"><i class="bi bi-upload me-1"></i>Add Attachment</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="upload">
+          <div class="d-flex gap-2">
+            <input type="file" name="file" class="form-control form-control-sm">
+            <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Upload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Solution -->
+    <div class="card border-0 shadow-sm" id="solution-card">
+      <div class="card-header bg-white fw-semibold small">
+        <i class="bi bi-check-circle me-1"></i>Solution
+        <span id="solution-required-badge" class="badge bg-danger ms-2 d-none" style="font-size:11px;">Required to close</span>
+      </div>
+      <div class="card-body">
+        <textarea name="solution" id="id_solution" form="update-form"
+                  class="form-control" rows="5"
+                  placeholder="Describe how the ticket was resolved…">{{ ticket.solution }}</textarea>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right: edit panel -->
+  <div class="col-12 col-lg-4">
+    <div class="card border-0 shadow-sm position-sticky" style="top:1rem;">
+      <div class="card-header bg-white fw-semibold small"><i class="bi bi-pencil-square me-1"></i>Edit Ticket</div>
+      <div class="card-body">
+        <form method="post" id="update-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update">
+          {% if update_form.non_field_errors %}
+          <div class="alert alert-danger py-2 small mb-2">{{ update_form.non_field_errors }}</div>
+          {% endif %}
+          {% for field in update_form %}
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+          </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-primary btn-sm w-100 mt-1">Save Changes</button>
+        </form>
+        <hr>
+        <!-- Category -->
+        <div class="mb-3">
+          <div class="small fw-semibold mb-2"><i class="bi bi-tag me-1"></i>Category</div>
+          <select id="det-cat" class="form-select form-select-sm mb-1">
+            <option value="">— Category —</option>
+          </select>
+          <select id="det-sub" class="form-select form-select-sm mb-1" disabled>
+            <option value="">— Sub-category —</option>
+          </select>
+          <select id="det-item" class="form-select form-select-sm mb-2" disabled>
+            <option value="">— Item —</option>
+          </select>
+          <button class="btn btn-sm btn-outline-primary w-100" id="det-cat-save">Save Category</button>
+          <div id="det-cat-msg" class="small mt-1 text-success d-none">Saved.</div>
+        </div>
+        <hr>
+        <div class="small text-muted">
+          <div><strong>SLA Deadline:</strong>
+            {% if ticket.sla_deadline %}
+              {{ ticket.sla_deadline|date:"d M Y H:i" }}
+              <div class="progress mt-1" style="height:6px;" title="{{ ticket.sla_percent_elapsed }}% elapsed">
+                <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}"
+                     style="width:{{ ticket.sla_percent_elapsed|default:0 }}%"></div>
+              </div>
+            {% else %}—{% endif %}
+          </div>
+          <div class="mt-2"><strong>Last Updated:</strong> {{ ticket.updated_at|date:"d M Y H:i" }}</div>
+          {% if ticket.resolved_at %}
+          <div class="mt-1"><strong>Resolved:</strong> {{ ticket.resolved_at|date:"d M Y H:i" }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CAT_DATA = {{ categories_json|safe }};
+const TICKET_PK = {{ ticket.pk }};
+const INIT_CAT  = {{ ticket.category_id|default:'null' }};
+const INIT_SUB  = {{ ticket.subcategory_id|default:'null' }};
+const INIT_ITEM = {{ ticket.ticket_item_id|default:'null' }};
+
+function buildOpts(sel, items, placeholder) {
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  items.forEach(i => {
+    const o = document.createElement('option');
+    o.value = i.id; o.textContent = i.name;
+    sel.appendChild(o);
+  });
+}
+
+const dCat  = document.getElementById('det-cat');
+const dSub  = document.getElementById('det-sub');
+const dItem = document.getElementById('det-item');
+
+buildOpts(dCat, CAT_DATA.categories, '— Category —');
+
+dCat.addEventListener('change', function() {
+  const id = parseInt(this.value) || null;
+  buildOpts(dSub, id ? CAT_DATA.subcategories.filter(s => s.cat_id === id) : [], '— Sub-category —');
+  dSub.disabled = !id;
+  buildOpts(dItem, [], '— Item —');
+  dItem.disabled = true;
+});
+
+dSub.addEventListener('change', function() {
+  const id = parseInt(this.value) || null;
+  buildOpts(dItem, id ? CAT_DATA.items.filter(i => i.sub_id === id) : [], '— Item —');
+  dItem.disabled = !id;
+});
+
+if (INIT_CAT) {
+  dCat.value = INIT_CAT;
+  dCat.dispatchEvent(new Event('change'));
+  if (INIT_SUB) {
+    dSub.value = INIT_SUB;
+    dSub.dispatchEvent(new Event('change'));
+    if (INIT_ITEM) dItem.value = INIT_ITEM;
+  }
+}
+
+// ── Solution required when closing ───────────────────────────────────────────
+(function() {
+  const statusSel = document.querySelector('#update-form select[name="status"]');
+  const solutionTA = document.getElementById('id_solution');
+  const badge = document.getElementById('solution-required-badge');
+  const card = document.getElementById('solution-card');
+
+  function syncRequired() {
+    const closing = statusSel && statusSel.value === 'closed';
+    if (solutionTA) solutionTA.required = closing;
+    if (badge) badge.classList.toggle('d-none', !closing);
+    if (card) card.style.borderColor = closing ? 'var(--kramer-pink)' : '';
+    if (closing && solutionTA && !solutionTA.value.trim()) {
+      solutionTA.placeholder = 'Required — describe how the ticket was resolved…';
+    } else if (solutionTA) {
+      solutionTA.placeholder = 'Describe how the ticket was resolved…';
+    }
+  }
+
+  if (statusSel) {
+    statusSel.addEventListener('change', syncRequired);
+    syncRequired();
+  }
+})();
+
+document.getElementById('det-cat-save').addEventListener('click', function() {
+  const btn = this;
+  const msg = document.getElementById('det-cat-msg');
+  btn.disabled = true;
+  msg.classList.add('d-none');
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fd.append('category',    dCat.value  || '');
+  fd.append('subcategory', dSub.value  || '');
+  fd.append('ticket_item', dItem.value || '');
+  fetch(`/tickets/${TICKET_PK}/categorize/`, {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(data => { if (data.ok) { msg.classList.remove('d-none'); } })
+    .finally(() => { btn.disabled = false; });
+});
+</script>
+{% endblock %}
