@@ -15,11 +15,11 @@
 <form id="filter-form" method="get" class="card border-0 shadow-sm mb-3" style="overflow:visible;">
   <div class="card-body py-2">
     <div class="row g-2 align-items-end">
-      <div class="col-12 col-md-3">
+      <div class="col-3">
         <input type="text" name="q" class="form-control form-control-sm" placeholder="Search by #, subject, requester…" value="{{ current_filters.q }}">
       </div>
       <!-- Status multi-select -->
-      <div class="col-6 col-md-2">
+      <div class="col-2">
         <div class="dropdown w-100">
           <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
                   data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -39,7 +39,7 @@
         </div>
       </div>
       <!-- Assignee multi-select -->
-      <div class="col-6 col-md-2">
+      <div class="col-2">
         <div class="dropdown w-100">
           <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
                   data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -74,7 +74,7 @@
         </div>
       </div>
       <!-- SLA multi-select -->
-      <div class="col-6 col-md-1">
+      <div class="col-2">
         <div class="dropdown w-100">
           <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
                   data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -91,7 +91,7 @@
           </ul>
         </div>
       </div>
-      <div class="col-12 col-md-2 d-flex gap-1">
+      <div class="col-2 d-flex gap-1">
         <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-funnel"></i> Filter</button>
         <a href="{% url 'ticket_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
       </div>

@@ -58,6 +58,11 @@ body {
   line-height: 1.4;
   background-color: var(--kramer-dark);
   color: var(--kramer-neutral);
+  min-width: 1100px;
+}
+
+#wrapper {
+  min-width: 1100px;
 }
 
 h1 {

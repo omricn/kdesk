@@ -12,7 +12,7 @@
 
 <!-- Summary cards -->
 <div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
+  <div class="col-3">
     <div class="card border-0 shadow-sm text-center">
       <div class="card-body">
         <div class="fs-1 fw-bold text-primary">{{ tickets_30_count }}</div>
@@ -20,7 +20,7 @@
       </div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-3">
     <div class="card border-0 shadow-sm text-center">
       <div class="card-body">
         <div class="fs-1 fw-bold text-success">{{ resolved_count }}</div>
@@ -28,7 +28,7 @@
       </div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-3">
     <div class="card border-0 shadow-sm text-center">
       <div class="card-body">
         <div class="fs-1 fw-bold text-danger">{{ breached_count }}</div>
@@ -36,7 +36,7 @@
       </div>
     </div>
   </div>
-  <div class="col-6 col-md-3">
+  <div class="col-3">
     <div class="card border-0 shadow-sm text-center">
       <div class="card-body">
         <div class="fs-1 fw-bold text-info">{{ avg_resolution_hours|default:"—" }}{% if avg_resolution_hours %}h{% endif %}</div>
@@ -48,7 +48,7 @@
 
 <div class="row g-4">
   <!-- By Status -->
-  <div class="col-12 col-md-6">
+  <div class="col-6">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-white fw-semibold small">By Status</div>
       <div class="card-body p-0">
@@ -67,7 +67,7 @@
   </div>
 
   <!-- By Assignee -->
-  <div class="col-12 col-md-6">
+  <div class="col-6">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-white fw-semibold small">Top Assignees (all time)</div>
       <div class="card-body p-0">
