@@ -307,6 +307,11 @@ a:hover { color: #a0ffdb; }
 .progress-bar.bg-warning { background-color: #f59e0b !important; }
 .progress-bar.bg-danger  { background-color: var(--kramer-pink) !important; }
 
+/* ── Table cell text color ───────────────────────────────────────────────── */
+.table tbody td {
+  color: var(--kramer-neutral);
+}
+
 /* ── Table row alignment ─────────────────────────────────────────────────── */
 .table thead th {
   height: 44px;
