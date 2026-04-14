@@ -248,6 +248,110 @@ def _send_notification_email(to: str, subject: str, body: str):
         logger.error(f'[Notification] Failed to send email to {to}: {exc}')
 
 
+# ── Change Management notifications ──────────────────────────────────────────
+
+IT_MANAGER_EMAIL = 'rlisbon@kramerav.com'
+
+
+@shared_task(name='tasks.notify_change')
+def notify_change(change_pk: int, event: str):
+    """
+    Send email notifications for change lifecycle events.
+    event: 'submitted' | 'approved' | 'done'
+    """
+    from changes.models import Change
+    try:
+        change = Change.objects.select_related('submitted_by').get(pk=change_pk)
+    except Change.DoesNotExist:
+        return
+
+    submitter_email = change.submitted_by.email if change.submitted_by else None
+    submitter_name = (
+        change.submitted_by.display_name or change.submitted_by.email
+        if change.submitted_by else 'IT Team'
+    )
+    planned = change.planned_date.strftime('%Y-%m-%d %H:%M') if change.planned_date else 'N/A'
+
+    change_url = f'{settings.SITE_URL}/changes/{change.pk}/'
+
+    if event == 'submitted':
+        body = f"""
+        <p>A new change request has been submitted and is awaiting your approval:</p>
+        <ul>
+          <li><strong>Change:</strong> #{change.pk:04d} — {change.title}</li>
+          <li><strong>Risk Level:</strong> {change.get_risk_level_display()}</li>
+          <li><strong>Affected System:</strong> {change.affected_system_display}</li>
+          <li><strong>Planned Date:</strong> {planned}</li>
+          <li><strong>Submitted By:</strong> {submitter_name}</li>
+        </ul>
+        <p><a href="{change_url}" style="display:inline-block;padding:10px 20px;background:#8200B4;color:#fff;text-decoration:none;border-radius:6px;">Review &amp; Approve in Kdesk</a></p>
+        """
+        _send_notification_email(
+            to=IT_MANAGER_EMAIL,
+            subject=f'[Kdesk] Change Request Pending Approval — #{change.pk:04d}: {change.title}',
+            body=body,
+        )
+        if submitter_email:
+            _send_notification_email(
+                to=submitter_email,
+                subject=f'[Kdesk] Change Submitted — #{change.pk:04d}: {change.title}',
+                body=f"""
+                <p>Hello {submitter_name},</p>
+                <p>Your change request <strong>#{change.pk:04d}</strong> has been submitted and is now pending approval by the IT Manager.</p>
+                <ul>
+                  <li><strong>Title:</strong> {change.title}</li>
+                  <li><strong>Planned Date:</strong> {planned}</li>
+                </ul>
+                <p><a href="{change_url}">View change in Kdesk</a></p>
+                <p>You will be notified when it is approved.</p>
+                """,
+            )
+
+    elif event == 'approved':
+        if submitter_email:
+            _send_notification_email(
+                to=submitter_email,
+                subject=f'[Kdesk] Change Approved — #{change.pk:04d}: {change.title}',
+                body=f"""
+                <p>Hello {submitter_name},</p>
+                <p>Your change request <strong>#{change.pk:04d}</strong> has been <strong>approved</strong>.</p>
+                <ul>
+                  <li><strong>Title:</strong> {change.title}</li>
+                  <li><strong>Planned Date:</strong> {planned}</li>
+                </ul>
+                <p>You may now proceed with implementation.</p>
+                <p><a href="{change_url}">View change in Kdesk</a></p>
+                """,
+            )
+
+    elif event == 'done':
+        body = f"""
+        <p>The following change has been completed:</p>
+        <ul>
+          <li><strong>Change:</strong> #{change.pk:04d} — {change.title}</li>
+          <li><strong>Risk Level:</strong> {change.get_risk_level_display()}</li>
+          <li><strong>Affected System:</strong> {change.affected_system_display}</li>
+          <li><strong>Implemented By:</strong> {submitter_name}</li>
+        </ul>
+        """
+        _send_notification_email(
+            to=IT_MANAGER_EMAIL,
+            subject=f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}',
+            body=body,
+        )
+        if submitter_email:
+            _send_notification_email(
+                to=submitter_email,
+                subject=f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}',
+                body=f"""
+                <p>Hello {submitter_name},</p>
+                <p>Change <strong>#{change.pk:04d} — {change.title}</strong> has been marked as <strong>Done</strong>.</p>
+                """,
+            )
+
+    logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
+
+
 # ── Setup scheduled tasks in the DB ──────────────────────────────────────────
 
 def register_periodic_tasks():

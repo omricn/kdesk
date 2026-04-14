@@ -48,6 +48,11 @@
       </li>
       {% if user.is_admin %}
       <li>
+        <a href="{% url 'change_list' %}" class="nav-link {% if request.resolver_match.url_name in 'change_list,change_detail,change_create,change_edit' %}active{% endif %}">
+          <i class="bi bi-arrow-repeat me-2"></i>Changes
+        </a>
+      </li>
+      <li>
         <a href="{% url 'settings' %}" class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
           <i class="bi bi-gear me-2"></i>Settings
         </a>

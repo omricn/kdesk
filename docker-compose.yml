@@ -36,6 +36,7 @@ services:
       - ./users:/app/users
       - ./tasks:/app/tasks
       - ./integrations:/app/integrations
+      - ./changes:/app/changes
     env_file:
       - .env
     depends_on:
@@ -58,6 +59,7 @@ services:
       - ./users:/app/users
       - ./tasks:/app/tasks
       - ./integrations:/app/integrations
+      - ./changes:/app/changes
     env_file:
       - .env
     depends_on:

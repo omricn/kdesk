@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}#{{ change.pk|stringformat:"04d" }} {{ change.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'change_list' %}">Changes</a></li>
+      <li class="breadcrumb-item active">#{{ change.pk|stringformat:"04d" }}</li>
+    </ol>
+  </nav>
+  <span class="badge {{ change.status_badge_class }} fs-6">{{ change.get_status_display }}</span>
+</div>
+
+<div class="row g-4">
+
+  <!-- Left: details -->
+  <div class="col-8">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-info-circle me-1"></i>#{{ change.pk|stringformat:"04d" }} — {{ change.title }}</span>
+        {% if change.status == 'new' or change.status == 'pending_approval' %}
+        <a href="{% url 'change_edit' change.pk %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-4">Risk Level</dt>
+          <dd class="col-8"><span class="badge {{ change.risk_badge_class }}">{{ change.get_risk_level_display }}</span></dd>
+
+          <dt class="col-4">Affected System</dt>
+          <dd class="col-8">{{ change.affected_system_display }}</dd>
+
+          <dt class="col-4">Planned Date</dt>
+          <dd class="col-8">{{ change.planned_date|date:"d M Y H:i" }}</dd>
+
+          <dt class="col-4">Submitted By</dt>
+          <dd class="col-8">{{ change.submitted_by|default:"—" }}</dd>
+
+          <dt class="col-4">Created</dt>
+          <dd class="col-8">{{ change.created_at|date:"d M Y H:i" }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-card-text me-1"></i>Description</div>
+      <div class="card-body description-body">{{ change.description|linebreaksbr }}</div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-arrow-counterclockwise me-1"></i>Rollback Plan</div>
+      <div class="card-body description-body">{{ change.rollback_plan|linebreaksbr }}</div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-sticky me-1"></i>Notes</div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="notes">
+          <textarea name="notes" class="form-control mb-2" rows="3">{{ change.notes }}</textarea>
+          <button type="submit" class="btn btn-sm btn-outline-secondary">Save Notes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: workflow actions -->
+  <div class="col-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-diagram-3 me-1"></i>Workflow</div>
+      <div class="card-body d-grid gap-2">
+
+        <!-- Workflow steps indicator -->
+        {% for step_val, step_label in change.STATUS_CHOICES %}
+        <div class="d-flex align-items-center gap-2 py-1" style="font-size:14px;">
+          {% if change.status == step_val %}
+            <i class="bi bi-arrow-right-circle-fill" style="color:var(--kramer-mint);"></i>
+            <strong style="color:var(--kramer-mint);">{{ step_label }}</strong>
+          {% elif change.status == 'done' or change.STATUS_CHOICES|dictsortreversed:"0"|last != step_val %}
+            <i class="bi bi-check-circle text-muted"></i>
+            <span class="text-muted">{{ step_label }}</span>
+          {% else %}
+            <i class="bi bi-circle text-muted"></i>
+            <span class="text-muted">{{ step_label }}</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        <hr>
+
+        <!-- Action buttons -->
+        {% if change.status == 'new' %}
+        <form method="post" action="{% url 'change_transition' change.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="submit">
+          <button type="submit" class="btn btn-warning w-100">
+            <i class="bi bi-send me-1"></i>Submit for Approval
+          </button>
+        </form>
+        {% if can_cancel %}
+        <form method="post" action="{% url 'change_transition' change.pk %}"
+              onsubmit="return confirm('Cancel this change request? It will remain visible in the calendar.');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="cancel">
+          <button type="submit" class="btn btn-danger w-100">
+            <i class="bi bi-x-circle me-1"></i>Cancel Change Request
+          </button>
+        </form>
+        {% endif %}
+
+        {% elif change.status == 'pending_approval' %}
+        {% if is_manager %}
+        <form method="post" action="{% url 'change_transition' change.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="approve">
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-check-lg me-1"></i>Approve
+          </button>
+        </form>
+        {% else %}
+        <div class="alert alert-info py-2 mb-0 text-center" style="font-size:14px;">
+          <i class="bi bi-hourglass-split me-1"></i>Awaiting IT Manager approval
+        </div>
+        {% endif %}
+
+        {% elif change.status == 'approved' %}
+        <form method="post" action="{% url 'change_transition' change.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="start">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-play me-1"></i>Start Implementation
+          </button>
+        </form>
+
+        {% elif change.status == 'in_progress' %}
+        <form method="post" action="{% url 'change_transition' change.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="complete">
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-check2-all me-1"></i>Mark as Done
+          </button>
+        </form>
+
+        {% elif change.status == 'done' %}
+        <div class="alert alert-success py-2 mb-0 text-center" style="font-size:14px;">
+          <i class="bi bi-check2-circle me-1"></i>Completed
+        </div>
+        <form method="post" action="{% url 'change_transition' change.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="reopen">
+          <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mt-1">
+            <i class="bi bi-arrow-repeat me-1"></i>Reopen
+          </button>
+        </form>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

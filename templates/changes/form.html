@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }} Change{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">
+          <i class="bi bi-arrow-repeat me-2"></i>{{ action }} Change
+          {% if change %}— #{{ change.pk|stringformat:"04d" }}{% endif %}
+        </h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label">Title</label>
+            {{ form.title }}
+            {% if form.title.errors %}<div class="text-danger small mt-1">{{ form.title.errors }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            {{ form.description }}
+            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Risk Level</label>
+              {{ form.risk_level }}
+              {% if form.risk_level.errors %}<div class="text-danger small mt-1">{{ form.risk_level.errors }}</div>{% endif %}
+            </div>
+            <div class="col-6">
+              <label class="form-label">Planned Date &amp; Time</label>
+              {{ form.planned_date }}
+              {% if form.planned_date.errors %}<div class="text-danger small mt-1">{{ form.planned_date.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Affected System</label>
+              {{ form.affected_system }}
+              {% if form.affected_system.errors %}<div class="text-danger small mt-1">{{ form.affected_system.errors }}</div>{% endif %}
+            </div>
+            <div class="col-6" id="other-system-field" style="display:none;">
+              <label class="form-label">Specify System</label>
+              {{ form.affected_system_other }}
+              {% if form.affected_system_other.errors %}<div class="text-danger small mt-1">{{ form.affected_system_other.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Rollback Plan</label>
+            {{ form.rollback_plan }}
+            {% if form.rollback_plan.errors %}<div class="text-danger small mt-1">{{ form.rollback_plan.errors }}</div>{% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Notes <span class="text-muted">(optional)</span></label>
+            {{ form.notes }}
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>{{ action }}
+            </button>
+            <a href="{% if change %}{% url 'change_detail' change.pk %}{% else %}{% url 'change_list' %}{% endif %}"
+               class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var systemSelect = document.getElementById('id_affected_system');
+  var otherField   = document.getElementById('other-system-field');
+
+  function toggle() {
+    otherField.style.display = systemSelect.value === 'other' ? '' : 'none';
+  }
+
+  systemSelect.addEventListener('change', toggle);
+  toggle();  // run on page load (for edit mode)
+})();
+</script>
+{% endblock %}

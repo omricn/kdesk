@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'users',
     'tickets',
     'tasks',
+    'changes',
 ]
 
 MIDDLEWARE = [
@@ -127,6 +128,7 @@ EMAIL_POLL_INTERVAL = int(os.environ.get('EMAIL_POLL_INTERVAL', '5'))
 # For local dev: http://localhost:8000/auth/callback/
 # For production: http://your-server-ip:8000/auth/callback/
 AZURE_REDIRECT_URI = os.environ.get('AZURE_REDIRECT_URI', 'http://localhost:8000/auth/callback/')
+SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
 
 # Only members of this Entra group (looked up by email) are allowed to log in as admins
 ENTRA_ADMIN_GROUP_EMAIL = os.environ.get('ENTRA_ADMIN_GROUP_EMAIL', 'Global_OPS_IT@kramerav.com')
