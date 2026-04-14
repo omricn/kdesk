@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Sync to GitHub",
+      "type": "shell",
+      "command": "git add -A && git diff --cached --quiet && echo 'Nothing to commit.' || (git commit -m \"Update $(date '+%Y-%m-%d %H:%M')\" && git push && echo 'Pushed to GitHub.')",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}
