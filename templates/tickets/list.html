@@ -144,7 +144,7 @@
   <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small">
+        <table class="table align-middle mb-0 small">
           <thead class="table-light">
             <tr>
               <th style="width:36px;"><input type="checkbox" id="select-all" class="form-check-input"></th>
@@ -172,8 +172,8 @@
           </thead>
           <tbody>
             {% for t in tickets %}
-            <tr class="{{ t|sla_row_class }}">
-              <td><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
+            <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+              <td onclick="event.stopPropagation();"><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
               <td>
                 <a href="{% url 'ticket_detail' t.pk %}" class="fw-semibold text-decoration-none">
                   #{{ t.pk|stringformat:"04d" }}
@@ -251,6 +251,7 @@
 </div>
 
 {% block extra_js %}
+<span id="auto-refresh-enabled" hidden></span>
 <script>
 // ── Category modal ────────────────────────────────────────────────────────────
 const CAT_DATA = {{ categories_json|safe }};

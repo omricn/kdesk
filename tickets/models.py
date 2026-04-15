@@ -76,11 +76,30 @@ class Ticket(models.Model):
     # Resolution
     solution = models.TextField(blank=True, help_text='Required when closing a ticket.')
 
+    # Whether description contains HTML (email-sourced tickets)
+    description_is_html = models.BooleanField(default=False)
+
+    # AI-generated one-sentence summary (populated asynchronously after creation)
+    ai_summary = models.TextField(blank=True)
+
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return f'#{self.pk:04d} — {self.title}'
+
+    def save(self, *args, **kwargs):
+        # Auto-set SLA deadline for brand-new tickets that don't have one yet.
+        # Uses business hours (Sun–Thu, 08:00–17:00 Asia/Jerusalem).
+        if not self.pk and self.sla_deadline is None:
+            from tickets.sla import sla_deadline_for
+            self.sla_deadline = sla_deadline_for(timezone.now())
+        super().save(*args, **kwargs)
+
+    @property
+    def non_inline_attachments(self):
+        """Attachments that are not inline images (safe to show in the attachments panel)."""
+        return self.attachments.filter(is_inline=False)
 
     @property
     def is_overdue(self):
@@ -90,20 +109,23 @@ class Ticket(models.Model):
 
     @property
     def sla_percent_elapsed(self):
-        """Returns how much of the SLA window has been used (0-100+)."""
-        if not self.sla_deadline:
+        """Business hours consumed as a percentage of the 9-hour SLA target.
+        Frozen at the suspension timestamp when SLA is paused."""
+        if not self.sla_deadline or not self.created_at:
             return 0
-        total = (self.sla_deadline - self.created_at).total_seconds()
-        elapsed = (timezone.now() - self.created_at).total_seconds()
-        if total <= 0:
+        from tickets.sla import business_hours_elapsed, get_effective_now, SLA_HOURS
+        elapsed = business_hours_elapsed(self.created_at, get_effective_now())
+        if SLA_HOURS <= 0:
             return 100
-        return min(int((elapsed / total) * 100), 999)
+        return min(int((elapsed / SLA_HOURS) * 100), 999)
 
     @property
     def sla_status(self):
-        """Returns 'ok', 'warning' (>75%), or 'breached'."""
+        """Returns 'resolved', 'ok', 'warning' (≥75 %), or 'breached' (≥100 %)."""
         if self.status in self.TERMINAL_STATUSES:
             return 'resolved'
+        if not self.sla_deadline:
+            return 'ok'
         pct = self.sla_percent_elapsed
         if pct >= 100:
             return 'breached'
@@ -174,9 +196,30 @@ class TicketAttachment(models.Model):
     file = models.FileField(upload_to='attachments/%Y/%m/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     file_size = models.PositiveIntegerField(default=0)
+    content_id = models.CharField(max_length=500, blank=True)  # CID reference for inline images
+    is_inline = models.BooleanField(default=False)
 
     def __str__(self):
         return self.filename
+
+
+class TicketHistory(models.Model):
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='history')
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    field = models.CharField(max_length=100)
+    old_value = models.TextField(blank=True)
+    new_value = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f'#{self.ticket_id} {self.field}: {self.old_value} → {self.new_value}'
 
 
 class EmailLog(models.Model):

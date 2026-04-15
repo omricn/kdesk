@@ -75,14 +75,17 @@ def _create_ticket_from_message(msg, client, mailbox):
     subject = msg.get('subject', '(No Subject)').strip() or '(No Subject)'
 
     body_content = msg.get('body', {}).get('content', '')
-    # Strip any HTML if the body is HTML
-    if msg.get('body', {}).get('contentType', '').lower() == 'html':
-        body_content = _html_to_text(body_content)
+    content_type = msg.get('body', {}).get('contentType', '').lower()
+    is_html = content_type == 'html'
+
+    if is_html:
+        body_content = _sanitize_html(body_content)
 
     from tickets.views import _set_default_category
     ticket = Ticket(
         title=subject,
         description=body_content,
+        description_is_html=is_html,
         requester_email=requester_email,
         requester_name=requester_name,
         source=Ticket.SOURCE_EMAIL,
@@ -91,7 +94,8 @@ def _create_ticket_from_message(msg, client, mailbox):
     _set_default_category(ticket)
     ticket.save()
 
-    # Download attachments
+    # Download attachments; track inline CID → URL mapping for image resolution
+    cid_map = {}
     if msg.get('hasAttachments'):
         try:
             attachments = client.get_message_attachments(mailbox, msg['id'])
@@ -100,38 +104,67 @@ def _create_ticket_from_message(msg, client, mailbox):
                     continue
                 filename = att.get('name', 'attachment')
                 content_bytes = base64.b64decode(att.get('contentBytes', ''))
+                att_content_id = att.get('contentId', '')
+                att_is_inline = att.get('isInline', False)
                 with tempfile.NamedTemporaryFile(delete=False) as tmp:
                     tmp.write(content_bytes)
                     tmp_path = tmp.name
                 try:
                     with open(tmp_path, 'rb') as f:
-                        TicketAttachment.objects.create(
+                        ta = TicketAttachment.objects.create(
                             ticket=ticket,
                             filename=filename,
                             file=File(f, name=filename),
                             file_size=len(content_bytes),
+                            content_id=att_content_id,
+                            is_inline=att_is_inline,
                         )
+                    if att_content_id and att_is_inline:
+                        cid_map[att_content_id] = ta.file.url
                 finally:
                     os.unlink(tmp_path)
         except Exception as exc:
             logger.warning(f'[EmailPoller] Could not save attachments for ticket #{ticket.pk}: {exc}')
 
-    # Confirm receipt to the requester
+    # Replace cid: references in HTML body with actual served file URLs
+    if is_html and cid_map:
+        description = ticket.description
+        for cid, url in cid_map.items():
+            description = description.replace(f'cid:{cid}', url)
+        ticket.description = description
+        ticket.save(update_fields=['description'])
+
+    # Confirm receipt to the requester and generate AI summary
     try:
-        from tasks.scheduled import send_requester_created
+        from tasks.scheduled import send_requester_created, generate_ai_summary
         send_requester_created.delay(ticket.pk)
+        generate_ai_summary.delay(ticket.pk)
     except Exception as exc:
-        logger.warning(f'[EmailPoller] Could not queue requester confirmation: {exc}')
+        logger.warning(f'[EmailPoller] Could not queue post-create tasks: {exc}')
 
     logger.info(f'[EmailPoller] Created ticket #{ticket.pk} from email: {subject}')
     return ticket
 
 
-def _html_to_text(html: str) -> str:
-    """Very basic HTML-to-text stripping. Keeps it dependency-free."""
+def _sanitize_html(html: str) -> str:
+    """
+    Strip dangerous elements from email HTML, extract body content,
+    and preserve inline images and formatting.
+    """
     import re
-    text = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
-    text = re.sub(r'</p>', '\n\n', text, flags=re.IGNORECASE)
-    text = re.sub(r'<[^>]+>', '', text)
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-    return text.strip()
+    # Extract just the <body> content if this is a full HTML document
+    body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.DOTALL | re.IGNORECASE)
+    if body_match:
+        html = body_match.group(1)
+    # Remove script blocks
+    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove style blocks (avoid polluting page CSS)
+    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove iframes
+    html = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove javascript: hrefs
+    html = re.sub(r'href\s*=\s*["\']javascript:[^"\']*["\']', 'href="#"', html, flags=re.IGNORECASE)
+    # Remove on* event handlers
+    html = re.sub(r'\s+on\w+\s*=\s*"[^"]*"', '', html, flags=re.IGNORECASE)
+    html = re.sub(r"\s+on\w+\s*=\s*'[^']*'", '', html, flags=re.IGNORECASE)
+    return html.strip()

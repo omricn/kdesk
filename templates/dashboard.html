@@ -4,6 +4,9 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
+{% with first_name=request.user.display_name|default:request.user.email %}
+<div class="mb-1 text-muted small" id="dashboard-greeting"></div>
+{% endwith %}
 <h4 class="mb-4"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h4>
 
 <!-- Stats row -->
@@ -61,7 +64,7 @@
           </thead>
           <tbody>
             {% for t in my_tickets %}
-            <tr class="{{ t|sla_row_class }}">
+            <tr>
               <td><a href="{% url 'ticket_detail' t.pk %}" class="text-decoration-none">#{{ t.pk|stringformat:"04d" }}</a></td>
               <td class="text-truncate" style="max-width:220px;">{{ t.title }}</td>
               <td>
@@ -102,7 +105,7 @@
           </thead>
           <tbody>
             {% for t in recent_tickets %}
-            <tr class="{{ t|sla_row_class }}">
+            <tr>
               <td><a href="{% url 'ticket_detail' t.pk %}" class="text-decoration-none">#{{ t.pk|stringformat:"04d" }}</a></td>
               <td class="text-truncate" style="max-width:160px;">{{ t.title }}</td>
               <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
@@ -118,4 +121,39 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<span id="auto-refresh-enabled" hidden></span>
+<script>
+(function () {
+  var fullName = "{{ request.user.display_name|default:request.user.email|escapejs }}";
+  var firstName = fullName.split(' ')[0];
+  var phrases = [
+    "Let's do this!",
+    "You've got this!",
+    "Ready to crush it?",
+    "Another great day ahead!",
+    "Your team is counting on you!",
+    "Let's make it happen!",
+    "Time to shine!",
+    "On a roll today?",
+    "Making a difference, one ticket at a time.",
+    "Great things start here.",
+    "The tickets won't close themselves!",
+    "You're the hero they need.",
+    "Fresh day, fresh tickets!",
+    "Keep up the amazing work!",
+    "Saving the day, as usual.",
+    "Let's get those tickets sorted!",
+    "The queue won't know what hit it.",
+    "Small steps, big impact.",
+    "Every ticket matters.",
+    "Let's make today count!"
+  ];
+  var phrase = phrases[Math.floor(Math.random() * phrases.length)];
+  var el = document.getElementById('dashboard-greeting');
+  if (el) el.textContent = 'Hi ' + firstName + '! ' + phrase;
+})();
+</script>
 {% endblock %}

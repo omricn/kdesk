@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 from .forms import AttachmentForm, CommentForm, TicketForm, TicketUpdateForm
 from .models import (
     SystemSetting, Ticket, TicketAttachment, TicketComment,
-    TicketCategory, TicketSubCategory, TicketItem,
+    TicketCategory, TicketSubCategory, TicketItem, TicketHistory,
 )
 from users.models import User
 
@@ -69,9 +69,10 @@ def dashboard(request):
         status__in=Ticket.TERMINAL_STATUSES
     ).order_by('sla_deadline')[:10]
 
-    recent_tickets = tickets.exclude(
-        status__in=Ticket.TERMINAL_STATUSES
-    ).order_by('-created_at')[:10]
+    recent_qs = tickets.exclude(status__in=Ticket.TERMINAL_STATUSES)
+    if not request.user.is_superuser:
+        recent_qs = recent_qs.filter(assignee=request.user)
+    recent_tickets = recent_qs.order_by('-created_at')[:10]
 
     context = {
         'total': total,
@@ -95,6 +96,13 @@ def ticket_list(request):
     statuses = request.GET.getlist('status')
     assignee_list = request.GET.getlist('assignee')
     sla_list = request.GET.getlist('sla')
+
+    # Non-superusers default to seeing only their own tickets when no filters applied
+    has_any_filter = bool(statuses or assignee_list or sla_list or
+                          request.GET.get('q') or request.GET.get('col_id') or
+                          request.GET.get('col_subject') or request.GET.get('col_requester'))
+    if not request.user.is_superuser and not has_any_filter:
+        assignee_list = [str(request.user.pk)]
     search = request.GET.get('q', '')
     col_id = request.GET.get('col_id', '').strip()
     col_subject = request.GET.get('col_subject', '').strip()
@@ -187,6 +195,10 @@ def ticket_detail(request, pk):
                 return redirect('ticket_detail', pk=pk)
 
         elif action == 'update':
+            # Capture old values NOW — before is_valid() runs _post_clean()
+            # which overwrites the model instance fields with submitted data.
+            old_status = ticket.status
+            old_assignee = ticket.assignee
             update_form = TicketUpdateForm(request.POST, instance=ticket)
             if update_form.is_valid():
                 solution = request.POST.get('solution', '').strip()
@@ -194,14 +206,34 @@ def ticket_detail(request, pk):
                 if closing and not solution:
                     update_form.add_error(None, 'A solution description is required when closing a ticket.')
                 else:
-                    old_assignee = ticket.assignee
-                    was_closed = ticket.status in Ticket.TERMINAL_STATUSES
+                    was_closed = old_status in Ticket.TERMINAL_STATUSES
                     updated = update_form.save(commit=False)
                     updated.solution = solution
                     # Stamp resolved_at when closed
                     if updated.status in Ticket.TERMINAL_STATUSES and not updated.resolved_at:
                         updated.resolved_at = timezone.now()
                     updated.save()
+                    # Record history
+                    status_labels = dict(Ticket.STATUS_CHOICES)
+                    history_entries = []
+                    if updated.status != old_status:
+                        history_entries.append(TicketHistory(
+                            ticket=updated,
+                            changed_by=request.user,
+                            field='Status',
+                            old_value=status_labels.get(old_status, old_status),
+                            new_value=status_labels.get(updated.status, updated.status),
+                        ))
+                    if updated.assignee != old_assignee:
+                        history_entries.append(TicketHistory(
+                            ticket=updated,
+                            changed_by=request.user,
+                            field='Assignee',
+                            old_value=str(old_assignee) if old_assignee else 'Unassigned',
+                            new_value=str(updated.assignee) if updated.assignee else 'Unassigned',
+                        ))
+                    if history_entries:
+                        TicketHistory.objects.bulk_create(history_entries)
                     # Notify new assignee
                     if updated.assignee and updated.assignee != old_assignee and updated.assignee.notify_on_assign:
                         from tasks.scheduled import send_ticket_notification
@@ -211,6 +243,8 @@ def ticket_detail(request, pk):
                         from tasks.scheduled import send_requester_closed
                         send_requester_closed.delay(ticket.pk)
                     messages.success(request, 'Ticket updated.')
+                    if updated.status in Ticket.TERMINAL_STATUSES:
+                        return redirect('ticket_list')
                     return redirect('ticket_detail', pk=pk)
 
         elif action == 'upload':
@@ -231,6 +265,7 @@ def ticket_detail(request, pk):
         'comment_form': comment_form,
         'update_form': update_form,
         'categories_json': _get_categories_json(),
+        'ticket_history': ticket.history.select_related('changed_by').all(),
     }
     return render(request, 'tickets/detail.html', context)
 
@@ -247,11 +282,19 @@ def ticket_create(request):
             ticket.source = Ticket.SOURCE_MANUAL
             _set_default_category(ticket)
             ticket.save()
+            TicketHistory.objects.create(
+                ticket=ticket,
+                changed_by=request.user,
+                field='Ticket created',
+                old_value='',
+                new_value=f'By {request.user}',
+            )
             if ticket.assignee and ticket.assignee.notify_on_assign:
                 from tasks.scheduled import send_ticket_notification
                 send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
-            from tasks.scheduled import send_requester_created
+            from tasks.scheduled import send_requester_created, generate_ai_summary
             send_requester_created.delay(ticket.pk)
+            generate_ai_summary.delay(ticket.pk)
             messages.success(request, f'Ticket #{ticket.pk:04d} created.')
             return redirect('ticket_detail', pk=ticket.pk)
 
@@ -319,6 +362,14 @@ def ticket_categorize(request, pk):
     sub_id = _int_or_none(request.POST.get('subcategory'))
     item_id = _int_or_none(request.POST.get('ticket_item'))
 
+    # Capture old category label before overwriting
+    old_cat_parts = [x for x in [
+        ticket.category.name if ticket.category_id else None,
+        ticket.subcategory.name if ticket.subcategory_id else None,
+        ticket.ticket_item.name if ticket.ticket_item_id else None,
+    ] if x]
+    old_cat_str = ' / '.join(old_cat_parts)
+
     ticket.category_id = cat_id
     ticket.subcategory_id = sub_id
     ticket.ticket_item_id = item_id
@@ -353,9 +404,18 @@ def ticket_categorize(request, pk):
         ticket.subcategory.name if ticket.subcategory else None,
         ticket.ticket_item.name if ticket.ticket_item else None,
     ] if x]
+    new_cat_str = ' / '.join(parts) if parts else ''
+    if new_cat_str != old_cat_str:
+        TicketHistory.objects.create(
+            ticket=ticket,
+            changed_by=request.user,
+            field='Category',
+            old_value=old_cat_str,
+            new_value=new_cat_str,
+        )
     return JsonResponse({
         'ok': True,
-        'label': ' / '.join(parts) if parts else '',
+        'label': new_cat_str,
         'assignee': str(ticket.assignee) if ticket.assignee else '',
     })
 
@@ -455,20 +515,63 @@ def export_tickets_csv(request):
 
 @login_required
 def settings_view(request):
-    if not request.user.is_admin:
+    if not request.user.is_superuser:
         messages.error(request, 'Access denied.')
         return redirect('dashboard')
 
     if request.method == 'POST':
         action = request.POST.get('action')
+
         if action == 'notifications':
             val = '1' if 'notify_requester_on_close' in request.POST else '0'
             SystemSetting.set('notify_requester_on_close', val)
             messages.success(request, 'Notification settings saved.')
             return redirect('settings')
 
+        elif action == 'sla_suspend':
+            reason = request.POST.get('sla_pause_reason', '').strip()
+            SystemSetting.set('sla_paused', '1')
+            SystemSetting.set('sla_pause_started_at', timezone.now().isoformat())
+            SystemSetting.set('sla_pause_reason', reason)
+            messages.warning(request, 'SLA suspended. Ticket clocks are frozen.')
+            return redirect('settings')
+
+        elif action == 'sla_resume':
+            from tickets.sla import business_hours_elapsed, add_business_hours, SLA_HOURS
+            from django.utils.dateparse import parse_datetime
+
+            pause_started_at = parse_datetime(SystemSetting.get('sla_pause_started_at', ''))
+            resume_time = timezone.now()
+
+            if pause_started_at:
+                open_tickets = Ticket.objects.filter(
+                    sla_deadline__isnull=False
+                ).exclude(status__in=Ticket.TERMINAL_STATUSES)
+                for ticket in open_tickets:
+                    elapsed_at_pause = business_hours_elapsed(ticket.created_at, pause_started_at)
+                    remaining = max(0.0, SLA_HOURS - elapsed_at_pause)
+                    ticket.sla_deadline = add_business_hours(resume_time, remaining)
+                    ticket.save(update_fields=['sla_deadline'])
+
+            SystemSetting.set('sla_paused', '0')
+            SystemSetting.set('sla_pause_started_at', '')
+            SystemSetting.set('sla_pause_reason', '')
+            messages.success(request, 'SLA resumed. Ticket deadlines have been recalculated.')
+            return redirect('settings')
+
+    sla_paused = SystemSetting.get('sla_paused', '0') == '1'
+    sla_pause_reason = SystemSetting.get('sla_pause_reason', '')
+    sla_pause_started_raw = SystemSetting.get('sla_pause_started_at', '')
+    sla_pause_started = None
+    if sla_pause_started_raw:
+        from django.utils.dateparse import parse_datetime
+        sla_pause_started = parse_datetime(sla_pause_started_raw)
+
     context = {
         'servicedesk_email': settings.SERVICEDESK_EMAIL,
         'notify_requester_on_close': SystemSetting.get('notify_requester_on_close', '1') == '1',
+        'sla_paused': sla_paused,
+        'sla_pause_reason': sla_pause_reason,
+        'sla_pause_started': sla_pause_started,
     }
     return render(request, 'settings.html', context)

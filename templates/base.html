@@ -6,7 +6,7 @@
   <title>{% block title %}Kdesk{% endblock %} — Kdesk</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  {% load static %}
+  {% load static %}{% load ticket_tags %}
   <link href="{% static 'css/custom.css' %}" rel="stylesheet">
 </head>
 <body>
@@ -52,6 +52,8 @@
           <i class="bi bi-arrow-repeat me-2"></i>Changes
         </a>
       </li>
+      {% endif %}
+      {% if user.is_superuser %}
       <li>
         <a href="{% url 'settings' %}" class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
           <i class="bi bi-gear me-2"></i>Settings
@@ -83,6 +85,17 @@
   <div id="page-content" class="flex-grow-1" style="min-width:0;">
     <div class="container-fluid py-4 px-4">
 
+      {% sla_suspension_info as sla_suspension %}
+      {% if sla_suspension %}
+      <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+        <i class="bi bi-pause-circle-fill fs-5"></i>
+        <div>
+          <strong>SLA suspended</strong> since {{ sla_suspension.started|date:"d M Y H:i" }}{% if sla_suspension.reason %} — {{ sla_suspension.reason }}{% endif %}.
+          {% if user.is_superuser %}<a href="{% url 'settings' %}" class="alert-link ms-1">Manage in Settings</a>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
       {% if messages %}
         {% for message in messages %}
           <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
@@ -101,7 +114,66 @@
   {% block auth_content %}{% endblock %}
 {% endif %}
 
+{% if user.is_authenticated %}
+<button id="theme-toggle" title="Toggle theme"
+  style="position:fixed;bottom:20px;right:20px;z-index:9999;
+         width:40px;height:40px;border-radius:50%;
+         background:#8200B4;border:none;color:#fff;
+         font-size:18px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.4);">
+  <i class="bi bi-sun" id="theme-icon"></i>
+</button>
+{% endif %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  var html = document.documentElement;
+  var btn  = document.getElementById('theme-toggle');
+  var icon = document.getElementById('theme-icon');
+
+  function applyTheme(theme) {
+    if (theme === 'light') {
+      html.setAttribute('data-theme', 'light');
+      if (icon) { icon.className = 'bi bi-moon-stars'; }
+    } else {
+      html.removeAttribute('data-theme');
+      if (icon) { icon.className = 'bi bi-sun'; }
+    }
+  }
+
+  // Apply saved theme immediately
+  applyTheme(localStorage.getItem('kdeskTheme') || 'dark');
+
+  if (btn) {
+    btn.addEventListener('click', function () {
+      var current = localStorage.getItem('kdeskTheme') || 'dark';
+      var next = current === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('kdeskTheme', next);
+      applyTheme(next);
+    });
+  }
+})();
+</script>
+<script>
+(function () {
+  var SECS = 60;
+  var remaining = SECS;
+
+  function reset() { remaining = SECS; }
+
+  function tick() {
+    if (document.hidden) return;
+    remaining--;
+    if (remaining <= 0) window.location.reload();
+  }
+
+  if (document.getElementById('auto-refresh-enabled')) {
+    ['click', 'keydown', 'change', 'input'].forEach(function (e) {
+      document.addEventListener(e, reset, { passive: true });
+    });
+    setInterval(tick, 1000);
+  }
+})();
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

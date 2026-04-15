@@ -48,8 +48,12 @@ def check_sla():
     """
     Mark tickets as SLA-breached and send notification emails
     when the SLA deadline has passed.
+    Skips entirely when SLA is globally suspended.
     """
-    from tickets.models import Ticket
+    from tickets.models import Ticket, SystemSetting
+    if SystemSetting.get('sla_paused', '0') == '1':
+        logger.info('[SLA] Check skipped — SLA is suspended.')
+        return
     now = timezone.now()
 
     # Find tickets that just breached (deadline passed but not yet flagged)
@@ -246,6 +250,57 @@ def _send_notification_email(to: str, subject: str, body: str):
         )
     except Exception as exc:
         logger.error(f'[Notification] Failed to send email to {to}: {exc}')
+
+
+# ── AI Summary ───────────────────────────────────────────────────────────────
+
+@shared_task(name='tasks.generate_ai_summary')
+def generate_ai_summary(ticket_pk: int):
+    """Generate a one-sentence AI summary for a ticket using Claude Haiku."""
+    from tickets.models import Ticket
+    try:
+        ticket = Ticket.objects.get(pk=ticket_pk)
+    except Ticket.DoesNotExist:
+        return
+
+    if not settings.GROQ_API_KEY:
+        logger.warning('[AISummary] GROQ_API_KEY not set — skipping.')
+        return
+
+    # Build a clean plain-text excerpt (strip HTML tags if needed)
+    description = ticket.description or ''
+    if ticket.description_is_html:
+        import re
+        description = re.sub(r'<[^>]+>', ' ', description)
+        description = re.sub(r'\s+', ' ', description).strip()
+
+    excerpt = description[:800]
+
+    prompt = (
+        f'You are an IT helpdesk assistant. Write ONE short sentence (max 15 words) '
+        f'summarising what the following IT support ticket is about. '
+        f'Start with the requester\'s name if known. Do not use quotes. '
+        f'Examples: "David is requesting help with a Priority error." '
+        f'"Nofar is asking for a new mouse."\n\n'
+        f'Requester: {ticket.requester_name or ticket.requester_email}\n'
+        f'Subject: {ticket.title}\n'
+        f'Description: {excerpt}'
+    )
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model='llama-3.1-8b-instant',
+            max_tokens=60,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        summary = response.choices[0].message.content.strip()
+        ticket.ai_summary = summary
+        ticket.save(update_fields=['ai_summary'])
+        logger.info(f'[AISummary] Generated summary for ticket #{ticket_pk}.')
+    except Exception as exc:
+        logger.error(f'[AISummary] Failed for ticket #{ticket_pk}: {exc}')
 
 
 # ── Change Management notifications ──────────────────────────────────────────

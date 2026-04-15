@@ -22,10 +22,7 @@ class TicketForm(forms.ModelForm):
 class TicketUpdateForm(forms.ModelForm):
     class Meta:
         model = Ticket
-        fields = ['title', 'status', 'assignee', 'description']
-        widgets = {
-            'description': forms.Textarea(attrs={'rows': 5}),
-        }
+        fields = ['title', 'status', 'assignee']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -39,12 +36,9 @@ class TicketUpdateForm(forms.ModelForm):
 class CommentForm(forms.ModelForm):
     class Meta:
         model = TicketComment
-        fields = ['body', 'is_internal']
+        fields = ['body']
         widgets = {
             'body': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'Write a comment...'}),
-        }
-        labels = {
-            'is_internal': 'Internal note (not visible to requester)',
         }
 
 

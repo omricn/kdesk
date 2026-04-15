@@ -42,17 +42,23 @@
           <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
           {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
         </div>
-        <div class="description-body border rounded p-3 bg-light" style="white-space:pre-wrap;word-break:break-word;">{{ ticket.description|default:"(no description)" }}</div>
+        <div class="description-body border rounded p-3" style="word-break:break-word;overflow-x:auto;">
+          {% if ticket.description_is_html %}
+            {{ ticket.description|safe }}
+          {% else %}
+            <div style="white-space:pre-wrap;">{{ ticket.description|default:"(no description)" }}</div>
+          {% endif %}
+        </div>
       </div>
     </div>
 
-    <!-- Attachments -->
-    {% if ticket.attachments.exists %}
+    <!-- Attachments (excludes inline images already shown in description) -->
+    {% if ticket.non_inline_attachments.exists %}
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white small fw-semibold"><i class="bi bi-paperclip me-1"></i>Attachments</div>
       <div class="card-body py-2">
         <div class="d-flex flex-wrap gap-2">
-          {% for att in ticket.attachments.all %}
+          {% for att in ticket.non_inline_attachments %}
           <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
           </a>
@@ -62,43 +68,84 @@
     </div>
     {% endif %}
 
-    <!-- Comments -->
+    <!-- Comments + History tabs -->
     <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white fw-semibold small"><i class="bi bi-chat-left-text me-1"></i>Activity</div>
-      <div class="card-body p-0">
-        {% for comment in ticket.comments.all %}
-        <div class="p-3 border-bottom {% if comment.is_internal %}bg-warning bg-opacity-10{% endif %}">
-          <div class="d-flex justify-content-between mb-1">
-            <span class="fw-semibold small">{{ comment.author|default:"System" }}</span>
-            <span class="text-muted small">
-              {{ comment.created_at|date:"d M Y H:i" }}
-              {% if comment.is_internal %}<span class="badge bg-warning text-dark ms-1">Internal</span>{% endif %}
-            </span>
-          </div>
-          <div style="white-space:pre-wrap;">{{ comment.body }}</div>
-        </div>
-        {% empty %}
-        <div class="text-center text-muted py-3 small">No comments yet.</div>
-        {% endfor %}
+      <div class="card-header bg-white p-0">
+        <ul class="nav nav-tabs card-header-tabs px-3 pt-2" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-comments-btn" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">
+              <i class="bi bi-chat-left-text me-1"></i>Comments
+              {% if ticket.comments.exists %}<span class="badge bg-secondary ms-1" style="font-size:10px;">{{ ticket.comments.count }}</span>{% endif %}
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-history-btn" data-bs-toggle="tab" data-bs-target="#tab-history" type="button" role="tab">
+              <i class="bi bi-clock-history me-1"></i>History
+            </button>
+          </li>
+        </ul>
       </div>
-    </div>
+      <div class="tab-content">
 
-    <!-- Add comment form -->
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white fw-semibold small"><i class="bi bi-plus-circle me-1"></i>Add Comment</div>
-      <div class="card-body">
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="comment">
-          {{ comment_form.body }}
-          <div class="form-check mt-2 mb-3">
-            {{ comment_form.is_internal }}
-            <label class="form-check-label small" for="{{ comment_form.is_internal.id_for_label }}">
-              {{ comment_form.is_internal.label }}
-            </label>
+        <!-- Comments tab -->
+        <div class="tab-pane fade show active" id="tab-comments" role="tabpanel">
+          <div class="border-bottom">
+            {% for comment in ticket.comments.all %}
+            <div class="p-3 border-bottom">
+              <div class="d-flex justify-content-between mb-1">
+                <span class="fw-semibold small">{{ comment.author|default:"System" }}</span>
+                <span class="text-muted small">{{ comment.created_at|date:"d M Y H:i" }}</span>
+              </div>
+              <div style="white-space:pre-wrap;">{{ comment.body }}</div>
+            </div>
+            {% empty %}
+            <div class="text-center text-muted py-3 small">No comments yet.</div>
+            {% endfor %}
           </div>
-          <button type="submit" class="btn btn-sm btn-primary">Post Comment</button>
-        </form>
+          <div class="p-3">
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="comment">
+              {{ comment_form.body }}
+              <div class="mt-2">
+                <button type="submit" class="btn btn-sm btn-primary">Post Comment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- History tab -->
+        <div class="tab-pane fade" id="tab-history" role="tabpanel">
+          {% if ticket_history %}
+          <ul class="list-group list-group-flush">
+            {% for entry in ticket_history %}
+            <li class="list-group-item px-3 py-2">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <span class="fw-semibold small">{{ entry.field }}</span>
+                  {% if entry.old_value and entry.new_value %}
+                  <span class="text-muted small ms-1">
+                    <span class="text-danger">{{ entry.old_value }}</span>
+                    <i class="bi bi-arrow-right mx-1"></i>
+                    <span class="text-success">{{ entry.new_value }}</span>
+                  </span>
+                  {% elif entry.new_value %}
+                  <span class="text-muted small ms-1">{{ entry.new_value }}</span>
+                  {% endif %}
+                </div>
+                <div class="text-muted small text-end flex-shrink-0 ms-3">
+                  {{ entry.changed_at|date:"d M Y H:i" }}<br>
+                  <span>{{ entry.changed_by|default:"System" }}</span>
+                </div>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="text-center text-muted py-4 small">No history yet.</div>
+          {% endif %}
+        </div>
+
       </div>
     </div>
 
@@ -134,28 +181,24 @@
 
   <!-- Right: edit panel -->
   <div class="col-4">
-    <div class="card border-0 shadow-sm position-sticky" style="top:1rem;">
-      <div class="card-header bg-white fw-semibold small"><i class="bi bi-pencil-square me-1"></i>Edit Ticket</div>
-      <div class="card-body">
-        <form method="post" id="update-form">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="update">
-          {% if update_form.non_field_errors %}
-          <div class="alert alert-danger py-2 small mb-2">{{ update_form.non_field_errors }}</div>
-          {% endif %}
-          {% for field in update_form %}
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+    <div class="position-sticky" style="top:1rem;">
+
+      <!-- AI Summary -->
+      {% if ticket.ai_summary %}
+      <div class="card border-0 shadow-sm mb-3" style="border-left:3px solid var(--kramer-purple) !important;">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-stars" style="color:var(--kramer-purple);font-size:14px;margin-top:2px;flex-shrink:0;"></i>
+            <span class="small" style="line-height:1.4;">{{ ticket.ai_summary }}</span>
           </div>
-          {% endfor %}
-          <button type="submit" class="btn btn-primary btn-sm w-100 mt-1">Save Changes</button>
-        </form>
-        <hr>
-        <!-- Category -->
-        <div class="mb-3">
-          <div class="small fw-semibold mb-2"><i class="bi bi-tag me-1"></i>Category</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Category -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white fw-semibold small"><i class="bi bi-tag me-1"></i>Category</div>
+        <div class="card-body">
           <select id="det-cat" class="form-select form-select-sm mb-1">
             <option value="">— Category —</option>
           </select>
@@ -168,23 +211,46 @@
           <button class="btn btn-sm btn-outline-primary w-100" id="det-cat-save">Save Category</button>
           <div id="det-cat-msg" class="small mt-1 text-success d-none">Saved.</div>
         </div>
-        <hr>
-        <div class="small text-muted">
-          <div><strong>SLA Deadline:</strong>
-            {% if ticket.sla_deadline %}
-              {{ ticket.sla_deadline|date:"d M Y H:i" }}
-              <div class="progress mt-1" style="height:6px;" title="{{ ticket.sla_percent_elapsed }}% elapsed">
-                <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}"
-                     style="width:{{ ticket.sla_percent_elapsed|default:0 }}%"></div>
-              </div>
-            {% else %}—{% endif %}
+      </div>
+
+      <!-- Edit Ticket -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white fw-semibold small"><i class="bi bi-pencil-square me-1"></i>Edit Ticket</div>
+        <div class="card-body">
+          <form method="post" id="update-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update">
+            {% if update_form.non_field_errors %}
+            <div class="alert alert-danger py-2 small mb-2">{{ update_form.non_field_errors }}</div>
+            {% endif %}
+            {% for field in update_form %}
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary btn-sm w-100 mt-1">Save Changes</button>
+          </form>
+          <hr>
+          <div class="small text-muted">
+            <div><strong>SLA Deadline:</strong>
+              {% if ticket.sla_deadline %}
+                {{ ticket.sla_deadline|date:"d M Y H:i" }}
+                <div class="progress mt-1" style="height:6px;" title="{{ ticket.sla_percent_elapsed }}% elapsed">
+                  <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}"
+                       style="width:{{ ticket.sla_percent_elapsed|default:0 }}%"></div>
+                </div>
+              {% else %}—{% endif %}
+            </div>
+            <div class="mt-2"><strong>Last Updated:</strong> {{ ticket.updated_at|date:"d M Y H:i" }}</div>
+            {% if ticket.resolved_at %}
+            <div class="mt-1"><strong>Resolved:</strong> {{ ticket.resolved_at|date:"d M Y H:i" }}</div>
+            {% endif %}
           </div>
-          <div class="mt-2"><strong>Last Updated:</strong> {{ ticket.updated_at|date:"d M Y H:i" }}</div>
-          {% if ticket.resolved_at %}
-          <div class="mt-1"><strong>Resolved:</strong> {{ ticket.resolved_at|date:"d M Y H:i" }}</div>
-          {% endif %}
         </div>
       </div>
+
     </div>
   </div>
 
@@ -192,6 +258,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.description-body img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; }
+</style>
 <script>
 const CAT_DATA = {{ categories_json|safe }};
 const TICKET_PK = {{ ticket.pk }};
