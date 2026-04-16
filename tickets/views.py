@@ -293,12 +293,20 @@ def ticket_detail(request, pk):
 def ticket_create(request):
     form = TicketForm()
     if request.method == 'POST':
-        form = TicketForm(request.POST)
+        form = TicketForm(request.POST, request.FILES)
         if form.is_valid():
             ticket = form.save(commit=False)
             ticket.source = Ticket.SOURCE_MANUAL
             _set_default_category(ticket)
             ticket.save()
+            uploaded_file = request.FILES.get('attachment')
+            if uploaded_file:
+                TicketAttachment.objects.create(
+                    ticket=ticket,
+                    filename=uploaded_file.name,
+                    file=uploaded_file,
+                    file_size=uploaded_file.size,
+                )
             TicketHistory.objects.create(
                 ticket=ticket,
                 changed_by=request.user,
@@ -316,6 +324,14 @@ def ticket_create(request):
             return redirect('ticket_detail', pk=ticket.pk)
 
     return render(request, 'tickets/create.html', {'form': form})
+
+
+def lookup_user_by_email(request):
+    email = request.GET.get('email', '').strip()
+    if not email:
+        return JsonResponse({'name': ''})
+    user = User.objects.filter(email__iexact=email).first()
+    return JsonResponse({'name': user.display_name or '' if user else ''})
 
 
 @login_required
