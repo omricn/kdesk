@@ -89,36 +89,174 @@ def check_sla():
                     logger.info(f'[SLA] Warning sent for ticket #{ticket.pk}.')
 
 
+def _email_html(header_title: str, header_subtitle: str, greeting: str, body_rows: str,
+                cta_url: str = None, cta_label: str = None, header_color: str = '#8200B4') -> str:
+    """
+    Render a fully branded Kramer email.
+    body_rows: HTML rows for the details table (tr elements).
+    """
+    logo_url = f'{settings.SITE_URL}/static/img/kramer_logo.png'
+    cta_block = ''
+    if cta_url and cta_label:
+        cta_block = f'''
+        <tr><td style="padding:24px 0 8px;">
+          <a href="{cta_url}"
+             style="display:inline-block;padding:12px 28px;background:{header_color};
+                    color:#ffffff;text-decoration:none;border-radius:6px;
+                    font-weight:600;font-size:14px;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+            {cta_label}
+          </a>
+        </td></tr>'''
+
+    details_block = ''
+    if body_rows:
+        details_block = f'''
+        <tr><td>
+          <table width="100%" cellpadding="0" cellspacing="0"
+                 style="background:#f8f0ff;border-left:4px solid {header_color};border-radius:4px;">
+            <tr><td style="padding:18px 22px;">
+              <table width="100%" cellpadding="5" cellspacing="0"
+                     style="font-size:14px;color:#333333;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+                {body_rows}
+              </table>
+            </td></tr>
+          </table>
+        </td></tr>'''
+
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f0f0;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f0f0;padding:30px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0"
+       style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.10);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:{header_color};padding:28px 36px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="vertical-align:middle;">
+            <p style="margin:0;color:#ffffff;font-size:11px;letter-spacing:2px;
+                      text-transform:uppercase;opacity:0.75;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+              IT Support
+            </p>
+            <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;
+                       font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.3;">
+              {header_title}
+            </h1>
+            {f'<p style="margin:4px 0 0;color:rgba(255,255,255,0.82);font-size:13px;font-family:Segoe UI,Calibri,Arial,sans-serif;">{header_subtitle}</p>' if header_subtitle else ''}
+          </td>
+          <td style="text-align:right;vertical-align:middle;padding-left:16px;">
+            <img src="{logo_url}" alt="Kramer" width="110" height="auto"
+                 style="display:block;max-width:110px;filter:brightness(0) invert(1);opacity:0.9;">
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Body -->
+  <tr>
+    <td style="padding:32px 36px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="font-size:15px;color:#333333;padding-bottom:20px;
+                       font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.6;">
+          {greeting}
+        </td></tr>
+        {details_block}
+        {cta_block}
+      </table>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#1a1a2e;padding:22px 36px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color:#aaaaaa;font-size:12px;line-height:1.7;
+                     font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+            <strong style="color:#cccccc;">IT Support Team</strong><br>
+            <a href="mailto:servicedesk@kramerav.com"
+               style="color:#cc66ff;text-decoration:none;">servicedesk@kramerav.com</a>
+          </td>
+          <td style="text-align:right;vertical-align:middle;">
+            <span style="color:#444466;font-size:18px;font-weight:700;
+                         font-family:'Segoe UI',Calibri,Arial,sans-serif;letter-spacing:1px;">
+              KRAMER
+            </span>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>'''
+
+
+def _row(label: str, value: str, color: str = '#8200B4') -> str:
+    return (f'<tr>'
+            f'<td style="color:{color};font-weight:600;white-space:nowrap;width:140px;'
+            f'    vertical-align:top;padding:4px 16px 4px 0;">{label}</td>'
+            f'<td style="color:#333333;vertical-align:top;padding:4px 0;">{value}</td>'
+            f'</tr>')
+
+
 def _send_sla_breach_email(ticket):
+    name = ticket.assignee.display_name or ticket.assignee.email
+    deadline = ticket.sla_deadline.strftime('%d %b %Y %H:%M') if ticket.sla_deadline else 'N/A'
+    ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
+    body = _email_html(
+        header_title='SLA Deadline Breached',
+        header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
+        header_color='#c0392b',
+        greeting=(f'Hi <strong>{name}</strong>,<br><br>'
+                  f'The following ticket has <strong>breached its SLA deadline</strong> '
+                  f'and requires your immediate attention.'),
+        body_rows=(
+            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}', '#c0392b') +
+            _row('Requester', f'{ticket.requester_name} ({ticket.requester_email})', '#c0392b') +
+            _row('SLA Deadline', deadline, '#c0392b')
+        ),
+        cta_url=ticket_url,
+        cta_label='Open Ticket',
+    )
     _send_notification_email(
         to=ticket.assignee.email,
         subject=f'[Kdesk] SLA Breached — #{ticket.pk:04d}: {ticket.title}',
-        body=f"""
-        <p>Hello {ticket.assignee.display_name or ticket.assignee.email},</p>
-        <p>The following ticket has <strong>breached its SLA deadline</strong>:</p>
-        <ul>
-          <li><strong>Ticket:</strong> #{ticket.pk:04d} — {ticket.title}</li>
-          <li><strong>Requester:</strong> {ticket.requester_name} ({ticket.requester_email})</li>
-          <li><strong>SLA Deadline:</strong> {ticket.sla_deadline.strftime('%Y-%m-%d %H:%M') if ticket.sla_deadline else 'N/A'}</li>
-        </ul>
-        <p>Please take action immediately.</p>
-        """
+        body=body,
     )
 
 
 def _send_sla_warning_email(ticket):
+    name = ticket.assignee.display_name or ticket.assignee.email
+    deadline = ticket.sla_deadline.strftime('%d %b %Y %H:%M') if ticket.sla_deadline else 'N/A'
+    ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
+    body = _email_html(
+        header_title='SLA Warning',
+        header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
+        header_color='#e67e22',
+        greeting=(f'Hi <strong>{name}</strong>,<br><br>'
+                  f'This ticket is at <strong>{ticket.sla_percent_elapsed}% of its SLA window</strong>. '
+                  f'Please respond soon to avoid a breach.'),
+        body_rows=(
+            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}', '#e67e22') +
+            _row('SLA Deadline', deadline, '#e67e22') +
+            _row('Elapsed', f'{ticket.sla_percent_elapsed}%', '#e67e22')
+        ),
+        cta_url=ticket_url,
+        cta_label='Open Ticket',
+    )
     _send_notification_email(
         to=ticket.assignee.email,
         subject=f'[Kdesk] SLA Warning — #{ticket.pk:04d}: {ticket.title}',
-        body=f"""
-        <p>Hello {ticket.assignee.display_name or ticket.assignee.email},</p>
-        <p>The following ticket is approaching its SLA deadline ({ticket.sla_percent_elapsed}% elapsed):</p>
-        <ul>
-          <li><strong>Ticket:</strong> #{ticket.pk:04d} — {ticket.title}</li>
-          <li><strong>SLA Deadline:</strong> {ticket.sla_deadline.strftime('%Y-%m-%d %H:%M') if ticket.sla_deadline else 'N/A'}</li>
-        </ul>
-        <p>Please respond soon.</p>
-        """
+        body=body,
     )
 
 
@@ -132,20 +270,24 @@ def send_requester_created(ticket_pk: int):
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
         return
+    name = ticket.requester_name or ticket.requester_email
+    submitted = ticket.created_at.strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'
+    body = _email_html(
+        header_title='We received your request',
+        header_subtitle=f'Ticket #{ticket.pk:04d}',
+        greeting=(f'Hi <strong>{name}</strong>,<br><br>'
+                  f'Your support request has been received and logged. '
+                  f'Our IT team will look into it and get back to you as soon as possible.'),
+        body_rows=(
+            _row('Ticket #', f'#{ticket.pk:04d}') +
+            _row('Subject', ticket.title) +
+            _row('Submitted', submitted)
+        ),
+    )
     _send_notification_email(
         to=ticket.requester_email,
         subject=f'[Kdesk] Your request has been received — #{ticket.pk:04d}',
-        body=f"""
-        <p>Hello {ticket.requester_name or ticket.requester_email},</p>
-        <p>We have received your support request and assigned it ticket number <strong>#{ticket.pk:04d}</strong>.</p>
-        <ul>
-          <li><strong>Subject:</strong> {ticket.title}</li>
-          <li><strong>Submitted:</strong> {ticket.created_at.strftime('%Y-%m-%d %H:%M') if ticket.created_at else 'N/A'}</li>
-        </ul>
-        <p>Our team will look into this and be in touch as soon as possible.<br>
-        Please keep your ticket number for reference.</p>
-        <p>Thank you,<br>IT Support Team</p>
-        """,
+        body=body,
     )
     logger.info(f'[Requester] Creation confirmation sent for ticket #{ticket_pk}.')
 
@@ -161,24 +303,26 @@ def send_requester_closed(ticket_pk: int):
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
         return
-    solution_html = (
-        f'<p><strong>Resolution:</strong><br>{ticket.solution}</p>'
-        if ticket.solution else ''
+    name = ticket.requester_name or ticket.requester_email
+    closed = ticket.resolved_at.strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
+    solution_row = _row('Resolution', ticket.solution) if ticket.solution else ''
+    body = _email_html(
+        header_title='Your ticket has been closed',
+        header_subtitle=f'Ticket #{ticket.pk:04d}',
+        greeting=(f'Hi <strong>{name}</strong>,<br><br>'
+                  f'Your support ticket has been resolved and closed. '
+                  f'If you need further assistance, please don\'t hesitate to reach out.'),
+        body_rows=(
+            _row('Ticket #', f'#{ticket.pk:04d}') +
+            _row('Subject', ticket.title) +
+            _row('Closed', closed) +
+            solution_row
+        ),
     )
     _send_notification_email(
         to=ticket.requester_email,
         subject=f'[Kdesk] Your ticket has been closed — #{ticket.pk:04d}',
-        body=f"""
-        <p>Hello {ticket.requester_name or ticket.requester_email},</p>
-        <p>Your support ticket <strong>#{ticket.pk:04d}</strong> has been closed.</p>
-        <ul>
-          <li><strong>Subject:</strong> {ticket.title}</li>
-          <li><strong>Closed:</strong> {ticket.resolved_at.strftime('%Y-%m-%d %H:%M') if ticket.resolved_at else 'N/A'}</li>
-        </ul>
-        {solution_html}
-        <p>If you need further assistance, please submit a new request.</p>
-        <p>Thank you,<br>IT Support Team</p>
-        """,
+        body=body,
     )
     logger.info(f'[Requester] Close notification sent for ticket #{ticket_pk}.')
 
@@ -207,34 +351,49 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
             pass
 
     actor_name = str(actor) if actor else 'System'
+    ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
 
     if event_type == 'assign' and ticket.assignee:
+        name = ticket.assignee.display_name or ticket.assignee.email
+        deadline = ticket.sla_deadline.strftime('%d %b %Y %H:%M') if ticket.sla_deadline else 'N/A'
+        body = _email_html(
+            header_title='Ticket Assigned to You',
+            header_subtitle=f'#{ticket.pk:04d} — {ticket.title}',
+            greeting=(f'Hi <strong>{name}</strong>,<br><br>'
+                      f'A support ticket has been assigned to you.'),
+            body_rows=(
+                _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}') +
+                _row('Requester', f'{ticket.requester_name} ({ticket.requester_email})') +
+                _row('SLA Deadline', deadline)
+            ),
+            cta_url=ticket_url,
+            cta_label='Open Ticket',
+        )
         _send_notification_email(
             to=ticket.assignee.email,
             subject=f'[Kdesk] Ticket Assigned — #{ticket.pk:04d}: {ticket.title}',
-            body=f"""
-            <p>Hello {ticket.assignee.display_name or ticket.assignee.email},</p>
-            <p>A ticket has been assigned to you:</p>
-            <ul>
-              <li><strong>Ticket:</strong> #{ticket.pk:04d} — {ticket.title}</li>
-              <li><strong>Requester:</strong> {ticket.requester_name} ({ticket.requester_email})</li>
-              <li><strong>SLA Deadline:</strong> {ticket.sla_deadline.strftime('%Y-%m-%d %H:%M') if ticket.sla_deadline else 'N/A'}</li>
-            </ul>
-            """
+            body=body,
         )
 
     elif event_type == 'update' and ticket.assignee:
+        name = ticket.assignee.display_name or ticket.assignee.email
+        body = _email_html(
+            header_title='Ticket Updated',
+            header_subtitle=f'#{ticket.pk:04d} — {ticket.title}',
+            greeting=(f'Hi <strong>{name}</strong>,<br><br>'
+                      f'Ticket <strong>#{ticket.pk:04d}</strong> was updated by <strong>{actor_name}</strong>.'),
+            body_rows=(
+                _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}') +
+                _row('Status', ticket.get_status_display()) +
+                _row('Updated by', actor_name)
+            ),
+            cta_url=ticket_url,
+            cta_label='Open Ticket',
+        )
         _send_notification_email(
             to=ticket.assignee.email,
             subject=f'[Kdesk] Ticket Updated — #{ticket.pk:04d}: {ticket.title}',
-            body=f"""
-            <p>Hello {ticket.assignee.display_name or ticket.assignee.email},</p>
-            <p>Ticket #{ticket.pk:04d} was updated by <strong>{actor_name}</strong>.</p>
-            <ul>
-              <li><strong>Ticket:</strong> {ticket.title}</li>
-              <li><strong>Status:</strong> {ticket.get_status_display()}</li>
-            </ul>
-            """
+            body=body,
         )
 
 
@@ -269,91 +428,24 @@ def _send_maintenance_announcement(change):
     system_str = change.affected_system_display
     region_str = change.get_affected_region_display()
 
-    logo_tag = '<span style="font-size:12px;font-weight:400;color:#aaaaaa;font-family:Segoe UI,Calibri,Arial,sans-serif;line-height:1.8;">Kramer</span>'
-
-    body = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-    <body style="margin:0;padding:0;background:#f4f4f4;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 0;">
-        <tr><td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-
-            <!-- Header -->
-            <tr>
-              <td style="background:#8200B4;padding:28px 36px;">
-                <p style="margin:0;color:#ffffff;font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:0.8;font-family:'Segoe UI',Calibri,Arial,sans-serif;">IT Department</p>
-                <h1 style="margin:6px 0 0;color:#ffffff;font-size:22px;font-weight:600;font-family:'Segoe UI',Calibri,Arial,sans-serif;">Planned Maintenance Notification</h1>
-              </td>
-            </tr>
-
-
-            <!-- Body -->
-            <tr>
-              <td style="padding:32px 36px;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
-                <p style="margin:0 0 20px;color:#333333;font-size:15px;line-height:1.6;">
-                  Dear Employees,
-                </p>
-                <p style="margin:0 0 24px;color:#333333;font-size:15px;line-height:1.6;">
-                  Please be informed that the IT Department has scheduled a <strong>Planned Maintenance</strong>
-                  window. During this time, the affected system may be temporarily unavailable.
-                </p>
-
-                <!-- Details box -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f0ff;border-left:4px solid #8200B4;border-radius:4px;">
-                  <tr>
-                    <td style="padding:20px 24px;">
-                      <table width="100%" cellpadding="6" cellspacing="0" style="font-size:14px;color:#333333;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
-                        <tr>
-                          <td style="color:#8200B4;font-weight:600;white-space:nowrap;width:130px;">System</td>
-                          <td style="color:#333333;">{system_str}</td>
-                        </tr>
-                        <tr>
-                          <td style="color:#8200B4;font-weight:600;">Date</td>
-                          <td style="color:#333333;">{date_str}</td>
-                        </tr>
-                        <tr>
-                          <td style="color:#8200B4;font-weight:600;">Timeframe</td>
-                          <td style="color:#333333;">{timeframe_str}</td>
-                        </tr>
-                        <tr>
-                          <td style="color:#8200B4;font-weight:600;">Region</td>
-                          <td style="color:#333333;">{region_str}</td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="margin:24px 0 12px;color:#333333;font-size:15px;line-height:1.6;">
-                  We apologize for any inconvenience and will work to minimize disruption.
-                  The system will be restored as quickly as possible.
-                </p>
-                <p style="margin:0;color:#333333;font-size:15px;line-height:1.6;">
-                  If you have any questions, please contact the IT Support Team at
-                  <a href="mailto:servicedesk@kramerav.com" style="color:#8200B4;">servicedesk@kramerav.com</a>.
-                </p>
-              </td>
-            </tr>
-
-            <!-- Footer -->
-            <tr>
-              <td bgcolor="#1a1a2e" style="background:#1a1a2e;padding:24px 36px;text-align:left;">
-                {logo_tag}
-                <span style="display:block;margin-top:10px;color:#aaaaaa;font-size:12px;line-height:1.8;font-family:'Segoe UI',Calibri,Arial,sans-serif;text-align:left;">
-                  IT Support Team<br>
-                  <a href="mailto:servicedesk@kramerav.com" style="color:#cc66ff;text-decoration:none;">servicedesk@kramerav.com</a>
-                </span>
-              </td>
-            </tr>
-
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>
-    """
+    body = _email_html(
+        header_title='Planned Maintenance Notification',
+        header_subtitle=f'{system_str} — {date_str}',
+        greeting=(
+            'Dear Employees,<br><br>'
+            'Please be informed that the IT Department has scheduled a <strong>Planned Maintenance</strong> '
+            'window. During this time, the affected system may be temporarily unavailable.<br><br>'
+            'We apologize for any inconvenience and will work to minimize disruption. '
+            'If you have any questions please contact '
+            '<a href="mailto:servicedesk@kramerav.com" style="color:#8200B4;">servicedesk@kramerav.com</a>.'
+        ),
+        body_rows=(
+            _row('System', system_str) +
+            _row('Date', date_str) +
+            _row('Timeframe', timeframe_str) +
+            _row('Region', region_str)
+        ),
+    )
 
     subject = f'[Planned Maintenance] {system_str} – {date_str}, {timeframe_str}'
     try:
@@ -469,37 +561,44 @@ def notify_change(change_pk: int, event: str):
 
     change_url = f'{settings.SITE_URL}/changes/{change.pk}/'
 
+    change_rows = (
+        _row('Change', f'#{change.pk:04d} — {change.title}') +
+        _row('Risk Level', change.get_risk_level_display()) +
+        _row('Affected System', change.affected_system_display) +
+        _row('Planned Date', planned) +
+        _row('Submitted By', submitter_name)
+    )
+
     if event == 'submitted':
-        body = f"""
-        <p>A new change request has been submitted and is awaiting your approval:</p>
-        <ul>
-          <li><strong>Change:</strong> #{change.pk:04d} — {change.title}</li>
-          <li><strong>Risk Level:</strong> {change.get_risk_level_display()}</li>
-          <li><strong>Affected System:</strong> {change.affected_system_display}</li>
-          <li><strong>Planned Date:</strong> {planned}</li>
-          <li><strong>Submitted By:</strong> {submitter_name}</li>
-        </ul>
-        <p><a href="{change_url}" style="display:inline-block;padding:10px 20px;background:#8200B4;color:#fff;text-decoration:none;border-radius:6px;">Review &amp; Approve in Kdesk</a></p>
-        """
         _send_notification_email(
             to=IT_MANAGER_EMAIL,
             subject=f'[Kdesk] Change Request Pending Approval — #{change.pk:04d}: {change.title}',
-            body=body,
+            body=_email_html(
+                header_title='Change Request Pending Approval',
+                header_subtitle=f'#{change.pk:04d} — {change.title}',
+                greeting='A new change request has been submitted and is awaiting your approval.',
+                body_rows=change_rows,
+                cta_url=change_url,
+                cta_label='Review &amp; Approve in Kdesk',
+            ),
         )
         if submitter_email:
             _send_notification_email(
                 to=submitter_email,
                 subject=f'[Kdesk] Change Submitted — #{change.pk:04d}: {change.title}',
-                body=f"""
-                <p>Hello {submitter_name},</p>
-                <p>Your change request <strong>#{change.pk:04d}</strong> has been submitted and is now pending approval by the IT Manager.</p>
-                <ul>
-                  <li><strong>Title:</strong> {change.title}</li>
-                  <li><strong>Planned Date:</strong> {planned}</li>
-                </ul>
-                <p><a href="{change_url}">View change in Kdesk</a></p>
-                <p>You will be notified when it is approved.</p>
-                """,
+                body=_email_html(
+                    header_title='Change Request Submitted',
+                    header_subtitle=f'#{change.pk:04d} — {change.title}',
+                    greeting=(f'Hi <strong>{submitter_name}</strong>,<br><br>'
+                              f'Your change request has been submitted and is now pending approval '
+                              f'by the IT Manager. You will be notified once it is approved.'),
+                    body_rows=(
+                        _row('Change', f'#{change.pk:04d} — {change.title}') +
+                        _row('Planned Date', planned)
+                    ),
+                    cta_url=change_url,
+                    cta_label='View in Kdesk',
+                ),
             )
 
     elif event == 'approved':
@@ -507,43 +606,55 @@ def notify_change(change_pk: int, event: str):
             _send_notification_email(
                 to=submitter_email,
                 subject=f'[Kdesk] Change Approved — #{change.pk:04d}: {change.title}',
-                body=f"""
-                <p>Hello {submitter_name},</p>
-                <p>Your change request <strong>#{change.pk:04d}</strong> has been <strong>approved</strong>.</p>
-                <ul>
-                  <li><strong>Title:</strong> {change.title}</li>
-                  <li><strong>Planned Date:</strong> {planned}</li>
-                </ul>
-                <p>You may now proceed with implementation.</p>
-                <p><a href="{change_url}">View change in Kdesk</a></p>
-                """,
+                body=_email_html(
+                    header_title='Change Request Approved',
+                    header_subtitle=f'#{change.pk:04d} — {change.title}',
+                    header_color='#1a7a4a',
+                    greeting=(f'Hi <strong>{submitter_name}</strong>,<br><br>'
+                              f'Your change request has been <strong>approved</strong>. '
+                              f'You may now proceed with implementation.'),
+                    body_rows=(
+                        _row('Change', f'#{change.pk:04d} — {change.title}', '#1a7a4a') +
+                        _row('Planned Date', planned, '#1a7a4a')
+                    ),
+                    cta_url=change_url,
+                    cta_label='View in Kdesk',
+                ),
             )
         # Broadcast maintenance announcement to all affected employees
         _send_maintenance_announcement(change)
 
     elif event == 'done':
-        body = f"""
-        <p>The following change has been completed:</p>
-        <ul>
-          <li><strong>Change:</strong> #{change.pk:04d} — {change.title}</li>
-          <li><strong>Risk Level:</strong> {change.get_risk_level_display()}</li>
-          <li><strong>Affected System:</strong> {change.affected_system_display}</li>
-          <li><strong>Implemented By:</strong> {submitter_name}</li>
-        </ul>
-        """
+        done_rows = (
+            _row('Change', f'#{change.pk:04d} — {change.title}') +
+            _row('Affected System', change.affected_system_display) +
+            _row('Risk Level', change.get_risk_level_display()) +
+            _row('Implemented By', submitter_name)
+        )
         _send_notification_email(
             to=IT_MANAGER_EMAIL,
             subject=f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}',
-            body=body,
+            body=_email_html(
+                header_title='Change Completed',
+                header_subtitle=f'#{change.pk:04d} — {change.title}',
+                greeting='The following change has been completed.',
+                body_rows=done_rows,
+                cta_url=change_url,
+                cta_label='View in Kdesk',
+            ),
         )
         if submitter_email:
             _send_notification_email(
                 to=submitter_email,
                 subject=f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}',
-                body=f"""
-                <p>Hello {submitter_name},</p>
-                <p>Change <strong>#{change.pk:04d} — {change.title}</strong> has been marked as <strong>Done</strong>.</p>
-                """,
+                body=_email_html(
+                    header_title='Change Marked as Done',
+                    header_subtitle=f'#{change.pk:04d} — {change.title}',
+                    greeting=(f'Hi <strong>{submitter_name}</strong>,<br><br>'
+                              f'Change <strong>#{change.pk:04d} — {change.title}</strong> '
+                              f'has been marked as <strong>Done</strong>. Well done!'),
+                    body_rows=done_rows,
+                ),
             )
 
     logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
@@ -638,52 +749,52 @@ def _send_change_reminder(change, reminder_type: str):
 
     date_str = change.planned_date.strftime('%A, %d %B %Y') if change.planned_date else 'N/A'
 
+    detail_rows = (
+        _row('Change', f'#{change.pk:04d} — {change.title}') +
+        _row('System', change.affected_system_display) +
+        _row('Date', date_str) +
+        _row('Timeframe', timeframe)
+    )
+
     if reminder_type == 'start':
         subject = f'[Kdesk] Reminder: Mark Change #{change.pk:04d} as In Progress'
+        header_title = 'Action Needed — Mark as In Progress'
         action_label = 'Mark as In Progress'
-        message = (
+        greeting = (
+            f'Hi <strong>{submitter_name}</strong>,<br><br>'
             f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
-            f'has started ({timeframe}). Please remember to mark the change as <strong>In Progress</strong> '
+            f'has started ({timeframe}). Please mark the change as <strong>In Progress</strong> '
             f'in Kdesk so the team knows the work has begun.'
         )
     elif reminder_type == 'done_followup':
         subject = f'[Kdesk] Action Required: Change #{change.pk:04d} Still Not Closed'
+        header_title = 'Action Required — Change Not Yet Closed'
         action_label = 'Mark as Done'
-        message = (
+        greeting = (
+            f'Hi <strong>{submitter_name}</strong>,<br><br>'
             f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
-            f'ended over an hour ago ({timeframe}), but the change has not been marked as <strong>Done</strong> yet. '
-            f'Please update the status in Kdesk as soon as the work is complete.'
+            f'ended over an hour ago ({timeframe}), but the change has not been marked as '
+            f'<strong>Done</strong> yet. Please update the status as soon as the work is complete.'
         )
     else:
         subject = f'[Kdesk] Reminder: Mark Change #{change.pk:04d} as Done'
+        header_title = 'Action Needed — Mark as Done'
         action_label = 'Mark as Done'
-        message = (
+        greeting = (
+            f'Hi <strong>{submitter_name}</strong>,<br><br>'
             f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
-            f'has ended ({timeframe}). Please remember to mark the change as <strong>Done</strong> '
+            f'has ended ({timeframe}). Please mark the change as <strong>Done</strong> '
             f'in Kdesk once the work is complete.'
         )
 
-    body = f"""
-    <p>Hello {submitter_name},</p>
-    <p>{message}</p>
-    <table style="border-left:3px solid #8200B4;padding:12px 20px;background:#f8f0ff;border-radius:4px;margin:20px 0;">
-      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;white-space:nowrap;">Change</td>
-          <td>#{change.pk:04d} — {change.title}</td></tr>
-      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;">System</td>
-          <td>{change.affected_system_display}</td></tr>
-      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;">Date</td>
-          <td>{date_str}</td></tr>
-      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;">Timeframe</td>
-          <td>{timeframe}</td></tr>
-    </table>
-    <p>
-      <a href="{change_url}" style="display:inline-block;padding:10px 22px;background:#8200B4;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
-        {action_label} in Kdesk
-      </a>
-    </p>
-    <p style="color:#888;font-size:13px;">IT Support Team · servicedesk@kramerav.com</p>
-    """
-
+    body = _email_html(
+        header_title=header_title,
+        header_subtitle=f'#{change.pk:04d} — {change.title}',
+        greeting=greeting,
+        body_rows=detail_rows,
+        cta_url=change_url,
+        cta_label=f'{action_label} in Kdesk',
+    )
     _send_notification_email(to=to_email, subject=subject, body=body)
 
 
