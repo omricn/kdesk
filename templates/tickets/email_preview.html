@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Email Preview{% endblock %}
+{% block content %}
+<h4 class="mb-1"><i class="bi bi-envelope-paper me-2"></i>Email Preview</h4>
+<p class="text-muted small mb-4">All {{ samples|length }} outgoing email types — rendered with sample data.</p>
+
+<div class="d-flex flex-column gap-5">
+{% for idx, label in samples %}
+<div>
+  <div class="d-flex align-items-center gap-3 mb-2">
+    <span class="badge bg-secondary" style="font-size:13px;">{{ forloop.counter }}</span>
+    <strong>{{ label }}</strong>
+  </div>
+  <div style="border:1px solid var(--kramer-border);border-radius:8px;overflow:hidden;">
+    <iframe src="{% url 'email_preview' %}?idx={{ idx }}"
+            style="width:100%;border:none;display:block;min-height:400px;"
+            onload="this.style.height=(this.contentDocument.documentElement.scrollHeight+32)+'px'">
+    </iframe>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}

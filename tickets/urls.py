@@ -13,4 +13,5 @@ urlpatterns = [
     path('reports/', views.reports, name='reports'),
     path('reports/export/', views.export_tickets_csv, name='export_csv'),
     path('settings/', views.settings_view, name='settings'),
+    path('dev/email-preview/', views.email_preview, name='email_preview'),
 ]

@@ -659,3 +659,237 @@ def ticket_send_email(request, pk):
 
     messages.success(request, f'Email sent to {to_email}.')
     return redirect('ticket_detail', pk=pk)
+
+
+# ── Email preview (superuser only) ───────────────────────────────────────────
+
+@login_required
+def email_preview(request):
+    if not request.user.is_superuser:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden()
+
+    from tasks.scheduled import _email_html, _row
+
+    site = settings.SITE_URL
+
+    samples = [
+        {
+            'label': 'Ticket Assigned',
+            'html': _email_html(
+                header_title='Ticket Assigned to You',
+                header_subtitle='#0042 — Outlook not syncing emails',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>A support ticket has been assigned to you.',
+                body_rows=(
+                    _row('Ticket', '#0042 — Outlook not syncing emails') +
+                    _row('Requester', 'David Levi (dlevi@kramerav.com)') +
+                    _row('SLA Deadline', '18 Apr 2026 14:00')
+                ),
+                cta_url=f'{site}/tickets/42/',
+                cta_label='Open Ticket',
+            ),
+        },
+        {
+            'label': 'Ticket Updated',
+            'html': _email_html(
+                header_title='Ticket Updated',
+                header_subtitle='#0042 — Outlook not syncing emails',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>Ticket <strong>#0042</strong> was updated by <strong>Shahar Dekner</strong>.',
+                body_rows=(
+                    _row('Ticket', '#0042 — Outlook not syncing emails') +
+                    _row('Status', 'In Progress') +
+                    _row('Updated by', 'Shahar Dekner')
+                ),
+                cta_url=f'{site}/tickets/42/',
+                cta_label='Open Ticket',
+            ),
+        },
+        {
+            'label': 'SLA Warning',
+            'html': _email_html(
+                header_title='SLA Warning',
+                header_subtitle='#0042 — Outlook not syncing emails',
+                header_color='#e67e22',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>This ticket is at <strong>78% of its SLA window</strong>. Please respond soon to avoid a breach.',
+                body_rows=(
+                    _row('Ticket', '#0042 — Outlook not syncing emails', '#e67e22') +
+                    _row('SLA Deadline', '18 Apr 2026 14:00', '#e67e22') +
+                    _row('Elapsed', '78%', '#e67e22')
+                ),
+                cta_url=f'{site}/tickets/42/',
+                cta_label='Open Ticket',
+            ),
+        },
+        {
+            'label': 'SLA Breached',
+            'html': _email_html(
+                header_title='SLA Deadline Breached',
+                header_subtitle='#0042 — Outlook not syncing emails',
+                header_color='#c0392b',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>The following ticket has <strong>breached its SLA deadline</strong> and requires your immediate attention.',
+                body_rows=(
+                    _row('Ticket', '#0042 — Outlook not syncing emails', '#c0392b') +
+                    _row('Requester', 'David Levi (dlevi@kramerav.com)', '#c0392b') +
+                    _row('SLA Deadline', '17 Apr 2026 14:00', '#c0392b')
+                ),
+                cta_url=f'{site}/tickets/42/',
+                cta_label='Open Ticket',
+            ),
+        },
+        {
+            'label': 'Requester — Ticket Received',
+            'html': _email_html(
+                header_title='We received your request',
+                header_subtitle='Ticket #0042',
+                greeting='Hi <strong>David Levi</strong>,<br><br>Your support request has been received and logged. Our IT team will look into it and get back to you as soon as possible.',
+                body_rows=(
+                    _row('Ticket #', '#0042') +
+                    _row('Subject', 'Outlook not syncing emails') +
+                    _row('Submitted', '16 Apr 2026 09:31')
+                ),
+            ),
+        },
+        {
+            'label': 'Requester — Ticket Closed',
+            'html': _email_html(
+                header_title='Your ticket has been closed',
+                header_subtitle='Ticket #0042',
+                greeting='Hi <strong>David Levi</strong>,<br><br>Your support ticket has been resolved and closed. If you need further assistance, please don\'t hesitate to reach out.',
+                body_rows=(
+                    _row('Ticket #', '#0042') +
+                    _row('Subject', 'Outlook not syncing emails') +
+                    _row('Closed', '17 Apr 2026 11:20') +
+                    _row('Resolution', 'Reconfigured Exchange profile and cleared local cache. Emails are now syncing correctly.')
+                ),
+            ),
+        },
+        {
+            'label': 'Change — Pending Approval (to IT Manager)',
+            'html': _email_html(
+                header_title='Change Request Pending Approval',
+                header_subtitle='#0007 — Firewall rule update — DMZ segment',
+                greeting='A new change request has been submitted and is awaiting your approval.',
+                body_rows=(
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment') +
+                    _row('Risk Level', 'High') +
+                    _row('Affected System', 'Network') +
+                    _row('Planned Date', '20 Apr 2026  22:00 – 23:00') +
+                    _row('Submitted By', 'Omri Cohen')
+                ),
+                cta_url=f'{site}/changes/7/',
+                cta_label='Review &amp; Approve in Kdesk',
+            ),
+        },
+        {
+            'label': 'Change — Submitted (to submitter)',
+            'html': _email_html(
+                header_title='Change Request Submitted',
+                header_subtitle='#0007 — Firewall rule update — DMZ segment',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>Your change request has been submitted and is now pending approval by the IT Manager. You will be notified once it is approved.',
+                body_rows=(
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment') +
+                    _row('Planned Date', '20 Apr 2026  22:00 – 23:00')
+                ),
+                cta_url=f'{site}/changes/7/',
+                cta_label='View in Kdesk',
+            ),
+        },
+        {
+            'label': 'Change — Approved',
+            'html': _email_html(
+                header_title='Change Request Approved',
+                header_subtitle='#0007 — Firewall rule update — DMZ segment',
+                header_color='#1a7a4a',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>Your change request has been <strong>approved</strong>. You may now proceed with implementation.',
+                body_rows=(
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment', '#1a7a4a') +
+                    _row('Planned Date', '20 Apr 2026  22:00 – 23:00', '#1a7a4a')
+                ),
+                cta_url=f'{site}/changes/7/',
+                cta_label='View in Kdesk',
+            ),
+        },
+        {
+            'label': 'Change — Completed',
+            'html': _email_html(
+                header_title='Change Marked as Done',
+                header_subtitle='#0007 — Firewall rule update — DMZ segment',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>Change <strong>#0007 — Firewall rule update — DMZ segment</strong> has been marked as <strong>Done</strong>. Well done!',
+                body_rows=(
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment') +
+                    _row('Affected System', 'Network') +
+                    _row('Risk Level', 'High') +
+                    _row('Implemented By', 'Omri Cohen')
+                ),
+            ),
+        },
+        {
+            'label': 'Change — Reminder: Mark as In Progress',
+            'html': _email_html(
+                header_title='Action Needed — Mark as In Progress',
+                header_subtitle='#0007 — Firewall rule update — DMZ segment',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>The planned maintenance window for <strong>Network</strong> has started (22:00 – 23:00). Please mark the change as <strong>In Progress</strong> in Kdesk so the team knows the work has begun.',
+                body_rows=(
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment') +
+                    _row('System', 'Network') +
+                    _row('Date', 'Sunday, 20 April 2026') +
+                    _row('Timeframe', '22:00 – 23:00')
+                ),
+                cta_url=f'{site}/changes/7/',
+                cta_label='Mark as In Progress in Kdesk',
+            ),
+        },
+        {
+            'label': 'Change — Reminder: Mark as Done',
+            'html': _email_html(
+                header_title='Action Needed — Mark as Done',
+                header_subtitle='#0007 — Firewall rule update — DMZ segment',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br>The planned maintenance window for <strong>Network</strong> has ended (22:00 – 23:00). Please mark the change as <strong>Done</strong> in Kdesk once the work is complete.',
+                body_rows=(
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment') +
+                    _row('System', 'Network') +
+                    _row('Date', 'Sunday, 20 April 2026') +
+                    _row('Timeframe', '22:00 – 23:00')
+                ),
+                cta_url=f'{site}/changes/7/',
+                cta_label='Mark as Done in Kdesk',
+            ),
+        },
+        {
+            'label': 'Maintenance Broadcast (to all employees)',
+            'html': _email_html(
+                header_title='Planned Maintenance Notification',
+                header_subtitle='Network — Sunday, 20 April 2026',
+                greeting=(
+                    'Dear Employees,<br><br>'
+                    'Please be informed that the IT Department has scheduled a <strong>Planned Maintenance</strong> '
+                    'window. During this time, the affected system may be temporarily unavailable.<br><br>'
+                    'We apologize for any inconvenience and will work to minimize disruption. '
+                    'If you have any questions please contact '
+                    '<a href="mailto:servicedesk@kramerav.com" style="color:#8200B4;">servicedesk@kramerav.com</a>.'
+                ),
+                body_rows=(
+                    _row('System', 'Network') +
+                    _row('Date', 'Sunday, 20 April 2026') +
+                    _row('Timeframe', '22:00 – 23:00') +
+                    _row('Region', 'Israel')
+                ),
+            ),
+        },
+    ]
+
+    idx = request.GET.get('idx')
+    if idx is not None:
+        try:
+            from django.http import HttpResponse
+            from django.views.decorators.clickjacking import xframe_options_exempt
+            response = HttpResponse(samples[int(idx)]['html'])
+            response['X-Frame-Options'] = 'SAMEORIGIN'
+            return response
+        except (IndexError, ValueError):
+            from django.http import Http404
+            raise Http404
+
+    return render(request, 'tickets/email_preview.html', {
+        'samples': [(i, s['label']) for i, s in enumerate(samples)],
+    })
