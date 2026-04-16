@@ -9,6 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
+]
 
 # ── Apps ──────────────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
@@ -95,10 +98,26 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
+
+# ── Azure Blob Storage for media files (production) ───────────────────────────
+# When AZURE_STORAGE_ACCOUNT is set, media uploads go to Azure Blob Storage.
+# Static files always use Whitenoise (served from the container).
+_azure_storage_account = os.environ.get('AZURE_STORAGE_ACCOUNT', '')
+if _azure_storage_account:
+    STORAGES['default'] = {'BACKEND': 'storages.backends.azure_storage.AzureStorage'}
+    AZURE_ACCOUNT_NAME = _azure_storage_account
+    AZURE_ACCOUNT_KEY = os.environ.get('AZURE_STORAGE_KEY', '')
+    AZURE_CONTAINER = os.environ.get('AZURE_STORAGE_CONTAINER', 'media')
+    AZURE_CUSTOM_DOMAIN = f'{_azure_storage_account}.blob.core.windows.net'
+    MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

@@ -29,22 +29,32 @@ class Change(models.Model):
         (RISK_HIGH, 'High'),
     ]
 
+    REGION_ISRAEL = 'israel'
+    REGION_GLOBAL = 'global'
+    REGION_CHOICES = [
+        (REGION_ISRAEL, 'Israel'),
+        (REGION_GLOBAL, 'Globally'),
+    ]
+
     SYSTEM_CHOICES = [
         ('priority', 'Priority'),
         ('qv', 'QV'),
         ('sf', 'SF'),
         ('kdesk', 'KDESK'),
-        ('servers', 'Servers'),
+        ('servers', 'Servers - Network connectivity'),
         ('other', 'Other'),
     ]
 
     title = models.CharField(max_length=300)
     description = models.TextField()
     risk_level = models.CharField(max_length=10, choices=RISK_CHOICES, default=RISK_LOW)
-    planned_date = models.DateTimeField()
+    planned_date = models.DateField()
+    planned_from = models.TimeField(null=True, blank=True)
+    planned_to = models.TimeField(null=True, blank=True)
     rollback_plan = models.TextField()
     affected_system = models.CharField(max_length=20, choices=SYSTEM_CHOICES)
     affected_system_other = models.CharField(max_length=200, blank=True)
+    affected_region = models.CharField(max_length=20, choices=REGION_CHOICES, default=REGION_ISRAEL)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW, db_index=True)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -53,6 +63,9 @@ class Change(models.Model):
         related_name='changes',
     )
     notes = models.TextField(blank=True)
+    reminded_start = models.BooleanField(default=False)
+    reminded_done = models.BooleanField(default=False)
+    reminded_done_followup = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

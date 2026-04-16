@@ -227,12 +227,17 @@ a:hover { color: #a0ffdb; }
 }
 
 /* Status badges */
-.badge.bg-primary   { background-color: var(--kramer-purple) !important; color: #fff; }
-.badge.bg-info      { background-color: #1a4a6e !important; color: var(--kramer-neutral); }
-.badge.bg-warning   { background-color: #7a4d00 !important; color: var(--kramer-neutral); }
-.badge.bg-success   { background-color: rgba(104,255,195,0.15) !important; color: var(--kramer-mint); border: 1px solid rgba(104,255,195,0.3); }
-.badge.bg-secondary { background-color: var(--kramer-surface2) !important; color: #888; }
-.badge.bg-danger    { background-color: var(--kramer-pink) !important; color: #fff; }
+.badge.bg-primary        { background-color: var(--kramer-purple) !important; color: #fff; }
+.badge.bg-info           { background-color: #1a4a6e !important; color: var(--kramer-neutral); }
+.badge.bg-warning        { background-color: #7a4d00 !important; color: var(--kramer-neutral); }
+.badge.bg-success        { background-color: rgba(104,255,195,0.15) !important; color: var(--kramer-mint); border: 1px solid rgba(104,255,195,0.3); }
+.badge.bg-secondary      { background-color: var(--kramer-surface2) !important; color: #888; }
+.badge.bg-danger         { background-color: var(--kramer-pink) !important; color: #fff; }
+.badge.bg-user-responded { background-color: rgba(200,160,0,0.25) !important; color: #f5c842; border: 1px solid rgba(200,160,0,0.4); }
+
+/* User-responded row highlight */
+tr.row-user-responded td { background-color: rgba(200,160,0,0.08) !important; }
+tr.row-user-responded:hover td { background-color: rgba(200,160,0,0.14) !important; }
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 .form-control, .form-select {
@@ -257,6 +262,12 @@ a:hover { color: #a0ffdb; }
 }
 
 .form-control::placeholder { color: #555; }
+
+/* ── Bidirectional text (Hebrew / RTL support) ───────────────────────────── */
+input[type="text"].form-control,
+input[type="email"].form-control,
+input[type="search"].form-control,
+textarea.form-control { unicode-bidi: plaintext; }
 .form-label { color: var(--kramer-neutral); font-size: var(--fs-body); }
 .form-text  { color: #666; }
 .form-check-input:checked { background-color: var(--kramer-purple); border-color: var(--kramer-purple); }
@@ -457,6 +468,45 @@ a:hover { color: #a0ffdb; }
 [data-theme="light"] .alert-warning { background-color: rgba(180,100,0,0.1);  color: #7a4400; }
 
 [data-theme="light"] .btn-close { filter: invert(1); }
+
+/* ── Nav tabs ────────────────────────────────────────────────────────────── */
+.nav-tabs {
+  --bs-nav-tabs-border-color: var(--kramer-border);
+  --bs-nav-tabs-link-active-color: var(--kramer-mint);
+  --bs-nav-tabs-link-active-bg: var(--kramer-surface);
+  --bs-nav-tabs-link-active-border-color: var(--kramer-border) var(--kramer-border) var(--kramer-surface);
+  border-color: var(--kramer-border);
+}
+.nav-tabs .nav-link,
+.nav-tabs button.nav-link { color: #888 !important; border-color: transparent !important; background: transparent !important; }
+.nav-tabs .nav-link:hover,
+.nav-tabs button.nav-link:hover { color: var(--kramer-neutral) !important; }
+.nav-tabs .nav-link.active,
+.nav-tabs button.nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+  color: var(--kramer-mint) !important;
+  background-color: var(--kramer-surface) !important;
+  border-color: var(--kramer-border) var(--kramer-border) var(--kramer-surface) !important;
+}
+[data-theme="light"] .nav-tabs .nav-link.active,
+[data-theme="light"] .nav-tabs button.nav-link.active {
+  color: var(--kramer-purple) !important;
+  background-color: #ffffff !important;
+  border-color: #cccccc #cccccc #ffffff !important;
+}
+
+[data-theme="light"] .nav-tabs {
+  --bs-nav-tabs-link-active-color: var(--kramer-purple);
+  --bs-nav-tabs-link-active-bg: #ffffff;
+  --bs-nav-tabs-link-active-border-color: #cccccc #cccccc #ffffff;
+}
+[data-theme="light"] .nav-tabs .nav-link { color: #555 !important; }
+[data-theme="light"] .nav-tabs .nav-link:hover { color: #222 !important; }
+[data-theme="light"] .nav-tabs .nav-link.active {
+  color: var(--kramer-purple) !important;
+  background-color: #ffffff !important;
+  border-color: #cccccc #cccccc #ffffff !important;
+}
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }

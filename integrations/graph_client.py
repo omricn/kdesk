@@ -83,17 +83,29 @@ class GraphClient:
         )
         r.raise_for_status()
 
-    def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str):
-        """Send an email from the servicedesk mailbox."""
+    def move_message_to_deleted(self, mailbox: str, message_id: str):
+        """Move a message to the Deleted Items folder."""
+        url = f'{GRAPH_BASE}/users/{mailbox}/messages/{message_id}/move'
+        r = requests.post(
+            url,
+            headers=self._headers(),
+            json={'destinationId': 'deleteditems'},
+            timeout=30,
+        )
+        r.raise_for_status()
+
+    def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str,
+                   bcc_email: str = None):
+        """Send an email from the servicedesk mailbox. Optionally BCC an address."""
         path = f'/users/{from_mailbox}/sendMail'
-        payload = {
-            'message': {
-                'subject': subject,
-                'body': {'contentType': 'HTML', 'content': body_html},
-                'toRecipients': [{'emailAddress': {'address': to_email}}],
-            }
+        message = {
+            'subject': subject,
+            'body': {'contentType': 'HTML', 'content': body_html},
+            'toRecipients': [{'emailAddress': {'address': to_email}}],
         }
-        self.post(path, payload)
+        if bcc_email:
+            message['bccRecipients'] = [{'emailAddress': {'address': bcc_email}}]
+        self.post(path, {'message': message})
 
     # ── Users / Groups ────────────────────────────────────────────────────────
 

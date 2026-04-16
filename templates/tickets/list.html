@@ -180,7 +180,7 @@
                 </a>
               </td>
               <td class="text-truncate" style="max-width:220px;">
-                <a href="{% url 'ticket_detail' t.pk %}" class="text-dark text-decoration-none">{{ t.title }}</a>
+                <a href="{% url 'ticket_detail' t.pk %}" class="text-dark text-decoration-none" dir="auto">{{ t.title }}</a>
                 {% if t.source == 'email' %}<i class="bi bi-envelope text-muted ms-1" title="Created from email"></i>{% endif %}
               </td>
               <td class="text-truncate" style="max-width:140px;" title="{{ t.requester_email }}">

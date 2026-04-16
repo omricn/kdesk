@@ -34,8 +34,22 @@
           <dt class="col-4">Affected System</dt>
           <dd class="col-8">{{ change.affected_system_display }}</dd>
 
+          <dt class="col-4">Affected Region</dt>
+          <dd class="col-8">{{ change.get_affected_region_display }}</dd>
+
           <dt class="col-4">Planned Date</dt>
-          <dd class="col-8">{{ change.planned_date|date:"d M Y H:i" }}</dd>
+          <dd class="col-8">{{ change.planned_date|date:"d M Y" }}</dd>
+
+          <dt class="col-4">Planned Timeframe</dt>
+          <dd class="col-8">
+            {% if change.planned_from and change.planned_to %}
+              {{ change.planned_from|time:"H:i" }} – {{ change.planned_to|time:"H:i" }}
+            {% elif change.planned_from %}
+              From {{ change.planned_from|time:"H:i" }}
+            {% else %}
+              —
+            {% endif %}
+          </dd>
 
           <dt class="col-4">Submitted By</dt>
           <dd class="col-8">{{ change.submitted_by|default:"—" }}</dd>

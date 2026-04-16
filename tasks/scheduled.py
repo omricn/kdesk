@@ -238,6 +238,139 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
         )
 
 
+def _send_maintenance_announcement(change):
+    """Send a Planned Maintenance broadcast email to all affected employees."""
+    import os
+    from changes.models import Change
+
+    # Determine recipient list
+    region_recipients = {
+        Change.REGION_ISRAEL: 'IL_All_Employees@kramerav.com',
+        Change.REGION_GLOBAL: 'GLOBAL_All_Employees@kramerav.com',
+    }
+    to_email = region_recipients.get(change.affected_region)
+    if not to_email:
+        logger.warning(f'[Change] Unknown region "{change.affected_region}" — skipping broadcast.')
+        return
+
+    # Format date and timeframe
+    if change.planned_date:
+        date_str = change.planned_date.strftime('%A, %d %B %Y')
+    else:
+        date_str = 'TBD'
+
+    if change.planned_from and change.planned_to:
+        timeframe_str = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")}'
+    elif change.planned_from:
+        timeframe_str = f'From {change.planned_from.strftime("%H:%M")}'
+    else:
+        timeframe_str = 'To be confirmed'
+
+    system_str = change.affected_system_display
+    region_str = change.get_affected_region_display()
+
+    logo_tag = '<span style="font-size:12px;font-weight:400;color:#aaaaaa;font-family:Segoe UI,Calibri,Arial,sans-serif;line-height:1.8;">Kramer</span>'
+
+    body = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#f4f4f4;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 0;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+            <!-- Header -->
+            <tr>
+              <td style="background:#8200B4;padding:28px 36px;">
+                <p style="margin:0;color:#ffffff;font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:0.8;font-family:'Segoe UI',Calibri,Arial,sans-serif;">IT Department</p>
+                <h1 style="margin:6px 0 0;color:#ffffff;font-size:22px;font-weight:600;font-family:'Segoe UI',Calibri,Arial,sans-serif;">Planned Maintenance Notification</h1>
+              </td>
+            </tr>
+
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:32px 36px;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+                <p style="margin:0 0 20px;color:#333333;font-size:15px;line-height:1.6;">
+                  Dear Employees,
+                </p>
+                <p style="margin:0 0 24px;color:#333333;font-size:15px;line-height:1.6;">
+                  Please be informed that the IT Department has scheduled a <strong>Planned Maintenance</strong>
+                  window. During this time, the affected system may be temporarily unavailable.
+                </p>
+
+                <!-- Details box -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f0ff;border-left:4px solid #8200B4;border-radius:4px;">
+                  <tr>
+                    <td style="padding:20px 24px;">
+                      <table width="100%" cellpadding="6" cellspacing="0" style="font-size:14px;color:#333333;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+                        <tr>
+                          <td style="color:#8200B4;font-weight:600;white-space:nowrap;width:130px;">System</td>
+                          <td style="color:#333333;">{system_str}</td>
+                        </tr>
+                        <tr>
+                          <td style="color:#8200B4;font-weight:600;">Date</td>
+                          <td style="color:#333333;">{date_str}</td>
+                        </tr>
+                        <tr>
+                          <td style="color:#8200B4;font-weight:600;">Timeframe</td>
+                          <td style="color:#333333;">{timeframe_str}</td>
+                        </tr>
+                        <tr>
+                          <td style="color:#8200B4;font-weight:600;">Region</td>
+                          <td style="color:#333333;">{region_str}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:24px 0 12px;color:#333333;font-size:15px;line-height:1.6;">
+                  We apologize for any inconvenience and will work to minimize disruption.
+                  The system will be restored as quickly as possible.
+                </p>
+                <p style="margin:0;color:#333333;font-size:15px;line-height:1.6;">
+                  If you have any questions, please contact the IT Support Team at
+                  <a href="mailto:servicedesk@kramerav.com" style="color:#8200B4;">servicedesk@kramerav.com</a>.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td bgcolor="#1a1a2e" style="background:#1a1a2e;padding:24px 36px;text-align:left;">
+                {logo_tag}
+                <span style="display:block;margin-top:10px;color:#aaaaaa;font-size:12px;line-height:1.8;font-family:'Segoe UI',Calibri,Arial,sans-serif;text-align:left;">
+                  IT Support Team<br>
+                  <a href="mailto:servicedesk@kramerav.com" style="color:#cc66ff;text-decoration:none;">servicedesk@kramerav.com</a>
+                </span>
+              </td>
+            </tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    subject = f'[Planned Maintenance] {system_str} – {date_str}, {timeframe_str}'
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email=settings.SERVICEDESK_EMAIL,  # TO: servicedesk itself
+            bcc_email=to_email,                   # BCC: the distribution group
+            subject=subject,
+            body_html=body,
+        )
+        logger.info(f'[Change] Maintenance announcement sent (BCC) to {to_email} for change #{change.pk}.')
+    except Exception as exc:
+        logger.error(f'[Change] Failed to send maintenance announcement: {exc}')
+
+
 def _send_notification_email(to: str, subject: str, body: str):
     try:
         from integrations.graph_client import get_client
@@ -325,7 +458,14 @@ def notify_change(change_pk: int, event: str):
         change.submitted_by.display_name or change.submitted_by.email
         if change.submitted_by else 'IT Team'
     )
-    planned = change.planned_date.strftime('%Y-%m-%d %H:%M') if change.planned_date else 'N/A'
+    if change.planned_date:
+        planned = change.planned_date.strftime('%Y-%m-%d')
+        if change.planned_from and change.planned_to:
+            planned += f' {change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")}'
+        elif change.planned_from:
+            planned += f' from {change.planned_from.strftime("%H:%M")}'
+    else:
+        planned = 'N/A'
 
     change_url = f'{settings.SITE_URL}/changes/{change.pk}/'
 
@@ -378,6 +518,8 @@ def notify_change(change_pk: int, event: str):
                 <p><a href="{change_url}">View change in Kdesk</a></p>
                 """,
             )
+        # Broadcast maintenance announcement to all affected employees
+        _send_maintenance_announcement(change)
 
     elif event == 'done':
         body = f"""
@@ -407,6 +549,144 @@ def notify_change(change_pk: int, event: str):
     logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
 
 
+# ── Change status reminders ───────────────────────────────────────────────────
+
+@shared_task(name='tasks.check_change_reminders')
+def check_change_reminders():
+    """
+    Send email reminders to change submitters:
+    - When planned_from arrives: remind to mark as In Progress
+    - When planned_to arrives: remind to mark as Done
+    Runs every 15 minutes alongside the SLA checker.
+    """
+    from datetime import datetime, date
+    from changes.models import Change
+
+    now = timezone.now()
+    today = now.date()
+    current_time = now.time()
+
+    # ── Reminder 1: Start reminder ─────────────────────────────────────────────
+    # Approved changes whose planned window has started but submitter hasn't moved them
+    start_candidates = Change.objects.filter(
+        status=Change.STATUS_APPROVED,
+        planned_date__lte=today,
+        planned_from__isnull=False,
+        reminded_start=False,
+    ).select_related('submitted_by')
+
+    for change in start_candidates:
+        # Only trigger once the planned_from time has passed on the planned date
+        if change.planned_date < today or (change.planned_date == today and change.planned_from <= current_time):
+            _send_change_reminder(change, 'start')
+            change.reminded_start = True
+            change.save(update_fields=['reminded_start'])
+            logger.info(f'[Change] Start reminder sent for change #{change.pk}.')
+
+    # ── Reminder 2: Done reminder ──────────────────────────────────────────────
+    # In-progress changes whose planned window has ended
+    done_candidates = Change.objects.filter(
+        status=Change.STATUS_IN_PROGRESS,
+        planned_date__lte=today,
+        planned_to__isnull=False,
+        reminded_done=False,
+    ).select_related('submitted_by')
+
+    for change in done_candidates:
+        if change.planned_date < today or (change.planned_date == today and change.planned_to <= current_time):
+            _send_change_reminder(change, 'done')
+            change.reminded_done = True
+            change.save(update_fields=['reminded_done'])
+            logger.info(f'[Change] Done reminder sent for change #{change.pk}.')
+
+    # ── Reminder 3: Done follow-up (1 hour after planned_to) ──────────────────
+    # Any non-terminal change still not marked Done 1 hour after planned_to
+    from datetime import datetime, timedelta
+    followup_candidates = Change.objects.filter(
+        planned_date__isnull=False,
+        planned_to__isnull=False,
+        reminded_done_followup=False,
+    ).exclude(
+        status__in=[Change.STATUS_DONE, Change.STATUS_CANCELLED],
+    ).select_related('submitted_by')
+
+    for change in followup_candidates:
+        window_end = datetime.combine(change.planned_date, change.planned_to)
+        window_end_aware = timezone.make_aware(window_end)
+        if now >= window_end_aware + timedelta(hours=1):
+            _send_change_reminder(change, 'done_followup')
+            change.reminded_done_followup = True
+            change.save(update_fields=['reminded_done_followup'])
+            logger.info(f'[Change] Done follow-up reminder sent for change #{change.pk}.')
+
+
+def _send_change_reminder(change, reminder_type: str):
+    """Send a status-update reminder email to the change submitter."""
+    if not change.submitted_by:
+        return
+
+    to_email = change.submitted_by.email
+    submitter_name = change.submitted_by.display_name or change.submitted_by.email
+    change_url = f'{settings.SITE_URL}/changes/{change.pk}/'
+
+    if change.planned_from and change.planned_to:
+        timeframe = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")}'
+    elif change.planned_from:
+        timeframe = f'From {change.planned_from.strftime("%H:%M")}'
+    else:
+        timeframe = 'N/A'
+
+    date_str = change.planned_date.strftime('%A, %d %B %Y') if change.planned_date else 'N/A'
+
+    if reminder_type == 'start':
+        subject = f'[Kdesk] Reminder: Mark Change #{change.pk:04d} as In Progress'
+        action_label = 'Mark as In Progress'
+        message = (
+            f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
+            f'has started ({timeframe}). Please remember to mark the change as <strong>In Progress</strong> '
+            f'in Kdesk so the team knows the work has begun.'
+        )
+    elif reminder_type == 'done_followup':
+        subject = f'[Kdesk] Action Required: Change #{change.pk:04d} Still Not Closed'
+        action_label = 'Mark as Done'
+        message = (
+            f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
+            f'ended over an hour ago ({timeframe}), but the change has not been marked as <strong>Done</strong> yet. '
+            f'Please update the status in Kdesk as soon as the work is complete.'
+        )
+    else:
+        subject = f'[Kdesk] Reminder: Mark Change #{change.pk:04d} as Done'
+        action_label = 'Mark as Done'
+        message = (
+            f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
+            f'has ended ({timeframe}). Please remember to mark the change as <strong>Done</strong> '
+            f'in Kdesk once the work is complete.'
+        )
+
+    body = f"""
+    <p>Hello {submitter_name},</p>
+    <p>{message}</p>
+    <table style="border-left:3px solid #8200B4;padding:12px 20px;background:#f8f0ff;border-radius:4px;margin:20px 0;">
+      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;white-space:nowrap;">Change</td>
+          <td>#{change.pk:04d} — {change.title}</td></tr>
+      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;">System</td>
+          <td>{change.affected_system_display}</td></tr>
+      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;">Date</td>
+          <td>{date_str}</td></tr>
+      <tr><td style="color:#8200B4;font-weight:700;padding:3px 16px 3px 0;">Timeframe</td>
+          <td>{timeframe}</td></tr>
+    </table>
+    <p>
+      <a href="{change_url}" style="display:inline-block;padding:10px 22px;background:#8200B4;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
+        {action_label} in Kdesk
+      </a>
+    </p>
+    <p style="color:#888;font-size:13px;">IT Support Team · servicedesk@kramerav.com</p>
+    """
+
+    _send_notification_email(to=to_email, subject=subject, body=body)
+
+
 # ── Setup scheduled tasks in the DB ──────────────────────────────────────────
 
 def register_periodic_tasks():
@@ -416,8 +696,8 @@ def register_periodic_tasks():
     from django_celery_beat.models import PeriodicTask, IntervalSchedule
 
     poll_interval, _ = IntervalSchedule.objects.get_or_create(
-        every=settings.EMAIL_POLL_INTERVAL,
-        period=IntervalSchedule.MINUTES,
+        every=30,
+        period=IntervalSchedule.SECONDS,
     )
     sync_interval, _ = IntervalSchedule.objects.get_or_create(every=60, period=IntervalSchedule.MINUTES)
     weekly_interval, _ = IntervalSchedule.objects.get_or_create(every=10080, period=IntervalSchedule.MINUTES)
@@ -428,6 +708,7 @@ def register_periodic_tasks():
         ('Sync Entra Users', 'tasks.sync_users', sync_interval),
         ('Sync Entra Admins', 'tasks.sync_admins', weekly_interval),
         ('Check SLA', 'tasks.check_sla', sla_interval),
+        ('Check Change Reminders', 'tasks.check_change_reminders', sla_interval),
     ]
 
     for name, task_name, schedule in tasks:

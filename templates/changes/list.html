@@ -42,7 +42,10 @@
           <td>{{ c.title }}</td>
           <td><span class="badge {{ c.risk_badge_class }}">{{ c.get_risk_level_display }}</span></td>
           <td>{{ c.affected_system_display }}</td>
-          <td>{{ c.planned_date|date:"d M Y H:i" }}</td>
+          <td>
+            {{ c.planned_date|date:"d M Y" }}
+            {% if c.planned_from %}<br><span class="text-muted small">{{ c.planned_from|time:"H:i" }}{% if c.planned_to %} – {{ c.planned_to|time:"H:i" }}{% endif %}</span>{% endif %}
+          </td>
           <td><span class="badge {{ c.status_badge_class }}">{{ c.get_status_display }}</span></td>
           <td>{{ c.submitted_by|default:"—" }}</td>
         </tr>

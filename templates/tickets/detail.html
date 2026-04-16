@@ -29,7 +29,7 @@
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-start">
-          <h5 class="card-title mb-1">{{ ticket.title }}</h5>
+          <h5 class="card-title mb-1" dir="auto">{{ ticket.title }}</h5>
           <div class="d-flex gap-1 ms-2 flex-shrink-0">
             <span class="badge {{ ticket.status|status_badge }}">{{ ticket.get_status_display }}</span>
           </div>
@@ -42,7 +42,7 @@
           <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
           {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
         </div>
-        <div class="description-body border rounded p-3" style="word-break:break-word;overflow-x:auto;">
+        <div class="description-body border rounded p-3" style="word-break:break-word;overflow-x:auto;" dir="auto">
           {% if ticket.description_is_html %}
             {{ ticket.description|safe }}
           {% else %}
@@ -70,7 +70,7 @@
 
     <!-- Comments + History tabs -->
     <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white p-0">
+      <div class="card-header p-0">
         <ul class="nav nav-tabs card-header-tabs px-3 pt-2" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tab-comments-btn" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">
@@ -96,7 +96,7 @@
                 <span class="fw-semibold small">{{ comment.author|default:"System" }}</span>
                 <span class="text-muted small">{{ comment.created_at|date:"d M Y H:i" }}</span>
               </div>
-              <div style="white-space:pre-wrap;">{{ comment.body }}</div>
+              <div style="white-space:pre-wrap;" dir="auto">{{ comment.body }}</div>
             </div>
             {% empty %}
             <div class="text-center text-muted py-3 small">No comments yet.</div>
@@ -172,7 +172,7 @@
       </div>
       <div class="card-body">
         <textarea name="solution" id="id_solution" form="update-form"
-                  class="form-control" rows="5"
+                  class="form-control" rows="5" dir="auto"
                   placeholder="Describe how the ticket was resolved…">{{ ticket.solution }}</textarea>
       </div>
     </div>
@@ -194,6 +194,30 @@
         </div>
       </div>
       {% endif %}
+
+      <!-- Email Correspondence -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header fw-semibold small d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-envelope me-1"></i>Email to Requester</span>
+          {% with email_count=ticket.emails.count %}
+          {% if email_count %}
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="show-correspondence-btn" style="font-size:12px;">
+            <i class="bi bi-chat-left-dots me-1"></i>{{ email_count }} message{{ email_count|pluralize }}
+          </button>
+          {% endif %}
+          {% endwith %}
+        </div>
+        <div class="card-body">
+          <form method="post" action="{% url 'ticket_send_email' ticket.pk %}" id="send-email-form">
+            {% csrf_token %}
+            <textarea name="email_body" id="email_body" class="form-control form-control-sm mb-2"
+                      rows="4" placeholder="Type your message to {{ ticket.requester_name|default:ticket.requester_email }}…"></textarea>
+            <button type="submit" class="btn btn-sm btn-primary w-100">
+              <i class="bi bi-send me-1"></i>Send Email
+            </button>
+          </form>
+        </div>
+      </div>
 
       <!-- Category -->
       <div class="card border-0 shadow-sm mb-3">
@@ -255,6 +279,78 @@
   </div>
 
 </div>
+
+<!-- Correspondence floating modal -->
+<div class="modal fade" id="correspondenceModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <span class="modal-title small fw-semibold"><i class="bi bi-envelope-open me-2"></i>Email Correspondence — Ticket #{{ ticket.pk|stringformat:"04d" }}</span>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        {% with emails=ticket.emails.all %}
+        {% if emails %}
+        <div class="list-group list-group-flush">
+          {% for email in emails %}
+          <div class="list-group-item px-3 py-3 border-0 border-bottom">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <div class="d-flex align-items-center gap-2">
+                {% if email.direction == 'sent' %}
+                  <span class="badge bg-primary" style="font-size:11px;"><i class="bi bi-arrow-up-right me-1"></i>Sent</span>
+                  <span class="small text-muted">To: {{ email.to_email }}</span>
+                {% else %}
+                  <span class="badge bg-user-responded" style="font-size:11px;"><i class="bi bi-arrow-down-left me-1"></i>Received</span>
+                  <span class="small text-muted">From: {{ email.from_email }}</span>
+                {% endif %}
+              </div>
+              <span class="text-muted small text-nowrap ms-2">{{ email.timestamp|date:"d M Y H:i" }}</span>
+            </div>
+            <div class="small fw-semibold mb-1" style="color:var(--kramer-neutral);">{{ email.subject }}</div>
+            <div class="small" style="white-space:pre-wrap;color:#bbb;" dir="auto">{{ email.body }}</div>
+            {% if email.sent_by %}
+            <div class="small text-muted mt-1">by {{ email.sent_by }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5 small"><i class="bi bi-inbox fs-2 d-block mb-2"></i>No emails yet.</div>
+        {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  #tab-comments-btn, #tab-history-btn {
+    color: #888 !important;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  #tab-comments-btn:hover, #tab-history-btn:hover {
+    color: #ccc !important;
+  }
+  #tab-comments-btn.active, #tab-history-btn.active {
+    color: var(--kramer-mint) !important;
+    background-color: var(--kramer-surface) !important;
+    border-color: var(--kramer-border) var(--kramer-border) var(--kramer-surface) !important;
+  }
+  [data-theme="light"] #tab-comments-btn.active,
+  [data-theme="light"] #tab-history-btn.active {
+    color: var(--kramer-purple) !important;
+    background-color: #ffffff !important;
+    border-color: #cccccc #cccccc #ffffff !important;
+  }
+  [data-theme="light"] #tab-comments-btn,
+  [data-theme="light"] #tab-history-btn {
+    color: #555 !important;
+  }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -295,6 +391,15 @@ dSub.addEventListener('change', function() {
   const id = parseInt(this.value) || null;
   buildOpts(dItem, id ? CAT_DATA.items.filter(i => i.sub_id === id) : [], '— Item —');
   dItem.disabled = !id;
+
+  // Auto-select assignee based on subcategory mapping
+  const assigneeSel = document.querySelector('#update-form select[name="assignee"]');
+  if (assigneeSel && id) {
+    const sub = CAT_DATA.subcategories.find(s => s.id === id);
+    if (sub && sub.assignee_id) {
+      assigneeSel.value = sub.assignee_id;
+    }
+  }
 });
 
 if (INIT_CAT) {
@@ -329,6 +434,16 @@ if (INIT_CAT) {
   if (statusSel) {
     statusSel.addEventListener('change', syncRequired);
     syncRequired();
+  }
+})();
+
+// ── Correspondence modal ──────────────────────────────────────────────────────
+(function() {
+  var btn = document.getElementById('show-correspondence-btn');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      new bootstrap.Modal(document.getElementById('correspondenceModal')).show();
+    });
   }
 })();
 

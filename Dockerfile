@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN python manage.py collectstatic --noinput
+RUN chmod +x start_web.sh start_celery.sh start_beat.sh
 
 EXPOSE 8000
 
-CMD ["gunicorn", "kdesk.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+CMD ["./start_web.sh"]

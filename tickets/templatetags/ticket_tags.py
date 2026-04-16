@@ -31,7 +31,15 @@ def status_badge(status):
         'pending_vendor': 'bg-warning',
         'hold':           'bg-secondary',
         'closed':         'bg-secondary',
+        'user_responded': 'bg-user-responded',
     }
     return classes.get(status, 'bg-secondary')
+
+
+@register.filter
+def sla_row_class(ticket):
+    if getattr(ticket, 'status', None) == 'user_responded':
+        return 'row-user-responded'
+    return ''
 
 

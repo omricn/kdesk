@@ -15,8 +15,9 @@ from django.views.decorators.http import require_POST
 from .forms import AttachmentForm, CommentForm, TicketForm, TicketUpdateForm
 from .models import (
     SystemSetting, Ticket, TicketAttachment, TicketComment,
-    TicketCategory, TicketSubCategory, TicketItem, TicketHistory,
+    TicketCategory, TicketSubCategory, TicketItem, TicketHistory, TicketEmail,
 )
+
 from users.models import User
 
 
@@ -28,8 +29,8 @@ def _get_categories_json():
     }
     for cat in TicketCategory.objects.all():
         data['categories'].append({'id': cat.pk, 'name': cat.name})
-    for sub in TicketSubCategory.objects.select_related('category').all():
-        data['subcategories'].append({'id': sub.pk, 'cat_id': sub.category_id, 'name': sub.name})
+    for sub in TicketSubCategory.objects.select_related('category', 'assignee').all():
+        data['subcategories'].append({'id': sub.pk, 'cat_id': sub.category_id, 'name': sub.name, 'assignee_id': sub.assignee_id})
     for item in TicketItem.objects.select_related('subcategory').all():
         data['items'].append({'id': item.pk, 'sub_id': item.subcategory_id, 'name': item.name})
     return json.dumps(data)
@@ -63,6 +64,9 @@ def dashboard(request):
         status__in=Ticket.TERMINAL_STATUSES
     ).count()
 
+    from django.utils import timezone
+    today = timezone.now().date()
+
     my_tickets = tickets.filter(
         assignee=request.user
     ).exclude(
@@ -74,6 +78,17 @@ def dashboard(request):
         recent_qs = recent_qs.filter(assignee=request.user)
     recent_tickets = recent_qs.order_by('-created_at')[:10]
 
+    assigned_to_me_today = tickets.filter(
+        assignee=request.user,
+        created_at__date=today,
+    ).count()
+
+    closed_by_me_today = tickets.filter(
+        assignee=request.user,
+        status__in=Ticket.TERMINAL_STATUSES,
+        updated_at__date=today,
+    ).count()
+
     context = {
         'total': total,
         'open_count': open_count,
@@ -82,6 +97,8 @@ def dashboard(request):
         'breached_count': breached_count,
         'my_tickets': my_tickets,
         'recent_tickets': recent_tickets,
+        'assigned_to_me_today': assigned_to_me_today,
+        'closed_by_me_today': closed_by_me_today,
     }
     return render(request, 'dashboard.html', context)
 
@@ -374,30 +391,22 @@ def ticket_categorize(request, pk):
     ticket.subcategory_id = sub_id
     ticket.ticket_item_id = item_id
 
-    # Auto-assign based on subcategory if it has a designated admin
+    # Auto-assign based on subcategory assignee
     old_assignee = ticket.assignee
-    new_assignee = None
     if sub_id:
+        from .models import TicketSubCategory
         try:
             sub = TicketSubCategory.objects.select_related('assignee').get(pk=sub_id)
-            if sub.assignee:
+            if sub.assignee_id:
                 ticket.assignee = sub.assignee
-                new_assignee = sub.assignee
         except TicketSubCategory.DoesNotExist:
             pass
 
-    save_fields = ['category', 'subcategory', 'ticket_item']
-    if new_assignee:
-        save_fields.append('assignee')
-    ticket.save(update_fields=save_fields)
+    update_fields = ['category', 'subcategory', 'ticket_item']
+    if ticket.assignee != old_assignee:
+        update_fields.append('assignee')
 
-    # Notify new assignee if they changed
-    if new_assignee and new_assignee != old_assignee and new_assignee.notify_on_assign:
-        try:
-            from tasks.scheduled import send_ticket_notification
-            send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
-        except Exception:
-            pass
+    ticket.save(update_fields=update_fields)
 
     parts = [x for x in [
         ticket.category.name if ticket.category else None,
@@ -412,6 +421,14 @@ def ticket_categorize(request, pk):
             field='Category',
             old_value=old_cat_str,
             new_value=new_cat_str,
+        )
+    if ticket.assignee != old_assignee:
+        TicketHistory.objects.create(
+            ticket=ticket,
+            changed_by=request.user,
+            field='Assignee',
+            old_value=str(old_assignee) if old_assignee else '',
+            new_value=str(ticket.assignee) if ticket.assignee else '',
         )
     return JsonResponse({
         'ok': True,
@@ -575,3 +592,54 @@ def settings_view(request):
         'sla_pause_started': sla_pause_started,
     }
     return render(request, 'settings.html', context)
+
+
+# ── Ticket email correspondence ───────────────────────────────────────────────
+
+@login_required
+@require_POST
+def ticket_send_email(request, pk):
+    ticket = get_object_or_404(Ticket, pk=pk)
+    body = request.POST.get('email_body', '').strip()
+    if not body:
+        messages.error(request, 'Email body cannot be empty.')
+        return redirect('ticket_detail', pk=pk)
+
+    subject = f'[Ticket #{ticket.pk:04d}] {ticket.title}'
+    to_email = ticket.requester_email
+    sender_name = request.user.display_name or request.user.email
+
+    html_body = f"""
+    <p>{body.replace(chr(10), '<br>')}</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+    <p style="color:#888;font-size:12px;">
+      {sender_name} · IT Support Team<br>
+      Ticket reference: <strong>#{ticket.pk:04d}</strong>
+    </p>
+    """
+
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email=to_email,
+            subject=subject,
+            body_html=html_body,
+        )
+    except Exception as exc:
+        messages.error(request, f'Failed to send email: {exc}')
+        return redirect('ticket_detail', pk=pk)
+
+    TicketEmail.objects.create(
+        ticket=ticket,
+        direction=TicketEmail.DIRECTION_SENT,
+        subject=subject,
+        body=body,
+        from_email=settings.SERVICEDESK_EMAIL,
+        to_email=to_email,
+        sent_by=request.user,
+    )
+
+    messages.success(request, f'Email sent to {to_email}.')
+    return redirect('ticket_detail', pk=pk)

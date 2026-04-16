@@ -10,6 +10,7 @@ class Ticket(models.Model):
     STATUS_PENDING_VENDOR = 'pending_vendor'
     STATUS_HOLD = 'hold'
     STATUS_CLOSED = 'closed'
+    STATUS_USER_RESPONDED = 'user_responded'
 
     STATUS_CHOICES = [
         (STATUS_NEW, 'New'),
@@ -18,6 +19,7 @@ class Ticket(models.Model):
         (STATUS_PENDING_VENDOR, 'Pending Vendor'),
         (STATUS_HOLD, 'Hold'),
         (STATUS_CLOSED, 'Closed'),
+        (STATUS_USER_RESPONDED, 'User Responded'),
     ]
 
     # Statuses considered "terminal" (SLA stops, ticket is done)
@@ -254,3 +256,33 @@ class SystemSetting(models.Model):
         obj, _ = cls.objects.get_or_create(key=key)
         obj.value = value
         obj.save()
+
+
+class TicketEmail(models.Model):
+    """Stores outbound and inbound emails associated with a specific ticket."""
+    DIRECTION_SENT = 'sent'
+    DIRECTION_RECEIVED = 'received'
+    DIRECTION_CHOICES = [
+        (DIRECTION_SENT, 'Sent'),
+        (DIRECTION_RECEIVED, 'Received'),
+    ]
+
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='emails')
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES)
+    subject = models.CharField(max_length=500)
+    body = models.TextField()
+    from_email = models.EmailField()
+    to_email = models.EmailField()
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='sent_ticket_emails',
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f'[{self.direction}] #{self.ticket_id}: {self.subject}'

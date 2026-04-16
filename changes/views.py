@@ -22,7 +22,10 @@ def change_list(request):
         events.append({
             'id': c.pk,
             'title': f'[{c.get_risk_level_display()}] {c.title}',
-            'start': c.planned_date.isoformat(),
+            'start': (
+                f'{c.planned_date.isoformat()}T{c.planned_from.strftime("%H:%M")}'
+                if c.planned_from else c.planned_date.isoformat()
+            ),
             'color': c.calendar_color,
             'url': f'/changes/{c.pk}/',
         })

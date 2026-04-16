@@ -35,9 +35,22 @@
               {% if form.risk_level.errors %}<div class="text-danger small mt-1">{{ form.risk_level.errors }}</div>{% endif %}
             </div>
             <div class="col-6">
-              <label class="form-label">Planned Date &amp; Time</label>
+              <label class="form-label">Planned Date</label>
               {{ form.planned_date }}
               {% if form.planned_date.errors %}<div class="text-danger small mt-1">{{ form.planned_date.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Planned Timeframe — From</label>
+              {{ form.planned_from }}
+              {% if form.planned_from.errors %}<div class="text-danger small mt-1">{{ form.planned_from.errors }}</div>{% endif %}
+            </div>
+            <div class="col-6">
+              <label class="form-label">To</label>
+              {{ form.planned_to }}
+              {% if form.planned_to.errors %}<div class="text-danger small mt-1">{{ form.planned_to.errors }}</div>{% endif %}
             </div>
           </div>
 
@@ -51,6 +64,14 @@
               <label class="form-label">Specify System</label>
               {{ form.affected_system_other }}
               {% if form.affected_system_other.errors %}<div class="text-danger small mt-1">{{ form.affected_system_other.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Affected Region</label>
+              {{ form.affected_region }}
+              {% if form.affected_region.errors %}<div class="text-danger small mt-1">{{ form.affected_region.errors }}</div>{% endif %}
             </div>
           </div>
 
@@ -84,8 +105,12 @@
 {% endblock %}
 
 {% block extra_js %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" id="flatpickr-dark-theme" disabled>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
 (function () {
+  // Affected system toggle
   var systemSelect = document.getElementById('id_affected_system');
   var otherField   = document.getElementById('other-system-field');
 
@@ -94,7 +119,22 @@
   }
 
   systemSelect.addEventListener('change', toggle);
-  toggle();  // run on page load (for edit mode)
+  toggle();
+
+  // Flatpickr date picker
+  var isDark = localStorage.getItem('kdeskTheme') === 'dark';
+  if (isDark) {
+    document.getElementById('flatpickr-dark-theme').disabled = false;
+  }
+
+  flatpickr('#id_planned_date', {
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'j F Y',
+    allowInput: false,
+    disableMobile: false,
+    theme: isDark ? 'dark' : 'light',
+  });
 })();
 </script>
 {% endblock %}
