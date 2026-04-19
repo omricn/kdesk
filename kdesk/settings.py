@@ -128,6 +128,12 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+
+# Azure Cache for Redis uses rediss:// (SSL) — must set ssl_cert_reqs explicitly
+if CELERY_BROKER_URL.startswith('rediss://'):
+    CELERY_BROKER_TRANSPORT_OPTIONS = {'ssl_cert_reqs': None}
+    CELERY_REDIS_BACKEND_USE_SSL = {'ssl_cert_reqs': None}
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

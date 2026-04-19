@@ -33,4 +33,11 @@ else:
     print('User not found: $ACTIVATE_USER')
 "
 fi
+python manage.py shell -c "
+from integrations.user_sync import sync_users, sync_admins
+print('[Startup] Syncing users from Entra...')
+sync_users()
+sync_admins()
+print('[Startup] User sync complete.')
+"
 exec gunicorn kdesk.wsgi:application --bind 0.0.0.0:8000 --workers 3
