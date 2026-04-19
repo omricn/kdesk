@@ -257,7 +257,6 @@
           <form method="post" id="update-form">
             {% csrf_token %}
             <input type="hidden" name="action" value="update">
-            <input type="hidden" name="sub_changed" id="sub-changed-flag" value="">
             {% if update_form.non_field_errors %}
             <div class="alert alert-danger py-2 small mb-2">{{ update_form.non_field_errors }}</div>
             {% endif %}
@@ -410,9 +409,6 @@ dSub.addEventListener('change', function() {
   const id = parseInt(this.value) || null;
   buildOpts(dItem, id ? CAT_DATA.items.filter(i => i.sub_id === id) : [], '— Item —');
   setActive(dItem, !!id);
-
-  // Signal to backend that user explicitly picked a subcategory
-  document.getElementById('sub-changed-flag').value = '1';
 
   // Auto-select assignee based on subcategory mapping
   const assigneeSel = document.querySelector('#update-form select[name="assignee"]');

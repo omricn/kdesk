@@ -239,20 +239,19 @@ def ticket_detail(request, pk):
                     cat_id  = _to_int(request.POST.get('cat_id'))
                     sub_id  = _to_int(request.POST.get('sub_id'))
                     item_id = _to_int(request.POST.get('item_id'))
-                    sub_changed = request.POST.get('sub_changed') == '1'
-                    logger.info('[ticket_detail] update pk=%s cat_id=%s sub_id=%s item_id=%s sub_changed=%s', pk, cat_id, sub_id, item_id, sub_changed)
+                    logger.info('[ticket_detail] update pk=%s cat_id=%s sub_id=%s item_id=%s', pk, cat_id, sub_id, item_id)
                     if cat_id is not None or sub_id is not None:
+                        old_sub_id = ticket.subcategory_id
                         updated.category_id    = cat_id
                         updated.subcategory_id = sub_id
                         updated.ticket_item_id = item_id
-                        # Auto-assign when admin explicitly picked a subcategory
-                        if sub_id and sub_changed:
+                        # Auto-assign when subcategory is explicitly changed
+                        if sub_id and sub_id != old_sub_id:
                             from .models import TicketSubCategory
                             sub_obj = TicketSubCategory.objects.filter(pk=sub_id).select_related('assignee').first()
-                            logger.info('[ticket_detail] auto-assign check pk=%s sub_obj=%s assignee_id=%s', pk, sub_obj, sub_obj.assignee_id if sub_obj else None)
                             if sub_obj and sub_obj.assignee_id:
                                 updated.assignee = sub_obj.assignee
-                                logger.info('[ticket_detail] auto-assigned pk=%s to %s via subcategory %s', pk, sub_obj.assignee, sub_id)
+                                logger.info('[ticket_detail] auto-assigned pk=%s to %s', pk, sub_obj.assignee)
                     updated.save()
                     # Record history
                     status_labels = dict(Ticket.STATUS_CHOICES)
