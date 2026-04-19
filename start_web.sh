@@ -39,5 +39,28 @@ print('[Startup] Syncing users from Entra...')
 sync_users()
 sync_admins()
 print('[Startup] User sync complete.')
+
+# Ensure subcategory → assignee mappings are set (may have been skipped at
+# first migration run if admin users did not exist yet)
+from tickets.models import TicketSubCategory
+from users.models import User
+ASSIGNMENTS = {
+    'Priority':       'asaban@kramerav.com',
+    'BI':             'sdekner@kramerav.com',
+    'Salesforce':     'jsuissa@kramerav.com',
+    'Kramer-Website': 'sc-aalon@kramerav.com',
+    'Infra HW':       'ocohen@kramerav.com',
+    'Infra NET':      'ocohen@kramerav.com',
+    'Infra SW':       'ocohen@kramerav.com',
+}
+for sub_name, email in ASSIGNMENTS.items():
+    try:
+        user = User.objects.get(email=email)
+        updated = TicketSubCategory.objects.filter(name=sub_name, assignee__isnull=True).update(assignee=user)
+        if updated:
+            print(f'[Startup] Set assignee for subcategory \"{sub_name}\" -> {email}')
+    except User.DoesNotExist:
+        pass
+print('[Startup] Subcategory assignments checked.')
 "
 exec gunicorn kdesk.wsgi:application --bind 0.0.0.0:8000 --workers 3

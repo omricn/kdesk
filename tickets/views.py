@@ -244,6 +244,12 @@ def ticket_detail(request, pk):
                         updated.category_id    = cat_id
                         updated.subcategory_id = sub_id
                         updated.ticket_item_id = item_id
+                        # Auto-assign from subcategory if assignee not explicitly set
+                        if sub_id and not updated.assignee_id:
+                            from .models import TicketSubCategory
+                            sub_obj = TicketSubCategory.objects.filter(pk=sub_id).select_related('assignee').first()
+                            if sub_obj and sub_obj.assignee_id:
+                                updated.assignee = sub_obj.assignee
                     updated.save()
                     # Record history
                     status_labels = dict(Ticket.STATUS_CHOICES)
