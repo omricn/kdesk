@@ -16,14 +16,14 @@ docker build -t "$IMAGE" .
 echo "==> Pushing image to registry..."
 docker push "$IMAGE"
 
-echo "==> Restarting web..."
-az webapp restart --resource-group "$RG" --name kdesk-web
+echo "==> Deploying web (force image pull)..."
+az webapp config container set --resource-group "$RG" --name kdesk-web --docker-custom-image-name "$IMAGE" > /dev/null
 
-echo "==> Restarting celery worker..."
-az webapp restart --resource-group "$RG" --name kdesk-celery
+echo "==> Deploying celery worker (force image pull)..."
+az webapp config container set --resource-group "$RG" --name kdesk-celery --docker-custom-image-name "$IMAGE" > /dev/null
 
-echo "==> Restarting celery beat..."
-az webapp restart --resource-group "$RG" --name kdesk-celery-beat
+echo "==> Deploying celery beat (force image pull)..."
+az webapp config container set --resource-group "$RG" --name kdesk-celery-beat --docker-custom-image-name "$IMAGE" > /dev/null
 
 echo ""
 echo "Done. kdesk is live at https://kdesk.kramerav.com"
