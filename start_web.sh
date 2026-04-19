@@ -56,7 +56,7 @@ ASSIGNMENTS = {
 for sub_name, email in ASSIGNMENTS.items():
     try:
         user = User.objects.get(email=email)
-        updated = TicketSubCategory.objects.filter(name=sub_name, assignee__isnull=True).update(assignee=user)
+        updated = TicketSubCategory.objects.filter(name=sub_name).update(assignee=user)
         if updated:
             print(f'[Startup] Set assignee for subcategory \"{sub_name}\" -> {email}')
     except User.DoesNotExist:
