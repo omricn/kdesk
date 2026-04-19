@@ -219,6 +219,7 @@ def ticket_detail(request, pk):
             # which overwrites the model instance fields with submitted data.
             old_status = ticket.status
             old_assignee = ticket.assignee
+            old_sub_id = ticket.subcategory_id
             update_form = TicketUpdateForm(request.POST, instance=ticket)
             if update_form.is_valid():
                 solution = request.POST.get('solution', '').strip()
@@ -244,6 +245,12 @@ def ticket_detail(request, pk):
                         updated.category_id    = cat_id
                         updated.subcategory_id = sub_id
                         updated.ticket_item_id = item_id
+                        # Auto-assign when subcategory was explicitly changed
+                        if sub_id and sub_id != old_sub_id:
+                            from .models import TicketSubCategory
+                            sub_obj = TicketSubCategory.objects.filter(pk=sub_id).select_related('assignee').first()
+                            if sub_obj and sub_obj.assignee_id:
+                                updated.assignee = sub_obj.assignee
                     updated.save()
                     # Record history
                     status_labels = dict(Ticket.STATUS_CHOICES)
