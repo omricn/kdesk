@@ -817,7 +817,7 @@ def register_periodic_tasks():
     tasks = [
         ('Poll Mailbox', 'tasks.poll_mailbox', poll_interval),
         ('Sync Entra Users', 'tasks.sync_users', sync_interval),
-        ('Sync Entra Admins', 'tasks.sync_admins', weekly_interval),
+        ('Sync Entra Admins', 'tasks.sync_admins', sync_interval),
         ('Check SLA', 'tasks.check_sla', sla_interval),
         ('Check Change Reminders', 'tasks.check_change_reminders', sla_interval),
     ]
