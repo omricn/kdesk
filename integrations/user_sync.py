@@ -62,7 +62,8 @@ def sync_users():
             if user.entra_id != entra_id:
                 user.entra_id = entra_id
                 changed = True
-            if user.is_active != account_enabled:
+            # Never deactivate admin users via the regular user sync
+            if not user.is_admin and user.is_active != account_enabled:
                 user.is_active = account_enabled
                 changed = True
             if changed:
@@ -81,6 +82,7 @@ def sync_users():
         .exclude(entra_id='')
         .exclude(entra_id__in=entra_ids_in_group)
         .exclude(is_superuser=True)  # never deactivate superusers
+        .exclude(is_admin=True)      # never deactivate admins via user sync
         .update(is_active=False)
     )
     if deactivated:
