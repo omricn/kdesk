@@ -13,8 +13,8 @@
     </div>
     <div class="d-flex gap-2 flex-shrink-0">
       <a href="{% url 'ticket_list' %}" class="btn btn-sm btn-outline-secondary">Cancel</a>
-      <button type="submit" form="update-form" name="next" value="" class="btn btn-sm btn-outline-primary">Apply</button>
-      <button type="submit" form="update-form" name="next" value="list" class="btn btn-sm btn-primary">Save</button>
+      <button type="button" data-action-submit data-next="" class="btn btn-sm btn-outline-primary">Apply</button>
+      <button type="button" data-action-submit data-next="list" class="btn btn-sm btn-primary">Save</button>
     </div>
   </div>
 </div>
@@ -462,20 +462,44 @@ if (INIT_CAT) {
   }
 })();
 
-document.getElementById('det-cat-save').addEventListener('click', function() {
-  const btn = this;
-  const msg = document.getElementById('det-cat-msg');
-  btn.disabled = true;
-  msg.classList.add('d-none');
+function saveCategoryAsync() {
   const fd = new FormData();
   fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
   fd.append('category',    dCat.value  || '');
   fd.append('subcategory', dSub.value  || '');
   fd.append('ticket_item', dItem.value || '');
-  fetch(`/tickets/${TICKET_PK}/categorize/`, {method: 'POST', body: fd})
-    .then(r => r.json())
+  return fetch(`/tickets/${TICKET_PK}/categorize/`, {method: 'POST', body: fd})
+    .then(r => r.json());
+}
+
+document.getElementById('det-cat-save').addEventListener('click', function() {
+  const btn = this;
+  const msg = document.getElementById('det-cat-msg');
+  btn.disabled = true;
+  msg.classList.add('d-none');
+  saveCategoryAsync()
     .then(data => { if (data.ok) { msg.classList.remove('d-none'); } })
     .finally(() => { btn.disabled = false; });
+});
+
+// Apply and Save buttons: save category first, then submit the form
+document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    const nextVal = this.dataset.next;
+    saveCategoryAsync().finally(function() {
+      const form = document.getElementById('update-form');
+      let hidden = form.querySelector('input[name="next"]');
+      if (!hidden) {
+        hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'next';
+        form.appendChild(hidden);
+      }
+      hidden.value = nextVal;
+      form.requestSubmit();
+    });
+  });
 });
 </script>
 {% endblock %}
