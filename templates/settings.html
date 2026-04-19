@@ -83,6 +83,7 @@
   <div class="card-header bg-white fw-semibold">System Info</div>
   <div class="card-body small text-muted">
     <p><strong>Service Desk Mailbox:</strong> {{ servicedesk_email }}</p>
+    <p><strong>Employee Portal:</strong> <a href="{% url 'portal_dashboard' %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'portal_dashboard' %}</a></p>
     <p class="mb-0">To manage users, SLA logs, and raw data use the <a href="/admin/" target="_blank">Admin Panel</a>.</p>
   </div>
 </div>
