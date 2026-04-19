@@ -330,12 +330,15 @@ def ticket_create(request):
                 old_value='',
                 new_value=f'By {request.user}',
             )
-            if ticket.assignee and ticket.assignee.notify_on_assign:
-                from tasks.scheduled import send_ticket_notification
-                send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
-            from tasks.scheduled import send_requester_created, generate_ai_summary
-            send_requester_created.delay(ticket.pk)
-            generate_ai_summary.delay(ticket.pk)
+            try:
+                if ticket.assignee and ticket.assignee.notify_on_assign:
+                    from tasks.scheduled import send_ticket_notification
+                    send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
+                from tasks.scheduled import send_requester_created, generate_ai_summary
+                send_requester_created.delay(ticket.pk)
+                generate_ai_summary.delay(ticket.pk)
+            except Exception:
+                logger.exception('[ticket_create] Celery task dispatch failed for ticket #%s', ticket.pk)
             messages.success(request, f'Ticket #{ticket.pk:04d} created.')
             return redirect('ticket_detail', pk=ticket.pk)
 
