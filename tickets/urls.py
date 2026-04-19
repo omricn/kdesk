@@ -20,4 +20,6 @@ urlpatterns = [
     path('portal/', views.portal_dashboard, name='portal_dashboard'),
     path('portal/new/', views.portal_ticket_create, name='portal_ticket_create'),
     path('portal/tickets/<int:pk>/', views.portal_ticket_detail, name='portal_ticket_detail'),
+    path('portal/preview/enter/', views.portal_preview_enter, name='portal_preview_enter'),
+    path('portal/preview/exit/', views.portal_preview_exit, name='portal_preview_exit'),
 ]

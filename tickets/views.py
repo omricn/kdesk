@@ -32,12 +32,12 @@ def admin_required(view_func):
 
 
 def portal_required(view_func):
-    """Requires login. Admins are redirected to the admin dashboard."""
+    """Requires login. Admins are redirected to the admin dashboard unless in portal preview mode."""
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect(f'{settings.LOGIN_URL}?next={request.path}')
-        if request.user.is_admin:
+        if request.user.is_admin and not request.session.get('portal_preview'):
             return redirect('dashboard')
         return view_func(request, *args, **kwargs)
     return _wrapped
@@ -1057,3 +1057,15 @@ def portal_ticket_detail(request, pk):
         'comment_form': comment_form,
         'can_reply': can_reply,
     })
+
+
+@admin_required
+def portal_preview_enter(request):
+    request.session['portal_preview'] = True
+    return redirect('portal_dashboard')
+
+
+@admin_required
+def portal_preview_exit(request):
+    request.session.pop('portal_preview', None)
+    return redirect('dashboard')
