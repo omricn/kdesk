@@ -342,6 +342,7 @@ def ticket_create(request):
     return render(request, 'tickets/create.html', {'form': form})
 
 
+@login_required
 def lookup_user_by_email(request):
     email = request.GET.get('email', '').strip()
     if not email:
@@ -350,6 +351,7 @@ def lookup_user_by_email(request):
     return JsonResponse({'name': user.display_name or '' if user else ''})
 
 
+@login_required
 def user_search(request):
     """Return users matching a partial email or display name (for autocomplete)."""
     q = request.GET.get('q', '').strip()
