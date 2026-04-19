@@ -3,6 +3,7 @@ import io
 import json
 import logging
 from datetime import timedelta
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,31 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import AttachmentForm, CommentForm, TicketForm, TicketUpdateForm
+from .forms import AttachmentForm, CommentForm, PortalTicketForm, TicketForm, TicketUpdateForm
+
+
+def admin_required(view_func):
+    """Requires login + is_admin. Non-admins are redirected to the employee portal."""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f'{settings.LOGIN_URL}?next={request.path}')
+        if not request.user.is_admin:
+            return redirect('portal_dashboard')
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
+def portal_required(view_func):
+    """Requires login. Admins are redirected to the admin dashboard."""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f'{settings.LOGIN_URL}?next={request.path}')
+        if request.user.is_admin:
+            return redirect('dashboard')
+        return view_func(request, *args, **kwargs)
+    return _wrapped
 from .models import (
     SystemSetting, Ticket, TicketAttachment, TicketComment,
     TicketCategory, TicketSubCategory, TicketItem, TicketHistory, TicketEmail,
@@ -54,7 +79,7 @@ def _set_default_category(ticket):
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def dashboard(request):
     tickets = Ticket.objects.select_related('assignee')
     total = tickets.count()
@@ -108,7 +133,7 @@ def dashboard(request):
 
 # ── Ticket List ───────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def ticket_list(request):
     qs = Ticket.objects.select_related('assignee', 'category', 'subcategory', 'ticket_item').all()
 
@@ -187,7 +212,7 @@ def ticket_list(request):
 
 # ── Ticket Detail ─────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def ticket_detail(request, pk):
     ticket = get_object_or_404(
         Ticket.objects.select_related('assignee', 'category', 'subcategory', 'ticket_item'), pk=pk
@@ -313,7 +338,7 @@ def ticket_detail(request, pk):
 
 # ── Create Ticket ─────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def ticket_create(request):
     form = TicketForm()
     if request.method == 'POST':
@@ -353,7 +378,7 @@ def ticket_create(request):
     return render(request, 'tickets/create.html', {'form': form})
 
 
-@login_required
+@admin_required
 def lookup_user_by_email(request):
     email = request.GET.get('email', '').strip()
     if not email:
@@ -362,7 +387,7 @@ def lookup_user_by_email(request):
     return JsonResponse({'name': user.display_name or '' if user else ''})
 
 
-@login_required
+@admin_required
 def user_search(request):
     """Return users matching a partial email or display name (for autocomplete)."""
     q = request.GET.get('q', '').strip()
@@ -381,7 +406,7 @@ def user_search(request):
     ]})
 
 
-@login_required
+@admin_required
 @require_POST
 def ticket_bulk_action(request):
     ticket_ids = request.POST.getlist('ticket_ids')
@@ -426,7 +451,7 @@ def ticket_bulk_action(request):
     return redirect('ticket_list')
 
 
-@login_required
+@admin_required
 @require_POST
 def ticket_categorize(request, pk):
     """AJAX: set category / subcategory / item on a ticket, with auto-assignment."""
@@ -518,7 +543,7 @@ def _auto_assign():
 
 # ── Reports ───────────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def reports(request):
     now = timezone.now()
     last_30 = now - timedelta(days=30)
@@ -561,7 +586,7 @@ def reports(request):
     return render(request, 'reports/index.html', context)
 
 
-@login_required
+@admin_required
 def export_tickets_csv(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="kdesk_tickets.csv"'
@@ -593,7 +618,7 @@ def export_tickets_csv(request):
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def settings_view(request):
     if not request.user.is_superuser:
         messages.error(request, 'Access denied.')
@@ -659,7 +684,7 @@ def settings_view(request):
 
 # ── Ticket email correspondence ───────────────────────────────────────────────
 
-@login_required
+@admin_required
 @require_POST
 def ticket_send_email(request, pk):
     ticket = get_object_or_404(Ticket, pk=pk)
@@ -710,7 +735,7 @@ def ticket_send_email(request, pk):
 
 # ── Email preview (superuser only) ───────────────────────────────────────────
 
-@login_required
+@admin_required
 def email_preview(request):
     if not request.user.is_superuser:
         from django.http import HttpResponseForbidden
@@ -939,4 +964,96 @@ def email_preview(request):
 
     return render(request, 'tickets/email_preview.html', {
         'samples': [(i, s['label']) for i, s in enumerate(samples)],
+    })
+
+
+# ── Employee Portal ───────────────────────────────────────────────────────────
+
+@portal_required
+def portal_dashboard(request):
+    tickets = (
+        Ticket.objects
+        .filter(requester_email__iexact=request.user.email)
+        .order_by('-created_at')
+    )
+    return render(request, 'portal/dashboard.html', {'tickets': tickets})
+
+
+@portal_required
+def portal_ticket_create(request):
+    if request.method == 'POST':
+        form = PortalTicketForm(request.POST)
+        if form.is_valid():
+            ticket = form.save(commit=False)
+            ticket.source = Ticket.SOURCE_MANUAL
+            ticket.requester_email = request.user.email
+            ticket.requester_name = request.user.display_name or ''
+            _set_default_category(ticket)
+            ticket.save()
+            uploaded_file = request.FILES.get('attachment')
+            if uploaded_file:
+                TicketAttachment.objects.create(
+                    ticket=ticket,
+                    filename=uploaded_file.name,
+                    file=uploaded_file,
+                    file_size=uploaded_file.size,
+                )
+            TicketHistory.objects.create(
+                ticket=ticket,
+                changed_by=request.user,
+                field='Ticket created',
+                old_value='',
+                new_value=f'By {request.user} (portal)',
+            )
+            try:
+                from tasks.scheduled import send_requester_created, generate_ai_summary
+                send_requester_created.delay(ticket.pk)
+                generate_ai_summary.delay(ticket.pk)
+            except Exception:
+                logger.exception('[portal_ticket_create] Celery task dispatch failed for ticket #%s', ticket.pk)
+            messages.success(request, f'Ticket #{ticket.pk:04d} submitted. We\'ll be in touch soon.')
+            return redirect('portal_ticket_detail', pk=ticket.pk)
+    else:
+        form = PortalTicketForm()
+    return render(request, 'portal/create.html', {'form': form})
+
+
+@portal_required
+def portal_ticket_detail(request, pk):
+    ticket = get_object_or_404(Ticket, pk=pk)
+    if ticket.requester_email.lower() != request.user.email.lower():
+        messages.error(request, 'Ticket not found.')
+        return redirect('portal_dashboard')
+
+    comment_form = CommentForm()
+
+    if request.method == 'POST' and request.POST.get('action') == 'comment':
+        comment_form = CommentForm(request.POST)
+        if comment_form.is_valid():
+            comment = comment_form.save(commit=False)
+            comment.ticket = ticket
+            comment.author = request.user
+            comment.is_internal = False
+            comment.save()
+            ticket.updated_at = timezone.now()
+            ticket.save(update_fields=['updated_at'])
+            if ticket.assignee and ticket.assignee.notify_on_update:
+                from tasks.scheduled import send_ticket_notification
+                send_ticket_notification.delay('update', ticket.pk, request.user.pk)
+            messages.success(request, 'Reply sent.')
+            return redirect('portal_ticket_detail', pk=pk)
+
+    comments = (
+        ticket.comments
+        .filter(is_internal=False)
+        .select_related('author')
+        .order_by('created_at')
+    )
+    can_reply = ticket.status not in Ticket.TERMINAL_STATUSES
+
+    return render(request, 'portal/detail.html', {
+        'ticket': ticket,
+        'comments': comments,
+        'comment_form': comment_form,
+        'can_reply': can_reply,
     })

@@ -26,7 +26,7 @@ _LOGIN_SCOPES = ['User.Read']
 def login_view(request):
     """Redirect the user to Microsoft to authenticate."""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('dashboard' if request.user.is_admin else 'portal_dashboard')
 
     state = secrets.token_urlsafe(16)
     request.session['sso_state'] = state
@@ -83,11 +83,9 @@ def auth_callback(request):
         messages.error(request, 'Could not retrieve your email from Microsoft. Contact IT.')
         return redirect('login')
 
-    # Check that the user is in the Global_OPS_IT group
-    if not _user_in_it_group(user_id):
-        logger.warning(f'[SSO] Access denied for {email} — not in {settings.ENTRA_ADMIN_GROUP_EMAIL}')
-        messages.error(request, 'Access denied. You must be a member of the IT team to use Kdesk.')
-        return redirect('login')
+    # All authenticated Kramer users can log in.
+    # IT group members get admin access; everyone else gets the employee portal.
+    is_it_admin = _user_in_it_group(user_id)
 
     # Create or update the user record
     from users.models import User
@@ -98,8 +96,8 @@ def auth_callback(request):
         defaults={
             'display_name': display_name,
             'entra_id': user_id,
-            'is_admin': True,
-            'is_staff': True,
+            'is_admin': is_it_admin,
+            'is_staff': is_it_admin,
             'is_active': True,
         }
     )
@@ -113,8 +111,10 @@ def auth_callback(request):
         if user.entra_id != user_id:
             user.entra_id = user_id
             changed = True
-        if not user.is_admin:
+        # Promote to admin if now in IT group; demotion is handled by sync_admins
+        if is_it_admin and not user.is_admin:
             user.is_admin = True
+            user.is_staff = True
             changed = True
         if not user.is_active:
             user.is_active = True
@@ -126,8 +126,16 @@ def auth_callback(request):
     user.save(update_fields=['last_sync'])
 
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-    logger.info(f'[SSO] {email} logged in successfully')
-    return redirect(request.GET.get('next', 'dashboard'))
+    logger.info(f'[SSO] {email} logged in (is_admin={user.is_admin})')
+
+    # Redirect: admins follow ?next (or go to dashboard); employees go to portal
+    next_url = request.GET.get('next', '')
+    if user.is_admin:
+        return redirect(next_url or 'dashboard')
+    # For employees, only follow ?next if it points to the portal
+    if next_url and next_url.startswith('/portal/'):
+        return redirect(next_url)
+    return redirect('portal_dashboard')
 
 
 def _user_in_it_group(entra_user_id: str) -> bool:

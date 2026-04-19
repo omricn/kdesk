@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # ── Admin portal ──────────────────────────────────────────────────────────
     path('', views.dashboard, name='dashboard'),
     path('tickets/', views.ticket_list, name='ticket_list'),
     path('tickets/new/', views.ticket_create, name='ticket_create'),
@@ -15,4 +16,8 @@ urlpatterns = [
     path('reports/export/', views.export_tickets_csv, name='export_csv'),
     path('settings/', views.settings_view, name='settings'),
     path('dev/email-preview/', views.email_preview, name='email_preview'),
+    # ── Employee portal ───────────────────────────────────────────────────────
+    path('portal/', views.portal_dashboard, name='portal_dashboard'),
+    path('portal/new/', views.portal_ticket_create, name='portal_ticket_create'),
+    path('portal/tickets/<int:pk>/', views.portal_ticket_detail, name='portal_ticket_detail'),
 ]
