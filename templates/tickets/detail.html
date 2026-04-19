@@ -257,6 +257,9 @@
         <div class="card-header bg-white fw-semibold small"><i class="bi bi-pencil-square me-1"></i>Edit Ticket</div>
         <div class="card-body">
           <form method="post" id="update-form">
+            <input type="hidden" name="cat_id"  id="hidden-cat"  value="{{ ticket.category_id|default:'' }}">
+            <input type="hidden" name="sub_id"  id="hidden-sub"  value="{{ ticket.subcategory_id|default:'' }}">
+            <input type="hidden" name="item_id" id="hidden-item" value="{{ ticket.ticket_item_id|default:'' }}">
             {% csrf_token %}
             <input type="hidden" name="action" value="update">
             {% if update_form.non_field_errors %}
@@ -394,18 +397,27 @@ const dItem = document.getElementById('det-item');
 
 buildOpts(dCat, CAT_DATA.categories, '— Category —');
 
+const hiddenCat  = document.getElementById('hidden-cat');
+const hiddenSub  = document.getElementById('hidden-sub');
+const hiddenItem = document.getElementById('hidden-item');
+
 dCat.addEventListener('change', function() {
   const id = parseInt(this.value) || null;
   buildOpts(dSub, id ? CAT_DATA.subcategories.filter(s => s.cat_id === id) : [], '— Sub-category —');
   dSub.disabled = !id;
   buildOpts(dItem, [], '— Item —');
   dItem.disabled = true;
+  hiddenCat.value  = this.value;
+  hiddenSub.value  = '';
+  hiddenItem.value = '';
 });
 
 dSub.addEventListener('change', function() {
   const id = parseInt(this.value) || null;
   buildOpts(dItem, id ? CAT_DATA.items.filter(i => i.sub_id === id) : [], '— Item —');
   dItem.disabled = !id;
+  hiddenSub.value  = this.value;
+  hiddenItem.value = '';
 
   // Auto-select assignee based on subcategory mapping
   const assigneeSel = document.querySelector('#update-form select[name="assignee"]');
@@ -415,6 +427,10 @@ dSub.addEventListener('change', function() {
       assigneeSel.value = sub.assignee_id;
     }
   }
+});
+
+dItem.addEventListener('change', function() {
+  hiddenItem.value = this.value;
 });
 
 if (INIT_CAT) {
@@ -462,43 +478,36 @@ if (INIT_CAT) {
   }
 })();
 
-function saveCategoryAsync() {
-  const fd = new FormData();
-  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-  fd.append('category',    dCat.value  || '');
-  fd.append('subcategory', dSub.value  || '');
-  fd.append('ticket_item', dItem.value || '');
-  return fetch(`/tickets/${TICKET_PK}/categorize/`, {method: 'POST', body: fd})
-    .then(r => r.json());
-}
-
+// Save Category button — still useful for category-only saves
 document.getElementById('det-cat-save').addEventListener('click', function() {
   const btn = this;
   const msg = document.getElementById('det-cat-msg');
   btn.disabled = true;
   msg.classList.add('d-none');
-  saveCategoryAsync()
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fd.append('category',    dCat.value  || '');
+  fd.append('subcategory', dSub.value  || '');
+  fd.append('ticket_item', dItem.value || '');
+  fetch(`/tickets/${TICKET_PK}/categorize/`, {method: 'POST', body: fd})
+    .then(r => r.json())
     .then(data => { if (data.ok) { msg.classList.remove('d-none'); } })
     .finally(() => { btn.disabled = false; });
 });
 
-// Apply and Save buttons: save category first, then submit the form
+// Apply / Save buttons — category is already in hidden fields, just submit
 document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
-  btn.addEventListener('click', function(e) {
-    e.preventDefault();
-    const nextVal = this.dataset.next;
-    saveCategoryAsync().finally(function() {
-      const form = document.getElementById('update-form');
-      let hidden = form.querySelector('input[name="next"]');
-      if (!hidden) {
-        hidden = document.createElement('input');
-        hidden.type = 'hidden';
-        hidden.name = 'next';
-        form.appendChild(hidden);
-      }
-      hidden.value = nextVal;
-      form.requestSubmit();
-    });
+  btn.addEventListener('click', function() {
+    const form = document.getElementById('update-form');
+    let hidden = form.querySelector('input[name="next"]');
+    if (!hidden) {
+      hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'next';
+      form.appendChild(hidden);
+    }
+    hidden.value = this.dataset.next;
+    form.requestSubmit();
   });
 });
 </script>

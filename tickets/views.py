@@ -259,6 +259,19 @@ def ticket_detail(request, pk):
                     if updated.status in Ticket.TERMINAL_STATUSES and not was_closed:
                         from tasks.scheduled import send_requester_closed
                         send_requester_closed.delay(ticket.pk)
+                    # Save category fields if submitted alongside the form
+                    def _to_int(v):
+                        try: return int(v) if v else None
+                        except (ValueError, TypeError): return None
+                    cat_id  = _to_int(request.POST.get('cat_id'))
+                    sub_id  = _to_int(request.POST.get('sub_id'))
+                    item_id = _to_int(request.POST.get('item_id'))
+                    if cat_id is not None or sub_id is not None:
+                        updated.category_id    = cat_id
+                        updated.subcategory_id = sub_id
+                        updated.ticket_item_id = item_id
+                        updated.save(update_fields=['category', 'subcategory', 'ticket_item'])
+
                     messages.success(request, 'Ticket updated.')
                     if request.POST.get('next') == 'list':
                         return redirect('ticket_list')
