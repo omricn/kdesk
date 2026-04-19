@@ -260,7 +260,7 @@ def ticket_detail(request, pk):
                         from tasks.scheduled import send_requester_closed
                         send_requester_closed.delay(ticket.pk)
                     messages.success(request, 'Ticket updated.')
-                    if updated.status in Ticket.TERMINAL_STATUSES:
+                    if request.POST.get('next') == 'list':
                         return redirect('ticket_list')
                     return redirect('ticket_detail', pk=pk)
 
