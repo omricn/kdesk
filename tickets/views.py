@@ -360,7 +360,6 @@ def user_search(request):
         User.objects
         .filter(is_active=True)
         .filter(Q(email__icontains=q) | Q(display_name__icontains=q))
-        .exclude(is_admin=True)  # exclude admins — they open tickets on behalf of others
         .order_by('display_name')[:10]
     )
     return JsonResponse({'users': [
