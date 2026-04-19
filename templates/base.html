@@ -53,40 +53,40 @@
         <i class="bi bi-headset" style="color:var(--kramer-mint);"></i>
         <span class="brand-title">Kdesk</span>
       </div>
-      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+      <button type="button" class="btn-close btn-close-white"></button>
     </div>
     <div class="offcanvas-body p-3">
       <ul class="nav nav-pills flex-column mb-auto">
         <li class="nav-item">
-          <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" data-bs-dismiss="offcanvas">
+          <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
             <i class="bi bi-speedometer2 me-2"></i>Dashboard
           </a>
         </li>
         <li>
-          <a href="{% url 'ticket_list' %}" class="nav-link {% if request.resolver_match.url_name in 'ticket_list,ticket_detail' %}active{% endif %}" data-bs-dismiss="offcanvas">
+          <a href="{% url 'ticket_list' %}" class="nav-link {% if request.resolver_match.url_name in 'ticket_list,ticket_detail' %}active{% endif %}">
             <i class="bi bi-ticket-detailed me-2"></i>Tickets
           </a>
         </li>
         <li>
-          <a href="{% url 'ticket_create' %}" class="nav-link {% if request.resolver_match.url_name == 'ticket_create' %}active{% endif %}" data-bs-dismiss="offcanvas">
+          <a href="{% url 'ticket_create' %}" class="nav-link {% if request.resolver_match.url_name == 'ticket_create' %}active{% endif %}">
             <i class="bi bi-plus-circle me-2"></i>New Ticket
           </a>
         </li>
         <li>
-          <a href="{% url 'reports' %}" class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" data-bs-dismiss="offcanvas">
+          <a href="{% url 'reports' %}" class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
             <i class="bi bi-bar-chart-line me-2"></i>Reports
           </a>
         </li>
         {% if user.is_admin %}
         <li>
-          <a href="{% url 'change_list' %}" class="nav-link {% if request.resolver_match.url_name in 'change_list,change_detail,change_create,change_edit' %}active{% endif %}" data-bs-dismiss="offcanvas">
+          <a href="{% url 'change_list' %}" class="nav-link {% if request.resolver_match.url_name in 'change_list,change_detail,change_create,change_edit' %}active{% endif %}">
             <i class="bi bi-arrow-repeat me-2"></i>Changes
           </a>
         </li>
         {% endif %}
         {% if user.is_superuser %}
         <li>
-          <a href="{% url 'settings' %}" class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}" data-bs-dismiss="offcanvas">
+          <a href="{% url 'settings' %}" class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
             <i class="bi bi-gear me-2"></i>Settings
           </a>
         </li>
