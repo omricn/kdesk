@@ -10,6 +10,7 @@ urlpatterns = [
     path('tickets/<int:pk>/categorize/', views.ticket_categorize, name='ticket_categorize'),
     path('tickets/<int:pk>/send-email/', views.ticket_send_email, name='ticket_send_email'),
     path('tickets/lookup-user/', views.lookup_user_by_email, name='lookup_user_by_email'),
+    path('tickets/user-search/', views.user_search, name='user_search'),
     path('reports/', views.reports, name='reports'),
     path('reports/export/', views.export_tickets_csv, name='export_csv'),
     path('settings/', views.settings_view, name='settings'),

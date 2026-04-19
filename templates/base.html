@@ -13,10 +13,10 @@
 <body>
 
 {% if user.is_authenticated %}
-<div class="d-flex" id="wrapper">
+<div class="d-flex" id="wrapper" style="height:100vh;overflow:hidden;">
 
   <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
-  <nav id="sidebar" class="d-flex flex-column flex-shrink-0 p-3" style="width:220px;min-height:100vh;">
+  <nav id="sidebar" class="d-flex flex-column flex-shrink-0 p-3" style="width:220px;overflow-y:auto;">
 
     <!-- Logo -->
     <a href="{% url 'dashboard' %}" class="d-flex align-items-center mb-3 text-decoration-none gap-2">
@@ -83,7 +83,7 @@
   </nav>
 
   <!-- ── Main content ────────────────────────────────────────────────────── -->
-  <div id="page-content" class="flex-grow-1" style="min-width:0;">
+  <div id="page-content" class="flex-grow-1" style="min-width:0;overflow-y:auto;">
     <div class="container-fluid py-4 px-4">
 
       {% sla_suspension_info as sla_suspension %}

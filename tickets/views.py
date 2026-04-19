@@ -1,7 +1,10 @@
 import csv
 import io
 import json
+import logging
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib import messages
@@ -74,7 +77,7 @@ def dashboard(request):
     ).order_by('sla_deadline')[:10]
 
     recent_qs = tickets.exclude(status__in=Ticket.TERMINAL_STATUSES)
-    if not request.user.is_superuser:
+    if not request.user.is_admin:
         recent_qs = recent_qs.filter(assignee=request.user)
     recent_tickets = recent_qs.order_by('-created_at')[:10]
 
@@ -114,11 +117,11 @@ def ticket_list(request):
     assignee_list = request.GET.getlist('assignee')
     sla_list = request.GET.getlist('sla')
 
-    # Non-superusers default to seeing only their own tickets when no filters applied
+    # Non-admin users default to seeing only their own tickets when no filters applied
     has_any_filter = bool(statuses or assignee_list or sla_list or
                           request.GET.get('q') or request.GET.get('col_id') or
                           request.GET.get('col_subject') or request.GET.get('col_requester'))
-    if not request.user.is_superuser and not has_any_filter:
+    if not request.user.is_admin and not has_any_filter:
         assignee_list = [str(request.user.pk)]
     search = request.GET.get('q', '')
     col_id = request.GET.get('col_id', '').strip()
@@ -229,6 +232,18 @@ def ticket_detail(request, pk):
                     # Stamp resolved_at when closed
                     if updated.status in Ticket.TERMINAL_STATUSES and not updated.resolved_at:
                         updated.resolved_at = timezone.now()
+                    # Apply category fields before the single save
+                    def _to_int(v):
+                        try: return int(v) if v else None
+                        except (ValueError, TypeError): return None
+                    cat_id  = _to_int(request.POST.get('cat_id'))
+                    sub_id  = _to_int(request.POST.get('sub_id'))
+                    item_id = _to_int(request.POST.get('item_id'))
+                    logger.info('[ticket_detail] update pk=%s cat_id=%s sub_id=%s item_id=%s', pk, cat_id, sub_id, item_id)
+                    if cat_id is not None or sub_id is not None:
+                        updated.category_id    = cat_id
+                        updated.subcategory_id = sub_id
+                        updated.ticket_item_id = item_id
                     updated.save()
                     # Record history
                     status_labels = dict(Ticket.STATUS_CHOICES)
@@ -259,18 +274,6 @@ def ticket_detail(request, pk):
                     if updated.status in Ticket.TERMINAL_STATUSES and not was_closed:
                         from tasks.scheduled import send_requester_closed
                         send_requester_closed.delay(ticket.pk)
-                    # Save category fields if submitted alongside the form
-                    def _to_int(v):
-                        try: return int(v) if v else None
-                        except (ValueError, TypeError): return None
-                    cat_id  = _to_int(request.POST.get('cat_id'))
-                    sub_id  = _to_int(request.POST.get('sub_id'))
-                    item_id = _to_int(request.POST.get('item_id'))
-                    if cat_id is not None or sub_id is not None:
-                        updated.category_id    = cat_id
-                        updated.subcategory_id = sub_id
-                        updated.ticket_item_id = item_id
-                        updated.save(update_fields=['category', 'subcategory', 'ticket_item'])
 
                     messages.success(request, 'Ticket updated.')
                     if request.POST.get('next') == 'list':
@@ -345,6 +348,25 @@ def lookup_user_by_email(request):
         return JsonResponse({'name': ''})
     user = User.objects.filter(email__iexact=email).first()
     return JsonResponse({'name': user.display_name or '' if user else ''})
+
+
+def user_search(request):
+    """Return users matching a partial email or display name (for autocomplete)."""
+    q = request.GET.get('q', '').strip()
+    if len(q) < 2:
+        return JsonResponse({'users': []})
+    from django.db.models import Q
+    users = (
+        User.objects
+        .filter(is_active=True)
+        .filter(Q(email__icontains=q) | Q(display_name__icontains=q))
+        .exclude(is_admin=True)  # exclude admins — they open tickets on behalf of others
+        .order_by('display_name')[:10]
+    )
+    return JsonResponse({'users': [
+        {'email': u.email, 'name': u.display_name or u.email}
+        for u in users
+    ]})
 
 
 @login_required
