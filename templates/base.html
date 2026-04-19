@@ -91,13 +91,6 @@
           </a>
         </li>
         {% endif %}
-        {% if user.is_admin %}
-        <li>
-          <a href="{% url 'portal_preview_enter' %}" class="nav-link text-muted" style="font-size:12px;opacity:0.7;" data-bs-dismiss="offcanvas">
-            <i class="bi bi-eye me-2"></i>Preview Portal
-          </a>
-        </li>
-        {% endif %}
       </ul>
     </div>
   </div>
@@ -155,14 +148,7 @@
           </a>
         </li>
         {% endif %}
-        {% if user.is_admin %}
-        <li>
-          <a href="{% url 'portal_preview_enter' %}" class="nav-link text-muted" style="font-size:12px;opacity:0.7;">
-            <i class="bi bi-eye me-2"></i>Preview Portal
-          </a>
-        </li>
-        {% endif %}
-      </ul>
+        </ul>
 
       <hr>
       <div class="dropdown">
