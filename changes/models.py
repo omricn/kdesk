@@ -115,8 +115,8 @@ class Change(models.Model):
             'pending_approval': '#f59e0b',
             'approved': '#1a4a6e',
             'not_approved': '#BE0078',
-            'in_progress': '#8200B4',
-            'done': '#68FFC3',
+            'in_progress': '#8205B4',
+            'done': '#69FFC3',
             'cancelled': '#555',
         }.get(self.status, '#666')
 

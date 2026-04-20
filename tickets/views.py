@@ -840,12 +840,12 @@ def email_preview(request):
             'html': _email_html(
                 header_title='SLA Warning',
                 header_subtitle='#0042 — Outlook not syncing emails',
-                header_color='#e67e22',
+                header_color='#BE0078',
                 greeting='Hi <strong>Omri Cohen</strong>,<br><br>This ticket is at <strong>78% of its SLA window</strong>. Please respond soon to avoid a breach.',
                 body_rows=(
-                    _row('Ticket', '#0042 — Outlook not syncing emails', '#e67e22') +
-                    _row('SLA Deadline', '18 Apr 2026 14:00', '#e67e22') +
-                    _row('Elapsed', '78%', '#e67e22')
+                    _row('Ticket', '#0042 — Outlook not syncing emails', '#BE0078') +
+                    _row('SLA Deadline', '18 Apr 2026 14:00', '#BE0078') +
+                    _row('Elapsed', '78%', '#BE0078')
                 ),
                 cta_url=f'{site}/tickets/42/',
                 cta_label='Open Ticket',
@@ -856,12 +856,12 @@ def email_preview(request):
             'html': _email_html(
                 header_title='SLA Deadline Breached',
                 header_subtitle='#0042 — Outlook not syncing emails',
-                header_color='#c0392b',
+                header_color='#BE0078',
                 greeting='Hi <strong>Omri Cohen</strong>,<br><br>The following ticket has <strong>breached its SLA deadline</strong> and requires your immediate attention.',
                 body_rows=(
-                    _row('Ticket', '#0042 — Outlook not syncing emails', '#c0392b') +
-                    _row('Requester', 'David Levi (dlevi@kramerav.com)', '#c0392b') +
-                    _row('SLA Deadline', '17 Apr 2026 14:00', '#c0392b')
+                    _row('Ticket', '#0042 — Outlook not syncing emails', '#BE0078') +
+                    _row('Requester', 'David Levi (dlevi@kramerav.com)', '#BE0078') +
+                    _row('SLA Deadline', '17 Apr 2026 14:00', '#BE0078')
                 ),
                 cta_url=f'{site}/tickets/42/',
                 cta_label='Open Ticket',
@@ -930,11 +930,12 @@ def email_preview(request):
             'html': _email_html(
                 header_title='Change Request Approved',
                 header_subtitle='#0007 — Firewall rule update — DMZ segment',
-                header_color='#1a7a4a',
+                header_color='#69FFC3',
+                header_text_color='#1a1a2e',
                 greeting='Hi <strong>Omri Cohen</strong>,<br><br>Your change request has been <strong>approved</strong>. You may now proceed with implementation.',
                 body_rows=(
-                    _row('Change', '#0007 — Firewall rule update — DMZ segment', '#1a7a4a') +
-                    _row('Planned Date', '20 Apr 2026  22:00 – 23:00', '#1a7a4a')
+                    _row('Change', '#0007 — Firewall rule update — DMZ segment') +
+                    _row('Planned Date', '20 Apr 2026  22:00 – 23:00')
                 ),
                 cta_url=f'{site}/changes/7/',
                 cta_label='View in Kdesk',
@@ -997,7 +998,7 @@ def email_preview(request):
                     'window. During this time, the affected system may be temporarily unavailable.<br><br>'
                     'We apologize for any inconvenience and will work to minimize disruption. '
                     'If you have any questions please contact '
-                    '<a href="mailto:servicedesk@kramerav.com" style="color:#8200B4;">servicedesk@kramerav.com</a>.'
+                    '<a href="mailto:servicedesk@kramerav.com" style="color:#8205B4;">servicedesk@kramerav.com</a>.'
                 ),
                 body_rows=(
                     _row('System', 'Network') +

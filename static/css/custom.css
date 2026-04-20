@@ -19,8 +19,8 @@
 
 /* ── Kramer Brand Variables ───────────────────────────────────────────────── */
 :root {
-  --kramer-purple:  #8200B4;
-  --kramer-mint:    #68FFC3;
+  --kramer-purple:  #8205B4;
+  --kramer-mint:    #69FFC3;
   --kramer-pink:    #BE0078;
   --kramer-neutral: #DCDDDE;
   --kramer-dark:    #1f1f1f;
@@ -35,16 +35,16 @@
   --fs-title:     29px;
 
   /* Override Bootstrap 5 color tokens */
-  --bs-primary:         #8200B4;
-  --bs-primary-rgb:     130,0,180;
-  --bs-success:         #68FFC3;
-  --bs-success-rgb:     104,255,195;
+  --bs-primary:         #8205B4;
+  --bs-primary-rgb:     130,5,180;
+  --bs-success:         #69FFC3;
+  --bs-success-rgb:     105,255,195;
   --bs-danger:          #BE0078;
   --bs-danger-rgb:      190,0,120;
   --bs-warning:         #f59e0b;
   --bs-warning-rgb:     245,158,11;
-  --bs-info:            #8200B4;
-  --bs-info-rgb:        130,0,180;
+  --bs-info:            #8205B4;
+  --bs-info-rgb:        130,5,180;
   --bs-body-bg:         #1f1f1f;
   --bs-body-color:      #DCDDDE;
   --bs-border-color:    #484848;

@@ -97,19 +97,24 @@ def check_sla():
 
 
 def _email_html(header_title: str, header_subtitle: str, greeting: str, body_rows: str,
-                cta_url: str = None, cta_label: str = None, header_color: str = '#8200B4') -> str:
+                cta_url: str = None, cta_label: str = None,
+                header_color: str = '#8205B4', header_text_color: str = '#ffffff') -> str:
     """
     Render a fully branded Kramer email.
     body_rows: HTML rows for the details table (tr elements).
+    header_text_color: '#ffffff' for dark headers, '#1a1a2e' for light headers (e.g. green).
     """
     logo_url = f'{settings.SITE_URL}/static/img/kramer_logo.png'
+    subtitle_opacity = '0.65' if header_text_color != '#ffffff' else '0.82'
+    logo_filter = 'brightness(0)' if header_text_color != '#ffffff' else 'brightness(0) invert(1)'
+
     cta_block = ''
     if cta_url and cta_label:
         cta_block = f'''
         <tr><td style="padding:24px 0 8px;">
           <a href="{cta_url}"
              style="display:inline-block;padding:12px 28px;background:{header_color};
-                    color:#ffffff;text-decoration:none;border-radius:6px;
+                    color:{header_text_color};text-decoration:none;border-radius:6px;
                     font-weight:600;font-size:14px;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
             {cta_label}
           </a>
@@ -120,7 +125,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
         details_block = f'''
         <tr><td>
           <table width="100%" cellpadding="0" cellspacing="0"
-                 style="background:#f8f0ff;border-left:4px solid {header_color};border-radius:4px;">
+                 style="background:#f5f5f5;border-left:4px solid {header_color};border-radius:4px;">
             <tr><td style="padding:18px 22px;">
               <table width="100%" cellpadding="5" cellspacing="0"
                      style="font-size:14px;color:#333333;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
@@ -145,19 +150,19 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="vertical-align:middle;">
-            <p style="margin:0;color:#ffffff;font-size:11px;letter-spacing:2px;
-                      text-transform:uppercase;opacity:0.75;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+            <p style="margin:0;color:{header_text_color};font-size:11px;letter-spacing:2px;
+                      text-transform:uppercase;opacity:{subtitle_opacity};font-family:'Segoe UI',Calibri,Arial,sans-serif;">
               IT Support
             </p>
-            <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;
+            <h1 style="margin:4px 0 0;color:{header_text_color};font-size:20px;font-weight:700;
                        font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.3;">
               {header_title}
             </h1>
-            {f'<p style="margin:4px 0 0;color:rgba(255,255,255,0.82);font-size:13px;font-family:Segoe UI,Calibri,Arial,sans-serif;">{header_subtitle}</p>' if header_subtitle else ''}
+            {f'<p style="margin:4px 0 0;color:{header_text_color};opacity:{subtitle_opacity};font-size:13px;font-family:Segoe UI,Calibri,Arial,sans-serif;">{header_subtitle}</p>' if header_subtitle else ''}
           </td>
           <td style="text-align:right;vertical-align:middle;padding-left:16px;">
             <img src="{logo_url}" alt="Kramer" width="110" height="auto"
-                 style="display:block;max-width:110px;filter:brightness(0) invert(1);opacity:0.9;">
+                 style="display:block;max-width:110px;filter:{logo_filter};opacity:0.9;">
           </td>
         </tr>
       </table>
@@ -183,14 +188,14 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
     <td style="background:#1a1a2e;padding:22px 36px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="color:#aaaaaa;font-size:12px;line-height:1.7;
+          <td style="color:#D8D8D8;font-size:12px;line-height:1.7;
                      font-family:'Segoe UI',Calibri,Arial,sans-serif;">
-            <strong style="color:#cccccc;">IT Support Team</strong><br>
+            <strong style="color:#D8D8D8;">IT Support Team</strong><br>
             <a href="mailto:servicedesk@kramerav.com"
-               style="color:#cc66ff;text-decoration:none;">servicedesk@kramerav.com</a>
+               style="color:#69FFC3;text-decoration:none;">servicedesk@kramerav.com</a>
           </td>
           <td style="text-align:right;vertical-align:middle;">
-            <span style="color:#444466;font-size:18px;font-weight:700;
+            <span style="color:#8205B4;font-size:18px;font-weight:700;
                          font-family:'Segoe UI',Calibri,Arial,sans-serif;letter-spacing:1px;">
               KRAMER
             </span>
@@ -207,7 +212,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 </html>'''
 
 
-def _row(label: str, value: str, color: str = '#8200B4') -> str:
+def _row(label: str, value: str, color: str = '#8205B4') -> str:
     return (f'<tr>'
             f'<td style="color:{color};font-weight:600;white-space:nowrap;width:140px;'
             f'    vertical-align:top;padding:4px 16px 4px 0;">{label}</td>'
@@ -222,14 +227,14 @@ def _send_sla_breach_email(ticket):
     body = _email_html(
         header_title='SLA Deadline Breached',
         header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
-        header_color='#c0392b',
+        header_color='#BE0078',
         greeting=(f'Hi <strong>{name}</strong>,<br><br>'
                   f'The following ticket has <strong>breached its SLA deadline</strong> '
                   f'and requires your immediate attention.'),
         body_rows=(
-            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}', '#c0392b') +
-            _row('Requester', f'{ticket.requester_name} ({ticket.requester_email})', '#c0392b') +
-            _row('SLA Deadline', deadline, '#c0392b')
+            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}', '#BE0078') +
+            _row('Requester', f'{ticket.requester_name} ({ticket.requester_email})', '#BE0078') +
+            _row('SLA Deadline', deadline, '#BE0078')
         ),
         cta_url=ticket_url,
         cta_label='Open Ticket',
@@ -248,14 +253,14 @@ def _send_sla_warning_email(ticket):
     body = _email_html(
         header_title='SLA Warning',
         header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
-        header_color='#e67e22',
+        header_color='#BE0078',
         greeting=(f'Hi <strong>{name}</strong>,<br><br>'
                   f'This ticket is at <strong>{ticket.sla_percent_elapsed}% of its SLA window</strong>. '
                   f'Please respond soon to avoid a breach.'),
         body_rows=(
-            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}', '#e67e22') +
-            _row('SLA Deadline', deadline, '#e67e22') +
-            _row('Elapsed', f'{ticket.sla_percent_elapsed}%', '#e67e22')
+            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}', '#BE0078') +
+            _row('SLA Deadline', deadline, '#BE0078') +
+            _row('Elapsed', f'{ticket.sla_percent_elapsed}%', '#BE0078')
         ),
         cta_url=ticket_url,
         cta_label='Open Ticket',
@@ -449,7 +454,7 @@ def _send_maintenance_announcement(change):
             'window. During this time, the affected system may be temporarily unavailable.<br><br>'
             'We apologize for any inconvenience and will work to minimize disruption. '
             'If you have any questions please contact '
-            '<a href="mailto:servicedesk@kramerav.com" style="color:#8200B4;">servicedesk@kramerav.com</a>.'
+            '<a href="mailto:servicedesk@kramerav.com" style="color:#8205B4;">servicedesk@kramerav.com</a>.'
         ),
         body_rows=(
             _row('System', system_str) +
@@ -629,13 +634,14 @@ def notify_change(change_pk: int, event: str):
                 body=_email_html(
                     header_title='Change Request Approved',
                     header_subtitle=f'#{change.pk:04d} — {change.title}',
-                    header_color='#1a7a4a',
+                    header_color='#69FFC3',
+                    header_text_color='#1a1a2e',
                     greeting=(f'Hi <strong>{submitter_name}</strong>,<br><br>'
                               f'Your change request has been <strong>approved</strong>. '
                               f'You may now proceed with implementation.'),
                     body_rows=(
-                        _row('Change', f'#{change.pk:04d} — {change.title}', '#1a7a4a') +
-                        _row('Planned Date', planned, '#1a7a4a')
+                        _row('Change', f'#{change.pk:04d} — {change.title}') +
+                        _row('Planned Date', planned)
                     ),
                     cta_url=change_url,
                     cta_label='View in Kdesk',
@@ -652,13 +658,13 @@ def notify_change(change_pk: int, event: str):
                 body=_email_html(
                     header_title='Change Request Not Approved',
                     header_subtitle=f'#{change.pk:04d} — {change.title}',
-                    header_color='#c0392b',
+                    header_color='#BE0078',
                     greeting=(f'Hi <strong>{submitter_name}</strong>,<br><br>'
                               f'Your change request has been reviewed and was <strong>not approved</strong> '
                               f'at this time. Please reach out to the IT Manager for more information.'),
                     body_rows=(
-                        _row('Change', f'#{change.pk:04d} — {change.title}', '#c0392b') +
-                        _row('Planned Date', planned, '#c0392b')
+                        _row('Change', f'#{change.pk:04d} — {change.title}', '#BE0078') +
+                        _row('Planned Date', planned, '#BE0078')
                     ),
                     cta_url=change_url,
                     cta_label='View in Kdesk',
@@ -674,7 +680,7 @@ def notify_change(change_pk: int, event: str):
                 body=_email_html(
                     header_title='Changes Requested',
                     header_subtitle=f'#{change.pk:04d} — {change.title}',
-                    header_color='#e67e22',
+                    header_color='#BE0078',
                     greeting=(
                         f'Hi <strong>{submitter_name}</strong>,<br><br>'
                         f'The IT Manager has reviewed your change request and is requesting some modifications '
@@ -682,9 +688,9 @@ def notify_change(change_pk: int, event: str):
                         f'and resubmit it for approval.'
                     ),
                     body_rows=(
-                        _row('Change', f'#{change.pk:04d} — {change.title}', '#e67e22') +
-                        _row('Planned Date', planned, '#e67e22') +
-                        _row('IT Manager Remarks', remarks, '#e67e22')
+                        _row('Change', f'#{change.pk:04d} — {change.title}', '#BE0078') +
+                        _row('Planned Date', planned, '#BE0078') +
+                        _row('IT Manager Remarks', remarks, '#BE0078')
                     ),
                     cta_url=change_url,
                     cta_label='Review &amp; Update in Kdesk',
