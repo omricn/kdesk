@@ -286,7 +286,7 @@ def send_requester_created(ticket_pk: int):
     )
     _send_notification_email(
         to=ticket.requester_email,
-        subject=f'[Kdesk] Your request has been received — #{ticket.pk:04d}',
+        subject=f'[Ticket #{ticket.pk:04d}] Your request has been received',
         body=body,
     )
     logger.info(f'[Requester] Creation confirmation sent for ticket #{ticket_pk}.')
@@ -321,7 +321,7 @@ def send_requester_closed(ticket_pk: int):
     )
     _send_notification_email(
         to=ticket.requester_email,
-        subject=f'[Kdesk] Your ticket has been closed — #{ticket.pk:04d}',
+        subject=f'[Ticket #{ticket.pk:04d}] Your ticket has been closed',
         body=body,
     )
     logger.info(f'[Requester] Close notification sent for ticket #{ticket_pk}.')
@@ -530,7 +530,10 @@ def generate_ai_summary(ticket_pk: int):
 
 # ── Change Management notifications ──────────────────────────────────────────
 
-IT_MANAGER_EMAIL = 'rlisbon@kramerav.com'
+def _get_it_manager_emails():
+    """Return email addresses of all current IT managers from the DB."""
+    from users.models import User
+    return list(User.objects.filter(is_it_manager=True, is_active=True).values_list('email', flat=True))
 
 
 @shared_task(name='tasks.notify_change')
@@ -569,19 +572,20 @@ def notify_change(change_pk: int, event: str):
         _row('Submitted By', submitter_name)
     )
 
+    it_manager_emails = _get_it_manager_emails()
+
     if event == 'submitted':
-        _send_notification_email(
-            to=IT_MANAGER_EMAIL,
-            subject=f'[Kdesk] Change Request Pending Approval — #{change.pk:04d}: {change.title}',
-            body=_email_html(
-                header_title='Change Request Pending Approval',
-                header_subtitle=f'#{change.pk:04d} — {change.title}',
-                greeting='A new change request has been submitted and is awaiting your approval.',
-                body_rows=change_rows,
-                cta_url=change_url,
-                cta_label='Review &amp; Approve in Kdesk',
-            ),
+        subject = f'[Kdesk] Change Request Pending Approval — #{change.pk:04d}: {change.title}'
+        body = _email_html(
+            header_title='Change Request Pending Approval',
+            header_subtitle=f'#{change.pk:04d} — {change.title}',
+            greeting='A new change request has been submitted and is awaiting your approval.',
+            body_rows=change_rows,
+            cta_url=change_url,
+            cta_label='Review &amp; Approve in Kdesk',
         )
+        for mgr_email in it_manager_emails:
+            _send_notification_email(to=mgr_email, subject=subject, body=body)
         if submitter_email:
             _send_notification_email(
                 to=submitter_email,
@@ -624,6 +628,27 @@ def notify_change(change_pk: int, event: str):
         # Broadcast maintenance announcement to all affected employees
         _send_maintenance_announcement(change)
 
+    elif event == 'not_approved':
+        if submitter_email:
+            _send_notification_email(
+                to=submitter_email,
+                subject=f'[Kdesk] Change Not Approved — #{change.pk:04d}: {change.title}',
+                body=_email_html(
+                    header_title='Change Request Not Approved',
+                    header_subtitle=f'#{change.pk:04d} — {change.title}',
+                    header_color='#c0392b',
+                    greeting=(f'Hi <strong>{submitter_name}</strong>,<br><br>'
+                              f'Your change request has been reviewed and was <strong>not approved</strong> '
+                              f'at this time. Please reach out to the IT Manager for more information.'),
+                    body_rows=(
+                        _row('Change', f'#{change.pk:04d} — {change.title}', '#c0392b') +
+                        _row('Planned Date', planned, '#c0392b')
+                    ),
+                    cta_url=change_url,
+                    cta_label='View in Kdesk',
+                ),
+            )
+
     elif event == 'done':
         done_rows = (
             _row('Change', f'#{change.pk:04d} — {change.title}') +
@@ -631,22 +656,21 @@ def notify_change(change_pk: int, event: str):
             _row('Risk Level', change.get_risk_level_display()) +
             _row('Implemented By', submitter_name)
         )
-        _send_notification_email(
-            to=IT_MANAGER_EMAIL,
-            subject=f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}',
-            body=_email_html(
-                header_title='Change Completed',
-                header_subtitle=f'#{change.pk:04d} — {change.title}',
-                greeting='The following change has been completed.',
-                body_rows=done_rows,
-                cta_url=change_url,
-                cta_label='View in Kdesk',
-            ),
+        done_subject = f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}'
+        done_body = _email_html(
+            header_title='Change Completed',
+            header_subtitle=f'#{change.pk:04d} — {change.title}',
+            greeting='The following change has been completed.',
+            body_rows=done_rows,
+            cta_url=change_url,
+            cta_label='View in Kdesk',
         )
+        for mgr_email in it_manager_emails:
+            _send_notification_email(to=mgr_email, subject=done_subject, body=done_body)
         if submitter_email:
             _send_notification_email(
                 to=submitter_email,
-                subject=f'[Kdesk] Change Completed — #{change.pk:04d}: {change.title}',
+                subject=done_subject,
                 body=_email_html(
                     header_title='Change Marked as Done',
                     header_subtitle=f'#{change.pk:04d} — {change.title}',

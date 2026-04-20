@@ -84,8 +84,9 @@ def auth_callback(request):
         return redirect('login')
 
     # All authenticated Kramer users can log in.
-    # IT group members get admin access; everyone else gets the employee portal.
+    # IT group members get admin access; IT_Manager group members get is_it_manager.
     is_it_admin = _user_in_it_group(user_id)
+    is_it_manager = _user_in_it_manager_group(user_id)
 
     # Create or update the user record
     from users.models import User
@@ -97,6 +98,7 @@ def auth_callback(request):
             'display_name': display_name,
             'entra_id': user_id,
             'is_admin': is_it_admin,
+            'is_it_manager': is_it_manager,
             'is_staff': is_it_admin,
             'is_active': True,
         }
@@ -115,6 +117,9 @@ def auth_callback(request):
         if is_it_admin and not user.is_admin:
             user.is_admin = True
             user.is_staff = True
+            changed = True
+        if user.is_it_manager != is_it_manager:
+            user.is_it_manager = is_it_manager
             changed = True
         if not user.is_active:
             user.is_active = True
@@ -147,6 +152,18 @@ def _user_in_it_group(entra_user_id: str) -> bool:
         return client.is_user_in_group(entra_user_id, group_id)
     except Exception as exc:
         logger.error(f'[SSO] Group check failed for {entra_user_id}: {exc}')
+        return False
+
+
+def _user_in_it_manager_group(entra_user_id: str) -> bool:
+    """Returns True if the user is a member of the IT_Manager group."""
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        group_id = client.get_group_id_by_email(settings.ENTRA_IT_MANAGER_GROUP_EMAIL)
+        return client.is_user_in_group(entra_user_id, group_id)
+    except Exception as exc:
+        logger.error(f'[SSO] IT Manager group check failed for {entra_user_id}: {exc}')
         return False
 
 

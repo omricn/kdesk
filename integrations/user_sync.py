@@ -54,9 +54,9 @@ def sync_users():
         )
 
         if not created:
-            # Update existing user details
             changed = False
-            if user.display_name != display_name:
+            # Don't overwrite [OldUser] tag if already deactivated
+            if not user.display_name.startswith('[OldUser]') and user.display_name != display_name:
                 user.display_name = display_name
                 changed = True
             if user.entra_id != entra_id:
@@ -75,18 +75,25 @@ def sync_users():
         action = 'created' if created else 'updated'
         logger.debug(f'[UserSync] {action}: {email}')
 
-    # Deactivate users who are no longer in the group (but keep their data)
-    deactivated = (
+    # Deactivate and tag users who are no longer in the group
+    users_to_deactivate = (
         User.objects
         .filter(is_active=True, entra_id__isnull=False)
         .exclude(entra_id='')
         .exclude(entra_id__in=entra_ids_in_group)
-        .exclude(is_superuser=True)  # never deactivate superusers
-        .exclude(is_admin=True)      # never deactivate admins via user sync
-        .update(is_active=False)
+        .exclude(is_superuser=True)
+        .exclude(is_admin=True)
     )
-    if deactivated:
-        logger.info(f'[UserSync] Deactivated {deactivated} users no longer in group.')
+    deactivated_count = 0
+    for user in users_to_deactivate:
+        if not user.display_name.startswith('[OldUser]'):
+            user.display_name = f'[OldUser] {user.display_name}'.strip()
+        user.is_active = False
+        user.save(update_fields=['display_name', 'is_active'])
+        deactivated_count += 1
+
+    if deactivated_count:
+        logger.info(f'[UserSync] Deactivated and tagged {deactivated_count} users no longer in group.')
 
     logger.info(f'[UserSync] Sync complete. {len(members)} members processed.')
 
@@ -94,7 +101,8 @@ def sync_users():
 def sync_admins():
     """
     Pull all members of ENTRA_ADMIN_GROUP and ensure they exist as admin users.
-    Strips is_admin from anyone no longer in the group.
+    Strips is_admin from anyone no longer in the group and tags them [OldAdmin].
+    Also syncs IT manager role from ENTRA_IT_MANAGER_GROUP_EMAIL.
     """
     from users.models import User
 
@@ -156,16 +164,64 @@ def sync_admins():
         action = 'created' if created else 'updated'
         logger.debug(f'[AdminSync] {action}: {email}')
 
-    # Remove admin rights from anyone no longer in the group
-    demoted = (
+    # Remove admin rights and tag anyone no longer in the group
+    users_to_demote = (
         User.objects
         .filter(is_admin=True, entra_id__isnull=False)
         .exclude(entra_id='')
         .exclude(entra_id__in=admin_entra_ids)
         .exclude(is_superuser=True)
-        .update(is_admin=False, is_staff=False)
     )
-    if demoted:
-        logger.info(f'[AdminSync] Removed admin rights from {demoted} users no longer in {group_email}.')
+    demoted_count = 0
+    for user in users_to_demote:
+        if not user.display_name.startswith('[OldAdmin]'):
+            user.display_name = f'[OldAdmin] {user.display_name}'.strip()
+        user.is_admin = False
+        user.is_staff = False
+        user.save(update_fields=['display_name', 'is_admin', 'is_staff'])
+        demoted_count += 1
+
+    if demoted_count:
+        logger.info(f'[AdminSync] Removed admin rights and tagged {demoted_count} users no longer in {group_email}.')
 
     logger.info(f'[AdminSync] Sync complete. {len(members)} admins processed.')
+
+    # Also sync IT manager role
+    _sync_it_managers(client)
+
+
+def _sync_it_managers(client):
+    """Sync is_it_manager flag from the IT_Manager Entra group."""
+    from users.models import User
+
+    group_email = getattr(settings, 'ENTRA_IT_MANAGER_GROUP_EMAIL', 'IT_Manager@kramerav.com')
+
+    try:
+        group_id = client.get_group_id_by_email(group_email)
+        members = client.get_group_members(group_id)
+    except Exception as exc:
+        logger.error(f'[ITManagerSync] Failed to fetch group members: {exc}')
+        return
+
+    manager_entra_ids = set()
+
+    for member in members:
+        entra_id = member.get('id', '')
+        email = (member.get('mail', '') or '').lower().strip()
+        if not email:
+            continue
+        manager_entra_ids.add(entra_id)
+        User.objects.filter(entra_id=entra_id).update(is_it_manager=True)
+
+    # Clear the flag for anyone no longer in the group
+    cleared = (
+        User.objects
+        .filter(is_it_manager=True, entra_id__isnull=False)
+        .exclude(entra_id='')
+        .exclude(entra_id__in=manager_entra_ids)
+        .update(is_it_manager=False)
+    )
+    if cleared:
+        logger.info(f'[ITManagerSync] Cleared is_it_manager from {cleared} users no longer in {group_email}.')
+
+    logger.info(f'[ITManagerSync] Sync complete. {len(members)} IT managers processed.')

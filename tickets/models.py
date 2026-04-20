@@ -115,11 +115,12 @@ class Ticket(models.Model):
         Frozen at the suspension timestamp when SLA is paused."""
         if not self.sla_deadline or not self.created_at:
             return 0
-        from tickets.sla import business_hours_elapsed, get_effective_now, SLA_HOURS
+        from tickets.sla import business_hours_elapsed, get_effective_now, get_sla_hours
         elapsed = business_hours_elapsed(self.created_at, get_effective_now())
-        if SLA_HOURS <= 0:
+        sla_hours = get_sla_hours()
+        if sla_hours <= 0:
             return 100
-        return min(int((elapsed / SLA_HOURS) * 100), 999)
+        return min(int((elapsed / sla_hours) * 100), 999)
 
     @property
     def sla_status(self):

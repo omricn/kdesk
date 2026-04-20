@@ -6,6 +6,7 @@ class Change(models.Model):
     STATUS_NEW = 'new'
     STATUS_PENDING = 'pending_approval'
     STATUS_APPROVED = 'approved'
+    STATUS_NOT_APPROVED = 'not_approved'
     STATUS_IN_PROGRESS = 'in_progress'
     STATUS_DONE = 'done'
     STATUS_CANCELLED = 'cancelled'
@@ -14,6 +15,7 @@ class Change(models.Model):
         (STATUS_NEW, 'New'),
         (STATUS_PENDING, 'Pending Approval'),
         (STATUS_APPROVED, 'Approved'),
+        (STATUS_NOT_APPROVED, 'Not Approved'),
         (STATUS_IN_PROGRESS, 'In Progress'),
         (STATUS_DONE, 'Done'),
         (STATUS_CANCELLED, 'Cancelled'),
@@ -95,9 +97,10 @@ class Change(models.Model):
             'new': 'bg-secondary',
             'pending_approval': 'bg-warning',
             'approved': 'bg-info',
+            'not_approved': 'bg-danger',
             'in_progress': 'bg-primary',
             'done': 'bg-success',
-            'cancelled': 'bg-danger',
+            'cancelled': 'bg-secondary',
         }.get(self.status, 'bg-secondary')
 
     @property
@@ -106,7 +109,8 @@ class Change(models.Model):
             'new': '#666',
             'pending_approval': '#f59e0b',
             'approved': '#1a4a6e',
+            'not_approved': '#BE0078',
             'in_progress': '#8200B4',
             'done': '#68FFC3',
-            'cancelled': '#BE0078',
+            'cancelled': '#555',
         }.get(self.status, '#666')

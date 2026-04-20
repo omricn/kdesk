@@ -1,9 +1,11 @@
 """
 Business-hours SLA utilities for Kdesk.
 
-Work days : Sunday – Thursday  (Israel work week)
-Work hours : 08:00 – 17:00 Asia/Jerusalem  (9 h/day)
-SLA target : 9 business hours
+Default config (can be overridden via Settings page → SystemSetting):
+  sla_work_start : 8       (08:00)
+  sla_work_end   : 17      (17:00)
+  sla_hours      : 9       (9 business hours)
+  sla_work_days  : 6,0,1,2,3  (Sun–Thu, Python weekday: Mon=0 … Sun=6)
 
 All public functions accept and return timezone-aware UTC datetimes.
 The conversion to local time for the "is this inside work hours?" check
@@ -12,12 +14,36 @@ is done internally using Django's TIME_ZONE setting (Asia/Jerusalem).
 from datetime import timedelta
 from django.utils import timezone
 
-WORK_START = 8    # 08:00
-WORK_END   = 17   # 17:00  (exclusive – work ends at the start of this hour)
-SLA_HOURS  = 9
+# Module-level defaults — used as fallback if DB read fails
+_WORK_START_DEFAULT = 8
+_WORK_END_DEFAULT   = 17
+_SLA_HOURS_DEFAULT  = 9.0
+_WORK_DAYS_DEFAULT  = frozenset([6, 0, 1, 2, 3])  # Sun–Thu
 
-# Python datetime.weekday(): Mon=0 Tue=1 Wed=2 Thu=3 Fri=4 Sat=5 Sun=6
-WORK_DAYS = frozenset([6, 0, 1, 2, 3])   # Sun, Mon, Tue, Wed, Thu
+
+def _get_sla_config():
+    """Read SLA config from SystemSetting, falling back to compile-time defaults."""
+    try:
+        from tickets.models import SystemSetting
+        work_start = int(SystemSetting.get('sla_work_start', str(_WORK_START_DEFAULT)))
+        work_end   = int(SystemSetting.get('sla_work_end',   str(_WORK_END_DEFAULT)))
+        sla_hours  = float(SystemSetting.get('sla_hours',    str(_SLA_HOURS_DEFAULT)))
+        days_str   = SystemSetting.get('sla_work_days', '6,0,1,2,3')
+        work_days  = frozenset(int(d) for d in days_str.split(',') if d.strip().isdigit())
+        if not work_days:
+            work_days = _WORK_DAYS_DEFAULT
+    except Exception:
+        work_start = _WORK_START_DEFAULT
+        work_end   = _WORK_END_DEFAULT
+        sla_hours  = _SLA_HOURS_DEFAULT
+        work_days  = _WORK_DAYS_DEFAULT
+    return work_start, work_end, sla_hours, work_days
+
+
+def get_sla_hours() -> float:
+    """Return the current SLA target in business hours."""
+    _, _, sla_hours, _ = _get_sla_config()
+    return sla_hours
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -27,42 +53,31 @@ def _local(dt):
     return timezone.localtime(dt)
 
 
-def _day_start(dt_local):
-    """08:00 on the same calendar day as dt_local."""
-    return dt_local.replace(hour=WORK_START, minute=0, second=0, microsecond=0)
+def _day_start(dt_local, work_start):
+    return dt_local.replace(hour=work_start, minute=0, second=0, microsecond=0)
 
 
-def _day_end(dt_local):
-    """17:00 on the same calendar day as dt_local."""
-    return dt_local.replace(hour=WORK_END, minute=0, second=0, microsecond=0)
+def _day_end(dt_local, work_end):
+    return dt_local.replace(hour=work_end, minute=0, second=0, microsecond=0)
 
 
-def _is_work_moment(dt_local):
-    """True if dt_local falls inside a work-day work-hour window."""
+def _is_work_moment(dt_local, work_days, work_start, work_end):
     return (
-        dt_local.weekday() in WORK_DAYS
-        and WORK_START <= dt_local.hour < WORK_END
+        dt_local.weekday() in work_days
+        and work_start <= dt_local.hour < work_end
     )
 
 
-def _advance_to_work_start(dt_local):
-    """
-    Return the earliest work moment >= dt_local.
-
-    • If dt_local is already inside work hours → return it unchanged.
-    • If dt_local is before 08:00 on a work day → return 08:00 that day.
-    • Otherwise (after 17:00, or Friday/Saturday) → return 08:00 on the
-      next work day.
-    """
-    if _is_work_moment(dt_local):
+def _advance_to_work_start(dt_local, work_days, work_start, work_end):
+    if _is_work_moment(dt_local, work_days, work_start, work_end):
         return dt_local
 
-    if dt_local.weekday() in WORK_DAYS and dt_local.hour < WORK_START:
-        return _day_start(dt_local)
+    if dt_local.weekday() in work_days and dt_local.hour < work_start:
+        return _day_start(dt_local, work_start)
 
     # After hours or weekend — find next work day
-    candidate = _day_start(dt_local) + timedelta(days=1)
-    while candidate.weekday() not in WORK_DAYS:
+    candidate = _day_start(dt_local, work_start) + timedelta(days=1)
+    while candidate.weekday() not in work_days:
         candidate += timedelta(days=1)
     return candidate
 
@@ -72,17 +87,14 @@ def _advance_to_work_start(dt_local):
 def add_business_hours(start_dt, hours):
     """
     Given start_dt (UTC-aware), add `hours` business hours and return the
-    resulting deadline (UTC-aware).
-
-    If start_dt falls outside work hours the countdown begins at the next
-    work-day start, so the returned deadline is always a work-day work-hour
-    timestamp.
+    resulting deadline (UTC-aware), using the current SLA config from Settings.
     """
-    remaining = float(hours) * 3600.0   # seconds left to allocate
-    current   = _advance_to_work_start(_local(start_dt))
+    work_start, work_end, _, work_days = _get_sla_config()
+    remaining = float(hours) * 3600.0
+    current   = _advance_to_work_start(_local(start_dt), work_days, work_start, work_end)
 
     while remaining > 0:
-        day_end   = _day_end(current)
+        day_end   = _day_end(current, work_end)
         available = (day_end - current).total_seconds()
 
         if available >= remaining:
@@ -91,27 +103,24 @@ def add_business_hours(start_dt, hours):
 
         remaining -= available
 
-        # Jump to start of next work day
-        next_day = _day_start(current) + timedelta(days=1)
-        while next_day.weekday() not in WORK_DAYS:
+        next_day = _day_start(current, work_start) + timedelta(days=1)
+        while next_day.weekday() not in work_days:
             next_day += timedelta(days=1)
         current = next_day
 
-    # remaining == 0 exactly at day boundary
     return current.astimezone(timezone.utc)
 
 
 def business_hours_elapsed(start_dt, end_dt):
     """
-    Return the number of business hours elapsed between two UTC-aware
-    datetimes.  Returns 0.0 if end_dt <= start_dt or if no work time has
-    passed (e.g. the ticket was created after hours and end_dt is still
-    before the next work start).
+    Return the number of business hours elapsed between two UTC-aware datetimes.
+    Returns 0.0 if end_dt <= start_dt or no work time has passed.
     """
     if not start_dt or not end_dt or end_dt <= start_dt:
         return 0.0
 
-    current = _advance_to_work_start(_local(start_dt))
+    work_start, work_end, _, work_days = _get_sla_config()
+    current = _advance_to_work_start(_local(start_dt), work_days, work_start, work_end)
     target  = _local(end_dt)
 
     if current >= target:
@@ -119,16 +128,15 @@ def business_hours_elapsed(start_dt, end_dt):
 
     elapsed = 0.0
     while current < target:
-        day_end      = _day_end(current)
-        segment_end  = min(day_end, target)
-        elapsed     += (segment_end - current).total_seconds()
+        day_end     = _day_end(current, work_end)
+        segment_end = min(day_end, target)
+        elapsed    += (segment_end - current).total_seconds()
 
         if segment_end >= target:
             break
 
-        # Jump to next work day start
-        next_day = _day_start(current) + timedelta(days=1)
-        while next_day.weekday() not in WORK_DAYS:
+        next_day = _day_start(current, work_start) + timedelta(days=1)
+        while next_day.weekday() not in work_days:
             next_day += timedelta(days=1)
         current = next_day
 
@@ -136,18 +144,14 @@ def business_hours_elapsed(start_dt, end_dt):
 
 
 def sla_deadline_for(created_at):
-    """
-    Return the SLA deadline (UTC-aware) for a ticket created at created_at.
-    """
-    return add_business_hours(created_at, SLA_HOURS)
+    """Return the SLA deadline (UTC-aware) for a ticket created at created_at."""
+    return add_business_hours(created_at, get_sla_hours())
 
 
 def get_effective_now():
     """
     Return the effective 'now' for SLA calculations.
-
-    When SLA is globally suspended this returns the moment the suspension
-    started, so all progress bars freeze in place rather than advancing.
+    Frozen at the suspension timestamp when SLA is globally paused.
     """
     from tickets.models import SystemSetting
     if SystemSetting.get('sla_paused', '0') == '1':

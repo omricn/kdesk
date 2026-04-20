@@ -28,6 +28,59 @@
   </div>
 </div>
 
+<!-- SLA Configuration -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-clock me-1"></i>SLA Configuration</div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Configure business hours and SLA resolution target. Changes apply to new calculations immediately.
+      Existing ticket deadlines update only on the next SLA resume.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="sla_config">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Work Start Hour</label>
+          <input type="number" name="sla_work_start" class="form-control form-control-sm"
+                 value="{{ sla_work_start }}" min="0" max="23">
+          <div class="form-text">e.g. 8 = 08:00</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Work End Hour</label>
+          <input type="number" name="sla_work_end" class="form-control form-control-sm"
+                 value="{{ sla_work_end }}" min="1" max="24">
+          <div class="form-text">e.g. 17 = 17:00</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">SLA Target (hours)</label>
+          <input type="number" name="sla_hours" class="form-control form-control-sm"
+                 value="{{ sla_hours }}" min="1" max="168" step="0.5">
+          <div class="form-text">Business hours to resolve</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Work Week</label>
+          <div class="mt-1">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="sla_work_days"
+                     value="6,0,1,2,3" id="wk_sun_thu"
+                     {% if sla_work_days == '6,0,1,2,3' %}checked{% endif %}>
+              <label class="form-check-label" for="wk_sun_thu">Sun – Thu</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="sla_work_days"
+                     value="0,1,2,3,4" id="wk_mon_fri"
+                     {% if sla_work_days == '0,1,2,3,4' %}checked{% endif %}>
+              <label class="form-check-label" for="wk_mon_fri">Mon – Fri</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save SLA Settings</button>
+    </form>
+  </div>
+</div>
+
 <!-- SLA Suspension -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-header fw-semibold"><i class="bi bi-pause-circle me-1"></i>SLA Suspension</div>

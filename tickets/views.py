@@ -192,8 +192,15 @@ def ticket_list(request):
 
     admins = User.objects.filter(is_admin=True, is_active=True)
 
+    # Paginate — 25 tickets per page
+    from django.core.paginator import Paginator
+    paginator = Paginator(qs, 25)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
     context = {
-        'tickets': qs,
+        'tickets': page_obj,
+        'page_obj': page_obj,
         'admins': admins,
         'status_choices': Ticket.STATUS_CHOICES,
         'current_filters': {
@@ -316,6 +323,9 @@ def ticket_detail(request, pk):
         elif action == 'upload':
             file_obj = request.FILES.get('file')
             if file_obj:
+                if file_obj.size > 3 * 1024 * 1024:
+                    messages.error(request, 'File exceeds the 3 MB limit. Please upload a smaller file.')
+                    return redirect('ticket_detail', pk=pk)
                 att = TicketAttachment(
                     ticket=ticket,
                     filename=file_obj.name,
@@ -350,12 +360,15 @@ def ticket_create(request):
             ticket.save()
             uploaded_file = request.FILES.get('attachment')
             if uploaded_file:
-                TicketAttachment.objects.create(
-                    ticket=ticket,
-                    filename=uploaded_file.name,
-                    file=uploaded_file,
-                    file_size=uploaded_file.size,
-                )
+                if uploaded_file.size > 3 * 1024 * 1024:
+                    messages.error(request, 'Attachment exceeds the 3 MB limit and was not saved.')
+                else:
+                    TicketAttachment.objects.create(
+                        ticket=ticket,
+                        filename=uploaded_file.name,
+                        file=uploaded_file,
+                        file_size=uploaded_file.size,
+                    )
             TicketHistory.objects.create(
                 ticket=ticket,
                 changed_by=request.user,
@@ -641,12 +654,31 @@ def settings_view(request):
             messages.warning(request, 'SLA suspended. Ticket clocks are frozen.')
             return redirect('settings')
 
+        elif action == 'sla_config':
+            try:
+                work_start = int(request.POST.get('sla_work_start', '8'))
+                work_end   = int(request.POST.get('sla_work_end',   '17'))
+                sla_hours  = float(request.POST.get('sla_hours',    '9'))
+                work_days  = request.POST.get('sla_work_days', '6,0,1,2,3')
+                if not (0 <= work_start < work_end <= 24 and sla_hours > 0):
+                    raise ValueError
+            except (ValueError, TypeError):
+                messages.error(request, 'Invalid SLA configuration values.')
+                return redirect('settings')
+            SystemSetting.set('sla_work_start', str(work_start))
+            SystemSetting.set('sla_work_end',   str(work_end))
+            SystemSetting.set('sla_hours',      str(sla_hours))
+            SystemSetting.set('sla_work_days',  work_days)
+            messages.success(request, 'SLA configuration saved.')
+            return redirect('settings')
+
         elif action == 'sla_resume':
-            from tickets.sla import business_hours_elapsed, add_business_hours, SLA_HOURS
+            from tickets.sla import business_hours_elapsed, add_business_hours, get_sla_hours
             from django.utils.dateparse import parse_datetime
 
             pause_started_at = parse_datetime(SystemSetting.get('sla_pause_started_at', ''))
             resume_time = timezone.now()
+            sla_hours = get_sla_hours()
 
             if pause_started_at:
                 open_tickets = Ticket.objects.filter(
@@ -654,7 +686,7 @@ def settings_view(request):
                 ).exclude(status__in=Ticket.TERMINAL_STATUSES)
                 for ticket in open_tickets:
                     elapsed_at_pause = business_hours_elapsed(ticket.created_at, pause_started_at)
-                    remaining = max(0.0, SLA_HOURS - elapsed_at_pause)
+                    remaining = max(0.0, sla_hours - elapsed_at_pause)
                     ticket.sla_deadline = add_business_hours(resume_time, remaining)
                     ticket.save(update_fields=['sla_deadline'])
 
@@ -678,6 +710,10 @@ def settings_view(request):
         'sla_paused': sla_paused,
         'sla_pause_reason': sla_pause_reason,
         'sla_pause_started': sla_pause_started,
+        'sla_work_start': SystemSetting.get('sla_work_start', '8'),
+        'sla_work_end':   SystemSetting.get('sla_work_end',   '17'),
+        'sla_hours':      SystemSetting.get('sla_hours',      '9'),
+        'sla_work_days':  SystemSetting.get('sla_work_days',  '6,0,1,2,3'),
     }
     return render(request, 'settings.html', context)
 
@@ -971,12 +1007,17 @@ def email_preview(request):
 
 @portal_required
 def portal_dashboard(request):
-    tickets = (
+    qs = (
         Ticket.objects
         .filter(requester_email__iexact=request.user.email)
         .order_by('-created_at')
     )
-    return render(request, 'portal/dashboard.html', {'tickets': tickets})
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q) | Q(description__icontains=q)
+        )
+    return render(request, 'portal/dashboard.html', {'tickets': qs, 'search_q': q})
 
 
 @portal_required
@@ -992,12 +1033,15 @@ def portal_ticket_create(request):
             ticket.save()
             uploaded_file = request.FILES.get('attachment')
             if uploaded_file:
-                TicketAttachment.objects.create(
-                    ticket=ticket,
-                    filename=uploaded_file.name,
-                    file=uploaded_file,
-                    file_size=uploaded_file.size,
-                )
+                if uploaded_file.size > 3 * 1024 * 1024:
+                    messages.error(request, 'Attachment exceeds the 3 MB limit and was not saved.')
+                else:
+                    TicketAttachment.objects.create(
+                        ticket=ticket,
+                        filename=uploaded_file.name,
+                        file=uploaded_file,
+                        file_size=uploaded_file.size,
+                    )
             TicketHistory.objects.create(
                 ticket=ticket,
                 changed_by=request.user,

@@ -81,6 +81,10 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+# ── Session ───────────────────────────────────────────────────────────────────
+SESSION_COOKIE_AGE = 43200          # 12 hours
+SESSION_SAVE_EVERY_REQUEST = True   # reset timer on activity
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -156,6 +160,7 @@ SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
 
 # Only members of this Entra group (looked up by email) are allowed to log in as admins
 ENTRA_ADMIN_GROUP_EMAIL = os.environ.get('ENTRA_ADMIN_GROUP_EMAIL', 'Global_OPS_IT@kramerav.com')
+ENTRA_IT_MANAGER_GROUP_EMAIL = os.environ.get('ENTRA_IT_MANAGER_GROUP_EMAIL', 'IT_Manager@kramerav.com')
 
 # ── Groq AI ──────────────────────────────────────────────────────────────────
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')

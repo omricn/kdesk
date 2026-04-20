@@ -9,8 +9,6 @@ from django.views.decorators.http import require_POST
 from .forms import ChangeForm
 from .models import Change
 
-IT_MANAGER_EMAIL = 'rlisbon@kramerav.com'
-
 
 @login_required
 def change_list(request):
@@ -51,7 +49,7 @@ def change_detail(request, pk):
             messages.success(request, 'Notes saved.')
             return redirect('change_detail', pk=pk)
 
-    is_manager = request.user.email.lower() == IT_MANAGER_EMAIL.lower()
+    is_manager = request.user.is_it_manager
     can_cancel = (request.user == change.submitted_by or request.user.is_superuser)
     return render(request, 'changes/detail.html', {
         'change': change,
@@ -91,32 +89,31 @@ def change_edit(request, pk):
     return render(request, 'changes/form.html', {'form': form, 'action': 'Edit', 'change': change})
 
 
-
-
 @login_required
 @require_POST
 def change_transition(request, pk):
     change = get_object_or_404(Change.objects.select_related('submitted_by'), pk=pk)
     action = request.POST.get('action')
 
-    is_manager = request.user.email.lower() == IT_MANAGER_EMAIL.lower()
+    is_manager = request.user.is_it_manager
 
     transitions = {
-        'submit':   (Change.STATUS_NEW,         Change.STATUS_PENDING),
-        'approve':  (Change.STATUS_PENDING,     Change.STATUS_APPROVED),
-        'start':    (Change.STATUS_APPROVED,    Change.STATUS_IN_PROGRESS),
-        'complete': (Change.STATUS_IN_PROGRESS, Change.STATUS_DONE),
-        'reopen':   (Change.STATUS_DONE,        Change.STATUS_NEW),
-        'cancel':   (Change.STATUS_NEW,         Change.STATUS_CANCELLED),
+        'submit':       (Change.STATUS_NEW,         Change.STATUS_PENDING),
+        'approve':      (Change.STATUS_PENDING,      Change.STATUS_APPROVED),
+        'not_approve':  (Change.STATUS_PENDING,      Change.STATUS_NOT_APPROVED),
+        'start':        (Change.STATUS_APPROVED,     Change.STATUS_IN_PROGRESS),
+        'complete':     (Change.STATUS_IN_PROGRESS,  Change.STATUS_DONE),
+        'reopen':       (Change.STATUS_DONE,         Change.STATUS_NEW),
+        'cancel':       (Change.STATUS_NEW,          Change.STATUS_CANCELLED),
     }
 
     if action not in transitions:
         messages.error(request, 'Invalid action.')
         return redirect('change_detail', pk=pk)
 
-    # Only managers can approve
-    if action == 'approve' and not is_manager:
-        messages.error(request, 'Only the IT Manager can approve changes.')
+    # Only managers can approve or not-approve
+    if action in ('approve', 'not_approve') and not is_manager:
+        messages.error(request, 'Only the IT Manager can approve or reject changes.')
         return redirect('change_detail', pk=pk)
 
     # Only submitter or superuser can cancel
@@ -141,6 +138,10 @@ def change_transition(request, pk):
         from tasks.scheduled import notify_change
         notify_change.delay(pk, 'approved')
         messages.success(request, 'Change approved.')
+    elif action == 'not_approve':
+        from tasks.scheduled import notify_change
+        notify_change.delay(pk, 'not_approved')
+        messages.warning(request, 'Change marked as Not Approved. The submitter has been notified.')
     elif action == 'complete':
         from tasks.scheduled import notify_change
         notify_change.delay(pk, 'done')
