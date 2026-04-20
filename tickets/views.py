@@ -9,14 +9,13 @@ logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import AttachmentForm, CommentForm, PortalTicketForm, TicketForm, TicketUpdateForm
+from .forms import CommentForm, PortalTicketForm, TicketForm, TicketUpdateForm
 
 
 def admin_required(view_func):
