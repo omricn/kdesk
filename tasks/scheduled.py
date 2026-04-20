@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # ── Email polling ─────────────────────────────────────────────────────────────
 
-@shared_task(name='tasks.poll_mailbox')
+@shared_task(name='tasks.poll_mailbox', time_limit=300, soft_time_limit=270)
 def poll_mailbox():
     """Check the servicedesk mailbox for new emails and create tickets."""
     from tickets.models import SystemSetting
@@ -27,7 +27,7 @@ def poll_mailbox():
 
 # ── User sync ─────────────────────────────────────────────────────────────────
 
-@shared_task(name='tasks.sync_users')
+@shared_task(name='tasks.sync_users', time_limit=300, soft_time_limit=270)
 def sync_users():
     """Sync users from the KramerLicensedUsers Entra group."""
     from integrations.user_sync import sync_users as _sync
@@ -36,7 +36,7 @@ def sync_users():
     logger.info('[Task] sync_users finished')
 
 
-@shared_task(name='tasks.sync_admins')
+@shared_task(name='tasks.sync_admins', time_limit=300, soft_time_limit=270)
 def sync_admins():
     """Sync admin users from the Global_OPS_IT Entra group."""
     from integrations.user_sync import sync_admins as _sync

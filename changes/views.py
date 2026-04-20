@@ -1,16 +1,16 @@
 import json
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from tickets.views import admin_required
 from .forms import ChangeForm
 from .models import Change
 
 
-@login_required
+@admin_required
 def change_list(request):
     changes = Change.objects.select_related('submitted_by').all()
 
@@ -35,7 +35,7 @@ def change_list(request):
     return render(request, 'changes/list.html', context)
 
 
-@login_required
+@admin_required
 def change_detail(request, pk):
     change = get_object_or_404(Change.objects.select_related('submitted_by'), pk=pk)
 
@@ -61,7 +61,7 @@ def change_detail(request, pk):
     })
 
 
-@login_required
+@admin_required
 def change_create(request):
     form = ChangeForm()
     if request.method == 'POST':
@@ -75,7 +75,7 @@ def change_create(request):
     return render(request, 'changes/form.html', {'form': form, 'action': 'Create'})
 
 
-@login_required
+@admin_required
 def change_edit(request, pk):
     change = get_object_or_404(Change, pk=pk)
     if request.user != change.submitted_by and not request.user.is_superuser:
@@ -95,7 +95,7 @@ def change_edit(request, pk):
     return render(request, 'changes/form.html', {'form': form, 'action': 'Edit', 'change': change})
 
 
-@login_required
+@admin_required
 @require_POST
 def change_transition(request, pk):
     change = get_object_or_404(Change.objects.select_related('submitted_by'), pk=pk)

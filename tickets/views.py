@@ -762,6 +762,10 @@ def ticket_send_email(request, pk):
     </p>
     """
 
+    if SystemSetting.get('emails_enabled', '1') != '1':
+        messages.warning(request, 'Email sending is currently disabled. Re-enable it in Settings.')
+        return redirect('ticket_detail', pk=pk)
+
     try:
         from integrations.graph_client import get_client
         client = get_client()
