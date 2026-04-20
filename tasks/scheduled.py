@@ -688,7 +688,6 @@ def notify_change(change_pk: int, event: str):
                     ),
                     cta_url=change_url,
                     cta_label='Review &amp; Update in Kdesk',
-                    header_color='#e67e22',
                 ),
             )
 
