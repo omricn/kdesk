@@ -1095,20 +1095,32 @@ def portal_ticket_detail(request, pk):
 
     comment_form = CommentForm()
 
-    if request.method == 'POST' and request.POST.get('action') == 'comment':
-        comment_form = CommentForm(request.POST)
-        if comment_form.is_valid():
-            comment = comment_form.save(commit=False)
-            comment.ticket = ticket
-            comment.author = request.user
-            comment.is_internal = False
-            comment.save()
-            ticket.updated_at = timezone.now()
-            ticket.save(update_fields=['updated_at'])
-            if ticket.assignee and ticket.assignee.notify_on_update:
-                from tasks.scheduled import send_ticket_notification
-                send_ticket_notification.delay('update', ticket.pk, request.user.pk)
-            messages.success(request, 'Reply sent.')
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'comment':
+            comment_form = CommentForm(request.POST)
+            if comment_form.is_valid():
+                comment = comment_form.save(commit=False)
+                comment.ticket = ticket
+                comment.author = request.user
+                comment.is_internal = False
+                comment.save()
+                ticket.updated_at = timezone.now()
+                ticket.save(update_fields=['updated_at'])
+                if ticket.assignee and ticket.assignee.notify_on_update:
+                    from tasks.scheduled import send_ticket_notification
+                    send_ticket_notification.delay('update', ticket.pk, request.user.pk)
+                messages.success(request, 'Reply sent.')
+                return redirect('portal_ticket_detail', pk=pk)
+
+        elif action == 'self_close' and ticket.status not in Ticket.TERMINAL_STATUSES:
+            ticket.status = Ticket.STATUS_CLOSED
+            ticket.resolved_at = timezone.now()
+            ticket.save(update_fields=['status', 'resolved_at', 'updated_at'])
+            from tasks.scheduled import notify_user_closed_ticket
+            notify_user_closed_ticket.delay(ticket.pk, request.user.pk)
+            messages.success(request, 'Your ticket has been closed. Glad you sorted it out!')
             return redirect('portal_ticket_detail', pk=pk)
 
     comments = (
@@ -1118,12 +1130,14 @@ def portal_ticket_detail(request, pk):
         .order_by('created_at')
     )
     can_reply = ticket.status not in Ticket.TERMINAL_STATUSES
+    can_close = can_reply
 
     return render(request, 'portal/detail.html', {
         'ticket': ticket,
         'comments': comments,
         'comment_form': comment_form,
         'can_reply': can_reply,
+        'can_close': can_close,
     })
 
 

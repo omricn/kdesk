@@ -498,6 +498,52 @@ def _send_notification_email(to: str, subject: str, body: str):
         logger.error(f'[Notification] Failed to send email to {to}: {exc}')
 
 
+# ── User self-close notification ──────────────────────────────────────────────
+
+@shared_task(name='tasks.notify_user_closed_ticket')
+def notify_user_closed_ticket(ticket_pk: int, actor_pk: int):
+    """Notify the assignee (if any) that the requester self-closed their ticket."""
+    from tickets.models import Ticket
+    from users.models import User
+    try:
+        ticket = Ticket.objects.select_related('assignee').get(pk=ticket_pk)
+    except Ticket.DoesNotExist:
+        return
+
+    if not ticket.assignee:
+        return
+
+    try:
+        actor = User.objects.get(pk=actor_pk)
+    except User.DoesNotExist:
+        actor = None
+
+    actor_name = actor.display_name or actor.email if actor else ticket.requester_name or 'The requester'
+    assignee_name = ticket.assignee.display_name or ticket.assignee.email
+    ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
+
+    body = _email_html(
+        header_title='Ticket Closed by Requester',
+        header_subtitle=f'#{ticket.pk:04d} — {ticket.title}',
+        greeting=(f'Hi <strong>{assignee_name}</strong>,<br><br>'
+                  f'<strong>{actor_name}</strong> has self-closed their ticket, indicating '
+                  f'they resolved the issue on their own. No further action is needed.'),
+        body_rows=(
+            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}') +
+            _row('Requester', f'{ticket.requester_name} ({ticket.requester_email})') +
+            _row('Closed by', actor_name)
+        ),
+        cta_url=ticket_url,
+        cta_label='View Ticket',
+    )
+    _send_notification_email(
+        to=ticket.assignee.email,
+        subject=f'[Kdesk] Closed by Requester — #{ticket.pk:04d}: {ticket.title}',
+        body=body,
+    )
+    logger.info(f'[Portal] Self-close notification sent for ticket #{ticket_pk}.')
+
+
 # ── AI Summary ───────────────────────────────────────────────────────────────
 
 @shared_task(name='tasks.generate_ai_summary')
