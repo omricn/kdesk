@@ -13,7 +13,7 @@
         </h5>
       </div>
       <div class="card-body">
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
 
           <div class="mb-3">
@@ -84,6 +84,30 @@
           <div class="mb-4">
             <label class="form-label">Notes <span class="text-muted">(optional)</span></label>
             {{ form.notes }}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Attachments <span class="text-muted">(optional, max 3 MB each)</span></label>
+            <input type="file" name="attachments" class="form-control" multiple accept="*/*">
+            {% if attachments %}
+            <div class="mt-2">
+              {% for att in attachments %}
+              <div class="d-flex align-items-center gap-2 py-1" style="font-size:14px;">
+                <i class="bi bi-paperclip text-muted"></i>
+                <a href="{{ att.file.url }}" target="_blank">{{ att.filename }}</a>
+                <span class="text-muted">({{ att.file_size|filesizeformat }})</span>
+                <form method="post" action="{% url 'change_detail' change.pk %}" class="d-inline ms-auto" onsubmit="return confirm('Remove this attachment?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_attachment">
+                  <input type="hidden" name="attachment_id" value="{{ att.pk }}">
+                  <button type="submit" class="btn btn-link btn-sm text-danger p-0">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
           </div>
 
           {% if form.non_field_errors %}

@@ -68,6 +68,7 @@ class Change(models.Model):
     )
     notes = models.TextField(blank=True)
     manager_remarks = models.TextField(blank=True)
+
     reminded_start = models.BooleanField(default=False)
     reminded_done = models.BooleanField(default=False)
     reminded_done_followup = models.BooleanField(default=False)
@@ -118,3 +119,14 @@ class Change(models.Model):
             'done': '#68FFC3',
             'cancelled': '#555',
         }.get(self.status, '#666')
+
+
+class ChangeAttachment(models.Model):
+    change = models.ForeignKey(Change, on_delete=models.CASCADE, related_name='attachments')
+    filename = models.CharField(max_length=255)
+    file = models.FileField(upload_to='change_attachments/%Y/%m/')
+    file_size = models.PositiveIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.filename

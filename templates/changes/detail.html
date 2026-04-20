@@ -79,6 +79,49 @@
       <div class="card-body description-body">{{ change.rollback_plan|linebreaksbr }}</div>
     </div>
 
+    <!-- Attachments -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-paperclip me-1"></i>Attachments</div>
+      <div class="card-body">
+        {% if attachments %}
+        <ul class="list-unstyled mb-3">
+          {% for att in attachments %}
+          <li class="d-flex align-items-center gap-2 py-1" style="font-size:14px;">
+            <i class="bi bi-file-earmark text-muted"></i>
+            <a href="{{ att.file.url }}" target="_blank">{{ att.filename }}</a>
+            <span class="text-muted">({{ att.file_size|filesizeformat }})</span>
+            {% if change.submitted_by == request.user or request.user.is_superuser %}
+            <form method="post" class="d-inline ms-auto" onsubmit="return confirm('Remove this attachment?');">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_attachment">
+              <input type="hidden" name="attachment_id" value="{{ att.pk }}">
+              <button type="submit" class="btn btn-link btn-sm text-danger p-0">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small mb-2">No attachments.</p>
+        {% endif %}
+        {% if change.status == 'new' or change.status == 'pending_changes' %}
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="upload_attachment">
+          <div class="input-group input-group-sm">
+            <input type="file" name="attachments" class="form-control form-control-sm" multiple>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-upload me-1"></i>Upload
+            </button>
+          </div>
+          <div class="form-text">Max 3 MB per file</div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- Notes -->
     <div class="card">
       <div class="card-header"><i class="bi bi-sticky me-1"></i>Notes</div>

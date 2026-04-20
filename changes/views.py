@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 
 from tickets.views import admin_required
 from .forms import ChangeForm
-from .models import Change
+from .models import Change, ChangeAttachment
 
 
 @admin_required
@@ -52,12 +52,25 @@ def change_detail(request, pk):
             messages.success(request, 'Notes saved.')
             return redirect('change_detail', pk=pk)
 
+        elif action == 'upload_attachment':
+            if change.status in (Change.STATUS_NEW, Change.STATUS_PENDING_CHANGES):
+                _save_attachments(request, change)
+            return redirect('change_detail', pk=pk)
+
+        elif action == 'delete_attachment':
+            att_id = request.POST.get('attachment_id')
+            if request.user == change.submitted_by or request.user.is_superuser:
+                ChangeAttachment.objects.filter(pk=att_id, change=change).delete()
+                messages.success(request, 'Attachment removed.')
+            return redirect('change_detail', pk=pk)
+
     is_manager = request.user.is_it_manager
     can_cancel = (request.user == change.submitted_by or request.user.is_superuser)
     return render(request, 'changes/detail.html', {
         'change': change,
         'is_manager': is_manager,
         'can_cancel': can_cancel,
+        'attachments': change.attachments.all(),
     })
 
 
@@ -70,6 +83,7 @@ def change_create(request):
             change = form.save(commit=False)
             change.submitted_by = request.user
             change.save()
+            _save_attachments(request, change)
             messages.success(request, f'Change #{change.pk:04d} created.')
             return redirect('change_detail', pk=change.pk)
     return render(request, 'changes/form.html', {'form': form, 'action': 'Create'})
@@ -90,9 +104,13 @@ def change_edit(request, pk):
         form = ChangeForm(request.POST, instance=change)
         if form.is_valid():
             form.save()
+            _save_attachments(request, change)
             messages.success(request, 'Change updated.')
             return redirect('change_detail', pk=pk)
-    return render(request, 'changes/form.html', {'form': form, 'action': 'Edit', 'change': change})
+    return render(request, 'changes/form.html', {
+        'form': form, 'action': 'Edit', 'change': change,
+        'attachments': change.attachments.all(),
+    })
 
 
 @admin_required
@@ -177,3 +195,18 @@ def change_transition(request, pk):
         messages.success(request, 'Change reopened.')
 
     return redirect('change_detail', pk=pk)
+
+
+def _save_attachments(request, change):
+    """Save uploaded files from request.FILES['attachments'] to ChangeAttachment."""
+    from django.contrib import messages as msg
+    for f in request.FILES.getlist('attachments'):
+        if f.size > 3 * 1024 * 1024:
+            msg.error(request, f'"{f.name}" exceeds the 3 MB limit and was skipped.')
+            continue
+        ChangeAttachment.objects.create(
+            change=change,
+            filename=f.name,
+            file=f,
+            file_size=f.size,
+        )
