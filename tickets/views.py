@@ -672,6 +672,15 @@ def settings_view(request):
             messages.success(request, 'SLA configuration saved.')
             return redirect('settings')
 
+        elif action == 'emails_toggle':
+            val = '1' if 'emails_enabled' in request.POST else '0'
+            SystemSetting.set('emails_enabled', val)
+            if val == '1':
+                messages.success(request, 'Email processes re-enabled.')
+            else:
+                messages.warning(request, 'All email processes disabled. No emails will be sent or polled.')
+            return redirect('settings')
+
         elif action == 'change_broadcast':
             il_email = request.POST.get('change_broadcast_il', '').strip()
             global_email = request.POST.get('change_broadcast_global', '').strip()
@@ -724,6 +733,7 @@ def settings_view(request):
         'sla_work_days':  SystemSetting.get('sla_work_days',  '6,0,1,2,3'),
         'change_broadcast_il':     SystemSetting.get('change_broadcast_il',     'IL_All_Employees@kramerav.com'),
         'change_broadcast_global': SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
+        'emails_enabled': SystemSetting.get('emails_enabled', '1') == '1',
     }
     return render(request, 'settings.html', context)
 

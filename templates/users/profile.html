@@ -36,4 +36,18 @@
     </div>
   </div>
 </div>
+
+{% if user.is_admin %}
+<div class="row justify-content-center mt-4">
+  <div class="col-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white"><h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Quick Links</h6></div>
+      <div class="card-body small text-muted">
+        <p><strong>Employee Portal:</strong> <a href="{% url 'portal_dashboard' %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'portal_dashboard' %}</a></p>
+        <p class="mb-0"><strong>Preview Portal:</strong> <a href="{% url 'portal_preview_enter' %}">Open portal as an employee would see it</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 @shared_task(name='tasks.poll_mailbox')
 def poll_mailbox():
     """Check the servicedesk mailbox for new emails and create tickets."""
+    from tickets.models import SystemSetting
+    if SystemSetting.get('emails_enabled', '1') != '1':
+        logger.info('[Task] poll_mailbox skipped — emails disabled.')
+        return
     from integrations.email_poller import poll_mailbox as _poll
     logger.info('[Task] poll_mailbox started')
     _poll()
@@ -404,6 +408,10 @@ def _send_maintenance_announcement(change):
     """Send a Planned Maintenance broadcast email to all affected employees."""
     import os
     from changes.models import Change
+    from tickets.models import SystemSetting as _SS
+    if _SS.get('emails_enabled', '1') != '1':
+        logger.info(f'[Change] Maintenance announcement skipped — emails disabled.')
+        return
 
     # Determine recipient list (configurable via Settings page)
     from tickets.models import SystemSetting
@@ -468,6 +476,10 @@ def _send_maintenance_announcement(change):
 
 
 def _send_notification_email(to: str, subject: str, body: str):
+    from tickets.models import SystemSetting
+    if SystemSetting.get('emails_enabled', '1') != '1':
+        logger.info(f'[Notification] Skipped email to {to} — emails disabled.')
+        return
     try:
         from integrations.graph_client import get_client
         client = get_client()
