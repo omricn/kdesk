@@ -120,6 +120,33 @@
   </div>
 </div>
 
+<!-- Change Broadcast Emails -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-megaphone me-1"></i>Change Broadcast Emails</div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Distribution addresses used when a planned maintenance announcement is sent for each region.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="change_broadcast">
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Israel (IL)</label>
+          <input type="email" name="change_broadcast_il" class="form-control form-control-sm"
+                 value="{{ change_broadcast_il }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Global</label>
+          <input type="email" name="change_broadcast_global" class="form-control form-control-sm"
+                 value="{{ change_broadcast_global }}">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save Addresses</button>
+    </form>
+  </div>
+</div>
+
 <!-- Email Templates -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-header fw-semibold"><i class="bi bi-envelope-paper me-1"></i>Email Templates</div>

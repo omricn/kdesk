@@ -43,6 +43,9 @@ def change_detail(request, pk):
         action = request.POST.get('action')
 
         if action == 'notes':
+            if request.user != change.submitted_by and not request.user.is_superuser:
+                messages.error(request, 'You can only edit notes on your own changes.')
+                return redirect('change_detail', pk=pk)
             notes = request.POST.get('notes', '').strip()
             change.notes = notes
             change.save(update_fields=['notes', 'updated_at'])
@@ -75,6 +78,9 @@ def change_create(request):
 @login_required
 def change_edit(request, pk):
     change = get_object_or_404(Change, pk=pk)
+    if request.user != change.submitted_by and not request.user.is_superuser:
+        messages.error(request, 'You can only edit your own changes.')
+        return redirect('change_detail', pk=pk)
     if change.status not in (Change.STATUS_NEW, Change.STATUS_PENDING):
         messages.error(request, 'Only New or Pending changes can be edited.')
         return redirect('change_detail', pk=pk)

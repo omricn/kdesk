@@ -79,14 +79,17 @@ def check_sla():
     ).exclude(status__in=Ticket.TERMINAL_STATUSES)
 
     for ticket in warning_tickets:
-        if ticket.sla_percent_elapsed >= 75:
-            cache_key = f'sla_warning_sent_{ticket.pk}'
-            from tickets.models import SystemSetting
-            if not SystemSetting.objects.filter(key=cache_key).exists():
-                SystemSetting.set(cache_key, '1')
-                if ticket.assignee and ticket.assignee.notify_on_sla_breach:
-                    _send_sla_warning_email(ticket)
-                    logger.info(f'[SLA] Warning sent for ticket #{ticket.pk}.')
+        try:
+            if ticket.sla_percent_elapsed >= 75:
+                cache_key = f'sla_warning_sent_{ticket.pk}'
+                from tickets.models import SystemSetting
+                if not SystemSetting.objects.filter(key=cache_key).exists():
+                    SystemSetting.set(cache_key, '1')
+                    if ticket.assignee and ticket.assignee.notify_on_sla_breach:
+                        _send_sla_warning_email(ticket)
+                        logger.info(f'[SLA] Warning sent for ticket #{ticket.pk}.')
+        except Exception as exc:
+            logger.error(f'[SLA] Failed to process warning for ticket #{ticket.pk}: {exc}')
 
 
 def _email_html(header_title: str, header_subtitle: str, greeting: str, body_rows: str,
@@ -402,10 +405,11 @@ def _send_maintenance_announcement(change):
     import os
     from changes.models import Change
 
-    # Determine recipient list
+    # Determine recipient list (configurable via Settings page)
+    from tickets.models import SystemSetting
     region_recipients = {
-        Change.REGION_ISRAEL: 'IL_All_Employees@kramerav.com',
-        Change.REGION_GLOBAL: 'GLOBAL_All_Employees@kramerav.com',
+        Change.REGION_ISRAEL: SystemSetting.get('change_broadcast_il', 'IL_All_Employees@kramerav.com'),
+        Change.REGION_GLOBAL: SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
     }
     to_email = region_recipients.get(change.affected_region)
     if not to_email:

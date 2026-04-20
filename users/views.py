@@ -84,9 +84,11 @@ def auth_callback(request):
         return redirect('login')
 
     # All authenticated Kramer users can log in.
-    # IT group members get admin access; IT_Manager group members get is_it_manager.
+    # IT group members get admin access; IT_Manager and IT_SupportAdmin get is_superuser.
     is_it_admin = _user_in_it_group(user_id)
     is_it_manager = _user_in_it_manager_group(user_id)
+    is_support_admin = _user_in_support_admin_group(user_id)
+    should_be_superuser = is_it_manager or is_support_admin
 
     # Create or update the user record
     from users.models import User
@@ -99,6 +101,7 @@ def auth_callback(request):
             'entra_id': user_id,
             'is_admin': is_it_admin,
             'is_it_manager': is_it_manager,
+            'is_superuser': should_be_superuser,
             'is_staff': is_it_admin,
             'is_active': True,
         }
@@ -120,6 +123,9 @@ def auth_callback(request):
             changed = True
         if user.is_it_manager != is_it_manager:
             user.is_it_manager = is_it_manager
+            changed = True
+        if user.is_superuser != should_be_superuser:
+            user.is_superuser = should_be_superuser
             changed = True
         if not user.is_active:
             user.is_active = True
@@ -164,6 +170,18 @@ def _user_in_it_manager_group(entra_user_id: str) -> bool:
         return client.is_user_in_group(entra_user_id, group_id)
     except Exception as exc:
         logger.error(f'[SSO] IT Manager group check failed for {entra_user_id}: {exc}')
+        return False
+
+
+def _user_in_support_admin_group(entra_user_id: str) -> bool:
+    """Returns True if the user is a member of the IT_SupportAdmin group."""
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        group_id = client.get_group_id_by_email(settings.ENTRA_SUPPORT_ADMIN_GROUP_EMAIL)
+        return client.is_user_in_group(entra_user_id, group_id)
+    except Exception as exc:
+        logger.error(f'[SSO] Support Admin group check failed for {entra_user_id}: {exc}')
         return False
 
 

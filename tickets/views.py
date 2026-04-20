@@ -611,7 +611,7 @@ def export_tickets_csv(request):
         'Created At', 'Resolved At', 'SLA Deadline', 'SLA Breached',
     ])
 
-    for t in Ticket.objects.select_related('assignee').all():
+    for t in Ticket.objects.select_related('assignee').iterator(chunk_size=500):
         writer.writerow([
             f'#{t.pk:04d}',
             t.title,
@@ -672,6 +672,14 @@ def settings_view(request):
             messages.success(request, 'SLA configuration saved.')
             return redirect('settings')
 
+        elif action == 'change_broadcast':
+            il_email = request.POST.get('change_broadcast_il', '').strip()
+            global_email = request.POST.get('change_broadcast_global', '').strip()
+            SystemSetting.set('change_broadcast_il', il_email)
+            SystemSetting.set('change_broadcast_global', global_email)
+            messages.success(request, 'Broadcast email addresses saved.')
+            return redirect('settings')
+
         elif action == 'sla_resume':
             from tickets.sla import business_hours_elapsed, add_business_hours, get_sla_hours
             from django.utils.dateparse import parse_datetime
@@ -714,6 +722,8 @@ def settings_view(request):
         'sla_work_end':   SystemSetting.get('sla_work_end',   '17'),
         'sla_hours':      SystemSetting.get('sla_hours',      '9'),
         'sla_work_days':  SystemSetting.get('sla_work_days',  '6,0,1,2,3'),
+        'change_broadcast_il':     SystemSetting.get('change_broadcast_il',     'IL_All_Employees@kramerav.com'),
+        'change_broadcast_global': SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
     }
     return render(request, 'settings.html', context)
 

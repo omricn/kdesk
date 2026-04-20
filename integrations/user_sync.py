@@ -186,8 +186,9 @@ def sync_admins():
 
     logger.info(f'[AdminSync] Sync complete. {len(members)} admins processed.')
 
-    # Also sync IT manager role
+    # Also sync IT manager role and superuser status
     _sync_it_managers(client)
+    _sync_superusers(client)
 
 
 def _sync_it_managers(client):
@@ -225,3 +226,40 @@ def _sync_it_managers(client):
         logger.info(f'[ITManagerSync] Cleared is_it_manager from {cleared} users no longer in {group_email}.')
 
     logger.info(f'[ITManagerSync] Sync complete. {len(members)} IT managers processed.')
+
+
+def _sync_superusers(client):
+    """Sync is_superuser flag: members of IT_SupportAdmin OR IT_Manager groups get superuser."""
+    from users.models import User
+
+    superuser_entra_ids = set()
+
+    for group_setting in ('ENTRA_SUPPORT_ADMIN_GROUP_EMAIL', 'ENTRA_IT_MANAGER_GROUP_EMAIL'):
+        group_email = getattr(settings, group_setting, '')
+        if not group_email:
+            continue
+        try:
+            group_id = client.get_group_id_by_email(group_email)
+            members = client.get_group_members(group_id)
+        except Exception as exc:
+            logger.error(f'[SuperuserSync] Failed to fetch {group_email}: {exc}')
+            continue
+        for member in members:
+            entra_id = member.get('id', '')
+            if entra_id:
+                superuser_entra_ids.add(entra_id)
+
+    for entra_id in superuser_entra_ids:
+        User.objects.filter(entra_id=entra_id).update(is_superuser=True)
+
+    cleared = (
+        User.objects
+        .filter(is_superuser=True, entra_id__isnull=False)
+        .exclude(entra_id='')
+        .exclude(entra_id__in=superuser_entra_ids)
+        .update(is_superuser=False)
+    )
+    if cleared:
+        logger.info(f'[SuperuserSync] Cleared is_superuser from {cleared} SSO users no longer in either group.')
+
+    logger.info(f'[SuperuserSync] Sync complete. {len(superuser_entra_ids)} superusers across both groups.')
