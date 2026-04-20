@@ -513,3 +513,5 @@ textarea.form-control { unicode-bidi: plaintext; }
 ::-webkit-scrollbar-track { background: var(--kramer-dark); }
 ::-webkit-scrollbar-thumb { background: var(--kramer-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--kramer-purple); }
+
+.bg-orange { background-color: #e67e22 !important; }

@@ -665,6 +665,49 @@ def notify_change(change_pk: int, event: str):
                 ),
             )
 
+    elif event == 'changes_requested':
+        if submitter_email:
+            remarks = change.manager_remarks or ''
+            _send_notification_email(
+                to=submitter_email,
+                subject=f'[Kdesk] Changes Requested — #{change.pk:04d}: {change.title}',
+                body=_email_html(
+                    header_title='Changes Requested',
+                    header_subtitle=f'#{change.pk:04d} — {change.title}',
+                    header_color='#e67e22',
+                    greeting=(
+                        f'Hi <strong>{submitter_name}</strong>,<br><br>'
+                        f'The IT Manager has reviewed your change request and is requesting some modifications '
+                        f'before it can be approved. Please review the remarks below, update your change request, '
+                        f'and resubmit it for approval.'
+                    ),
+                    body_rows=(
+                        _row('Change', f'#{change.pk:04d} — {change.title}', '#e67e22') +
+                        _row('Planned Date', planned, '#e67e22') +
+                        _row('IT Manager Remarks', remarks, '#e67e22')
+                    ),
+                    cta_url=change_url,
+                    cta_label='Review &amp; Update in Kdesk',
+                    header_color='#e67e22',
+                ),
+            )
+
+    elif event == 'resubmitted':
+        subject = f'[Kdesk] Change Resubmitted for Approval — #{change.pk:04d}: {change.title}'
+        body = _email_html(
+            header_title='Change Resubmitted for Approval',
+            header_subtitle=f'#{change.pk:04d} — {change.title}',
+            greeting=(
+                f'A change request that you previously requested modifications for has been updated '
+                f'and resubmitted for your approval.'
+            ),
+            body_rows=change_rows,
+            cta_url=change_url,
+            cta_label='Review &amp; Approve in Kdesk',
+        )
+        for mgr_email in it_manager_emails:
+            _send_notification_email(to=mgr_email, subject=subject, body=body)
+
     elif event == 'done':
         done_rows = (
             _row('Change', f'#{change.pk:04d} — {change.title}') +

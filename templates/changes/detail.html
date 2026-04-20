@@ -20,7 +20,7 @@
     <div class="card mb-3">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-info-circle me-1"></i>#{{ change.pk|stringformat:"04d" }} — {{ change.title }}</span>
-        {% if change.status == 'new' or change.status == 'pending_approval' %}
+        {% if change.status == 'new' or change.status == 'pending_approval' or change.status == 'pending_changes' %}
         <a href="{% url 'change_edit' change.pk %}" class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-pencil me-1"></i>Edit
         </a>
@@ -59,6 +59,15 @@
         </dl>
       </div>
     </div>
+
+    {% if change.status == 'pending_changes' and change.manager_remarks %}
+    <div class="card mb-3 border-warning">
+      <div class="card-header bg-orange text-white"><i class="bi bi-pencil-square me-1"></i>IT Manager Remarks</div>
+      <div class="card-body">
+        <p class="mb-0" style="white-space:pre-wrap;">{{ change.manager_remarks }}</p>
+      </div>
+    </div>
+    {% endif %}
 
     <div class="card mb-3">
       <div class="card-header"><i class="bi bi-card-text me-1"></i>Description</div>
@@ -137,6 +146,10 @@
             <i class="bi bi-check-lg me-1"></i>Approve
           </button>
         </form>
+        <button type="button" class="btn btn-warning w-100 text-dark"
+                data-bs-toggle="modal" data-bs-target="#requestChangesModal">
+          <i class="bi bi-pencil-square me-1"></i>Request Changes
+        </button>
         <form method="post" action="{% url 'change_transition' change.pk %}"
               onsubmit="return confirm('Mark this change as Not Approved? The submitter will be notified.');">
           {% csrf_token %}
@@ -148,6 +161,27 @@
         {% else %}
         <div class="alert alert-info py-2 mb-0 text-center" style="font-size:14px;">
           <i class="bi bi-hourglass-split me-1"></i>Awaiting IT Manager approval
+        </div>
+        {% endif %}
+
+        {% elif change.status == 'pending_changes' %}
+        {% if change.submitted_by == request.user or request.user.is_superuser %}
+        <div class="alert py-2 mb-0 text-center" style="font-size:14px;background:#e67e2233;border:1px solid #e67e22;color:#e67e22;">
+          <i class="bi bi-pencil-square me-1"></i>Changes requested — update the fields and resubmit
+        </div>
+        <a href="{% url 'change_edit' change.pk %}" class="btn btn-outline-secondary w-100">
+          <i class="bi bi-pencil me-1"></i>Edit Request
+        </a>
+        <form method="post" action="{% url 'change_transition' change.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="resubmit">
+          <button type="submit" class="btn btn-warning w-100">
+            <i class="bi bi-send me-1"></i>Resubmit for Approval
+          </button>
+        </form>
+        {% else %}
+        <div class="alert py-2 mb-0 text-center" style="font-size:14px;background:#e67e2233;border:1px solid #e67e22;color:#e67e22;">
+          <i class="bi bi-pencil-square me-1"></i>Awaiting submitter to update and resubmit
         </div>
         {% endif %}
 
@@ -192,4 +226,40 @@
   </div>
 
 </div>
+
+<!-- Request Changes Modal -->
+{% if is_manager %}
+<div class="modal fade" id="requestChangesModal" tabindex="-1" aria-labelledby="requestChangesModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'change_transition' change.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="request_changes">
+        <div class="modal-header">
+          <h5 class="modal-title" id="requestChangesModalLabel">
+            <i class="bi bi-pencil-square me-2"></i>Request Changes
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Describe what needs to be changed. The submitter will receive an email with your remarks
+            and the request will return to them for revision.
+          </p>
+          <label class="form-label fw-semibold">Your Remarks</label>
+          <textarea name="manager_remarks" class="form-control" rows="5"
+                    placeholder="e.g. Please update the planned timeframe — 22:00 conflicts with the backup window. Also clarify which servers will be affected." required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning text-dark">
+            <i class="bi bi-send me-1"></i>Send to Submitter
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

@@ -5,6 +5,7 @@ from django.conf import settings
 class Change(models.Model):
     STATUS_NEW = 'new'
     STATUS_PENDING = 'pending_approval'
+    STATUS_PENDING_CHANGES = 'pending_changes'
     STATUS_APPROVED = 'approved'
     STATUS_NOT_APPROVED = 'not_approved'
     STATUS_IN_PROGRESS = 'in_progress'
@@ -14,6 +15,7 @@ class Change(models.Model):
     STATUS_CHOICES = [
         (STATUS_NEW, 'New'),
         (STATUS_PENDING, 'Pending Approval'),
+        (STATUS_PENDING_CHANGES, 'Pending Changes'),
         (STATUS_APPROVED, 'Approved'),
         (STATUS_NOT_APPROVED, 'Not Approved'),
         (STATUS_IN_PROGRESS, 'In Progress'),
@@ -65,6 +67,7 @@ class Change(models.Model):
         related_name='changes',
     )
     notes = models.TextField(blank=True)
+    manager_remarks = models.TextField(blank=True)
     reminded_start = models.BooleanField(default=False)
     reminded_done = models.BooleanField(default=False)
     reminded_done_followup = models.BooleanField(default=False)
@@ -95,7 +98,8 @@ class Change(models.Model):
     def status_badge_class(self):
         return {
             'new': 'bg-secondary',
-            'pending_approval': 'bg-warning',
+            'pending_approval': 'bg-warning text-dark',
+            'pending_changes': 'bg-orange text-dark',
             'approved': 'bg-info',
             'not_approved': 'bg-danger',
             'in_progress': 'bg-primary',

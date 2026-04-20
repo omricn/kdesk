@@ -81,8 +81,8 @@ def change_edit(request, pk):
     if request.user != change.submitted_by and not request.user.is_superuser:
         messages.error(request, 'You can only edit your own changes.')
         return redirect('change_detail', pk=pk)
-    if change.status not in (Change.STATUS_NEW, Change.STATUS_PENDING):
-        messages.error(request, 'Only New or Pending changes can be edited.')
+    if change.status not in (Change.STATUS_NEW, Change.STATUS_PENDING, Change.STATUS_PENDING_CHANGES):
+        messages.error(request, 'Only New, Pending, or Pending Changes requests can be edited.')
         return redirect('change_detail', pk=pk)
 
     form = ChangeForm(instance=change)
@@ -104,21 +104,23 @@ def change_transition(request, pk):
     is_manager = request.user.is_it_manager
 
     transitions = {
-        'submit':       (Change.STATUS_NEW,         Change.STATUS_PENDING),
-        'approve':      (Change.STATUS_PENDING,      Change.STATUS_APPROVED),
-        'not_approve':  (Change.STATUS_PENDING,      Change.STATUS_NOT_APPROVED),
-        'start':        (Change.STATUS_APPROVED,     Change.STATUS_IN_PROGRESS),
-        'complete':     (Change.STATUS_IN_PROGRESS,  Change.STATUS_DONE),
-        'reopen':       (Change.STATUS_DONE,         Change.STATUS_NEW),
-        'cancel':       (Change.STATUS_NEW,          Change.STATUS_CANCELLED),
+        'submit':           (Change.STATUS_NEW,              Change.STATUS_PENDING),
+        'resubmit':         (Change.STATUS_PENDING_CHANGES,  Change.STATUS_PENDING),
+        'approve':          (Change.STATUS_PENDING,          Change.STATUS_APPROVED),
+        'not_approve':      (Change.STATUS_PENDING,          Change.STATUS_NOT_APPROVED),
+        'request_changes':  (Change.STATUS_PENDING,          Change.STATUS_PENDING_CHANGES),
+        'start':            (Change.STATUS_APPROVED,         Change.STATUS_IN_PROGRESS),
+        'complete':         (Change.STATUS_IN_PROGRESS,      Change.STATUS_DONE),
+        'reopen':           (Change.STATUS_DONE,             Change.STATUS_NEW),
+        'cancel':           (Change.STATUS_NEW,              Change.STATUS_CANCELLED),
     }
 
     if action not in transitions:
         messages.error(request, 'Invalid action.')
         return redirect('change_detail', pk=pk)
 
-    # Only managers can approve or not-approve
-    if action in ('approve', 'not_approve') and not is_manager:
+    # Only managers can approve, reject, or request changes
+    if action in ('approve', 'not_approve', 'request_changes') and not is_manager:
         messages.error(request, 'Only the IT Manager can approve or reject changes.')
         return redirect('change_detail', pk=pk)
 
@@ -132,8 +134,15 @@ def change_transition(request, pk):
         messages.error(request, f'Cannot perform "{action}" from current status.')
         return redirect('change_detail', pk=pk)
 
+    if action == 'request_changes':
+        remarks = request.POST.get('manager_remarks', '').strip()
+        if not remarks:
+            messages.error(request, 'Please enter your remarks before requesting changes.')
+            return redirect('change_detail', pk=pk)
+        change.manager_remarks = remarks
+
     change.status = new_status
-    change.save(update_fields=['status', 'updated_at'])
+    change.save(update_fields=['status', 'manager_remarks', 'updated_at'])
 
     # Trigger notifications
     if action == 'submit':
@@ -148,6 +157,14 @@ def change_transition(request, pk):
         from tasks.scheduled import notify_change
         notify_change.delay(pk, 'not_approved')
         messages.warning(request, 'Change marked as Not Approved. The submitter has been notified.')
+    elif action == 'request_changes':
+        from tasks.scheduled import notify_change
+        notify_change.delay(pk, 'changes_requested')
+        messages.info(request, 'Changes requested. The submitter has been notified.')
+    elif action == 'resubmit':
+        from tasks.scheduled import notify_change
+        notify_change.delay(pk, 'resubmitted')
+        messages.success(request, 'Change resubmitted for approval. The IT Manager has been notified.')
     elif action == 'complete':
         from tasks.scheduled import notify_change
         notify_change.delay(pk, 'done')
