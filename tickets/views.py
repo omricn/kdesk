@@ -1018,13 +1018,18 @@ def email_preview(request):
         except (IndexError, ValueError):
             messages.error(request, 'Invalid sample index.')
             return redirect('email_preview')
-        from tasks.scheduled import _send_notification_email
-        _send_notification_email(
-            to=request.user.email,
-            subject=f'[Kdesk Preview] {label}',
-            body=html,
-        )
-        messages.success(request, f'Preview sent to {request.user.email}.')
+        try:
+            from integrations.graph_client import get_client
+            client = get_client()
+            client.send_email(
+                from_mailbox=settings.SERVICEDESK_EMAIL,
+                to_email=request.user.email,
+                subject=f'[Kdesk Preview] {label}',
+                body_html=html,
+            )
+            messages.success(request, f'Preview sent to {request.user.email}.')
+        except Exception as exc:
+            messages.error(request, f'Failed to send: {exc}')
         return redirect('email_preview')
 
     idx = request.GET.get('idx')
