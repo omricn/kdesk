@@ -138,16 +138,29 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 
     return f'''<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f0f0f0;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f0f0;padding:30px 0;">
-<tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0"
-       style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.10);">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <style>:root{{color-scheme:light only;}}body{{color-scheme:light only!important;}}</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f0f0;color-scheme:light;
+             font-family:'Segoe UI',Calibri,Arial,sans-serif;" bgcolor="#f0f0f0">
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f0f0f0"
+       style="background-color:#f0f0f0;padding:30px 0;">
+<tr><td align="center" style="padding:30px 0;">
+
+<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" style="width:600px;" arcsize="2%" stroked="f" fillcolor="#ffffff"><w:anchorlock/><center><table width="600" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="background-color:#ffffff;width:600px;"><![endif]-->
+<!--[if !mso]><!-->
+<table width="600" cellpadding="0" cellspacing="0" bgcolor="#ffffff"
+       style="background-color:#ffffff;border-radius:10px;overflow:hidden;
+              box-shadow:0 2px 12px rgba(0,0,0,0.10);width:600px;">
+<!--<![endif]-->
 
   <!-- Header -->
   <tr>
-    <td style="background:{header_color};padding:28px 36px;">
+    <td bgcolor="{header_color}" style="background-color:{header_color};padding:28px 36px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="vertical-align:middle;">
@@ -172,7 +185,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 
   <!-- Body -->
   <tr>
-    <td style="padding:32px 36px;">
+    <td bgcolor="#ffffff" style="background-color:#ffffff;padding:32px 36px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr><td style="font-size:15px;color:#333333;padding-bottom:20px;
                        font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.6;">
@@ -186,7 +199,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 
   <!-- Footer -->
   <tr>
-    <td style="background:#1a1a2e;padding:22px 36px;">
+    <td bgcolor="#1a1a2e" style="background-color:#1a1a2e;padding:22px 36px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#D8D8D8;font-size:12px;line-height:1.7;
@@ -204,7 +217,11 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
     </td>
   </tr>
 
+<!--[if mso]></table></center></v:roundrect><![endif]-->
+<!--[if !mso]><!-->
 </table>
+<!--<![endif]-->
+
 </td></tr>
 </table>
 </body>
