@@ -105,6 +105,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
     header_text_color: '#ffffff' for dark headers, '#1a1a2e' for light headers (e.g. green).
     """
     logo_url = f'{settings.SITE_URL}/static/img/kramer_logo.png'
+    logo_footer_url = f'{settings.SITE_URL}/static/img/kramer_logo_footer.png'
     subtitle_opacity = '0.65' if header_text_color != '#ffffff' else '0.82'
     logo_filter = 'brightness(0)' if header_text_color != '#ffffff' else 'brightness(0) invert(1)'
 
@@ -195,10 +196,8 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
                style="color:#69FFC3;text-decoration:none;">servicedesk@kramerav.com</a>
           </td>
           <td style="text-align:right;vertical-align:middle;">
-            <span style="color:#8205B4;font-size:18px;font-weight:700;
-                         font-family:'Segoe UI',Calibri,Arial,sans-serif;letter-spacing:1px;">
-              KRAMER
-            </span>
+            <img src="{logo_footer_url}" alt="Kramer" width="110" height="auto"
+                 style="display:block;max-width:110px;opacity:0.95;">
           </td>
         </tr>
       </table>
