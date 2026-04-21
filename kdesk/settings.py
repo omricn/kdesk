@@ -82,8 +82,7 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 # ── Session ───────────────────────────────────────────────────────────────────
-SESSION_COOKIE_AGE = 43200          # 12 hours
-SESSION_SAVE_EVERY_REQUEST = True   # reset timer on activity
+SESSION_COOKIE_AGE = 43200          # 12 hours hard expiry from login
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
