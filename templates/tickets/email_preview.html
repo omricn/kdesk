@@ -10,6 +10,13 @@
   <div class="d-flex align-items-center gap-3 mb-2">
     <span class="badge bg-secondary" style="font-size:13px;">{{ forloop.counter }}</span>
     <strong>{{ label }}</strong>
+    <form method="post" class="ms-auto">
+      {% csrf_token %}
+      <input type="hidden" name="idx" value="{{ idx }}">
+      <button type="submit" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-send me-1"></i>Send to me
+      </button>
+    </form>
   </div>
   <div style="border:1px solid var(--kramer-border);border-radius:8px;overflow:hidden;">
     <iframe src="{% url 'email_preview' %}?idx={{ idx }}"

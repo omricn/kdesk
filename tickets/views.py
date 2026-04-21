@@ -1010,11 +1010,27 @@ def email_preview(request):
         },
     ]
 
+    if request.method == 'POST':
+        try:
+            idx = int(request.POST.get('idx', 0))
+            html = samples[idx]['html']
+            label = samples[idx]['label']
+        except (IndexError, ValueError):
+            messages.error(request, 'Invalid sample index.')
+            return redirect('email_preview')
+        from tasks.scheduled import _send_notification_email
+        _send_notification_email(
+            to=request.user.email,
+            subject=f'[Kdesk Preview] {label}',
+            body=html,
+        )
+        messages.success(request, f'Preview sent to {request.user.email}.')
+        return redirect('email_preview')
+
     idx = request.GET.get('idx')
     if idx is not None:
         try:
             from django.http import HttpResponse
-            from django.views.decorators.clickjacking import xframe_options_exempt
             response = HttpResponse(samples[int(idx)]['html'])
             response['X-Frame-Options'] = 'SAMEORIGIN'
             return response
