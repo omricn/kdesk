@@ -197,7 +197,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
           </td>
           <td style="text-align:right;vertical-align:middle;">
             <img src="{logo_footer_url}" alt="Kramer" width="110" height="auto"
-                 style="display:block;max-width:110px;opacity:0.95;">
+                 style="display:block;max-width:110px;opacity:0.95;margin-left:auto;">
           </td>
         </tr>
       </table>
