@@ -359,6 +359,40 @@ def send_requester_closed(ticket_pk: int):
     logger.info(f'[Requester] Close notification sent for ticket #{ticket_pk}.')
 
 
+@shared_task(name='tasks.send_requester_comment')
+def send_requester_comment(ticket_pk: int, comment_pk: int):
+    """Email the requester when an admin posts a public comment on their ticket."""
+    from tickets.models import Ticket, TicketComment
+    try:
+        ticket = Ticket.objects.get(pk=ticket_pk)
+        comment = TicketComment.objects.select_related('author').get(pk=comment_pk)
+    except (Ticket.DoesNotExist, TicketComment.DoesNotExist):
+        return
+    if not ticket.requester_email:
+        return
+    name = ticket.requester_name or ticket.requester_email
+    author_name = comment.author.display_name or comment.author.email if comment.author else 'IT Support'
+    body = _email_html(
+        header_title='New reply on your ticket',
+        header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
+        greeting=(
+            f'Hi <strong>{name}</strong>,<br><br>'
+            f'<strong>{author_name}</strong> from the IT team has posted a reply on your support ticket.'
+        ),
+        body_rows=(
+            _row('Ticket #', f'#{ticket.pk:04d}') +
+            _row('Subject', ticket.title) +
+            _row('Reply', comment.body.replace('\n', '<br>'))
+        ),
+    )
+    _send_notification_email(
+        to=ticket.requester_email,
+        subject=f'[Ticket #{ticket.pk:04d}] New reply from IT Support',
+        body=body,
+    )
+    logger.info(f'[Requester] Comment notification sent for ticket #{ticket_pk}, comment #{comment_pk}.')
+
+
 # ── Notification emails ───────────────────────────────────────────────────────
 
 @shared_task(name='tasks.send_ticket_notification')

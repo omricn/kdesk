@@ -246,10 +246,13 @@ def ticket_detail(request, pk):
                 comment.save()
                 ticket.updated_at = timezone.now()
                 ticket.save(update_fields=['updated_at'])
+                from tasks.scheduled import send_ticket_notification, send_requester_comment
                 # Notify assignee of update
                 if ticket.assignee and ticket.assignee != request.user and ticket.assignee.notify_on_update:
-                    from tasks.scheduled import send_ticket_notification
                     send_ticket_notification.delay('update', ticket.pk, request.user.pk)
+                # Notify requester
+                if ticket.requester_email:
+                    send_requester_comment.delay(ticket.pk, comment.pk)
                 messages.success(request, 'Comment added.')
                 return redirect('ticket_detail', pk=pk)
 
