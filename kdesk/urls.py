@@ -8,4 +8,5 @@ urlpatterns = [
     path('', include('tickets.urls')),
     path('', include('users.urls')),
     path('', include('changes.urls')),
+    path('', include('budget.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

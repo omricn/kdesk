@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Budget{% endblock %}
+
+{% block content %}
+<style>
+  .budget-table {
+    border-collapse: collapse;
+    font-family: Calibri, 'Trebuchet MS', Arial, sans-serif;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .budget-table td {
+    padding: 3px 8px;
+    min-width: 30px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+  }
+  .budget-table .col-hidden { display: none; }
+  .budget-scroll {
+    overflow: auto;
+    max-height: calc(100vh - 240px);
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+  }
+  /* Freeze-style: header row sticks when scrolling */
+  .budget-table thead td { position: sticky; top: 0; z-index: 2; }
+  /* Nav tabs styling */
+  .budget-tabs .nav-link { font-size: 0.85rem; padding: 0.35rem 0.85rem; }
+  .budget-tabs .nav-link.active {
+    color: var(--kramer-purple);
+    border-bottom-color: var(--kramer-purple);
+    font-weight: 600;
+  }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0 fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-2" style="color:var(--kramer-purple);"></i>Budget</h4>
+    {% if budget_file %}
+    <p class="text-muted small mb-0 mt-1">
+      {{ budget_file.original_name }}
+      &nbsp;·&nbsp; Uploaded by {{ budget_file.uploaded_by|default:"—" }}
+      &nbsp;·&nbsp; {{ budget_file.uploaded_at|date:"d M Y H:i" }}
+    </p>
+    {% endif %}
+  </div>
+  <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+    <i class="bi bi-upload me-1"></i>{% if budget_file %}Replace File{% else %}Upload File{% endif %}
+  </button>
+</div>
+
+{% if sheets %}
+
+  {% if sheets|length > 1 %}
+  <ul class="nav nav-tabs budget-tabs mb-0" id="sheetTabs" role="tablist">
+    {% for sheet in sheets %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if forloop.first %}active{% endif %}"
+              id="tab-{{ forloop.counter }}"
+              data-bs-toggle="tab"
+              data-bs-target="#sheet-{{ forloop.counter }}"
+              type="button" role="tab">
+        {{ sheet.name }}
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="tab-content">
+    {% for sheet in sheets %}
+    <div class="tab-pane fade {% if forloop.first %}show active{% endif %}"
+         id="sheet-{{ forloop.counter }}" role="tabpanel">
+      <div class="budget-scroll {% if sheets|length == 1 %}mt-0{% endif %}">
+        {{ sheet.html|safe }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+{% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-file-earmark-spreadsheet fs-1" style="color:var(--kramer-purple);opacity:0.4;"></i>
+    <p class="mt-3 mb-1 fw-semibold">No budget file uploaded yet</p>
+    <p class="small mb-3">Upload an Excel file (.xlsx) to display it here.</p>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+      <i class="bi bi-upload me-1"></i>Upload Budget File
+    </button>
+  </div>
+{% endif %}
+
+<!-- Upload modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--kramer-purple);color:#fff;">
+        <h5 class="modal-title" id="uploadModalLabel">
+          <i class="bi bi-upload me-2"></i>Upload Budget File
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-body">
+          {% if budget_file %}
+          <div class="alert alert-warning small py-2 mb-3">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            This will replace the current file (<strong>{{ budget_file.original_name }}</strong>).
+          </div>
+          {% endif %}
+          <label class="form-label fw-semibold">Excel file (.xlsx or .xls)</label>
+          <input type="file" name="excel_file" accept=".xlsx,.xls" class="form-control" required>
+          <p class="text-muted small mt-2 mb-0">
+            All formatting from Excel — colors, bold, merged cells, borders — will be preserved.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm" style="background:var(--kramer-purple);color:#fff;">
+            <i class="bi bi-upload me-1"></i>Upload
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
