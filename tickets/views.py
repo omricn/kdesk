@@ -145,12 +145,14 @@ def ticket_list(request):
     assignee_list = request.GET.getlist('assignee')
     sla_list = request.GET.getlist('sla')
 
-    # Non-admin users default to seeing only their own tickets when no filters applied
+    # Default to the current admin's tickets on a fresh visit (no explicit filter submission).
+    # _f=1 is sent by the filter form on every submission, so its absence means a clean URL.
+    is_explicit_filter = bool(request.GET.get('_f'))
     has_any_filter = bool(statuses or assignee_list or sla_list or
                           request.GET.get('q') or request.GET.get('col_id') or
                           request.GET.get('col_subject') or request.GET.get('col_requester'))
-    if not request.user.is_admin and not has_any_filter:
-        assignee_list = [str(request.user.pk)]
+    if not is_explicit_filter and not has_any_filter:
+        assignee_list = ['me']
     search = request.GET.get('q', '')
     col_id = request.GET.get('col_id', '').strip()
     col_subject = request.GET.get('col_subject', '').strip()
