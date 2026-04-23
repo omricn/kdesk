@@ -71,6 +71,7 @@
             <tr>
               <th>#</th>
               <th>Title</th>
+              <th>Status</th>
               <th>SLA</th>
             </tr>
           </thead>
@@ -78,7 +79,8 @@
             {% for t in my_tickets %}
             <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td>#{{ t.pk|stringformat:"04d" }}</td>
-              <td class="text-truncate" style="max-width:220px;">{{ t.title }}</td>
+              <td class="text-truncate" style="max-width:160px;">{{ t.title }}</td>
+              <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
               <td>
                 {% if t.sla_deadline %}
                   <span class="badge {% if t.sla_status == 'breached' %}bg-danger{% elif t.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}">
