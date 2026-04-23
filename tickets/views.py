@@ -100,10 +100,13 @@ def dashboard(request):
         status__in=Ticket.TERMINAL_STATUSES
     ).order_by('sla_deadline')[:10]
 
-    recent_qs = tickets.exclude(status__in=Ticket.TERMINAL_STATUSES)
-    if not request.user.is_admin:
-        recent_qs = recent_qs.filter(assignee=request.user)
-    recent_tickets = recent_qs.order_by('-created_at')[:10]
+    if request.user.is_superuser:
+        recent_tickets = (
+            tickets.exclude(status__in=Ticket.TERMINAL_STATUSES)
+            .order_by('-created_at')[:10]
+        )
+    else:
+        recent_tickets = None
 
     assigned_to_me_today = tickets.filter(
         assignee=request.user,

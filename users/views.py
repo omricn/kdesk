@@ -84,11 +84,11 @@ def auth_callback(request):
         return redirect('login')
 
     # All authenticated Kramer users can log in.
-    # IT group members get admin access; IT_Manager and IT_SupportAdmin get is_superuser.
+    # IT group members get admin access; Kdesk_Superusers group members get is_superuser.
     is_it_admin = _user_in_it_group(user_id)
     is_it_manager = _user_in_it_manager_group(user_id)
     is_support_admin = _user_in_support_admin_group(user_id)
-    should_be_superuser = is_it_manager or is_support_admin
+    should_be_superuser = is_support_admin
 
     # Create or update the user record
     from users.models import User
@@ -174,7 +174,7 @@ def _user_in_it_manager_group(entra_user_id: str) -> bool:
 
 
 def _user_in_support_admin_group(entra_user_id: str) -> bool:
-    """Returns True if the user is a member of the IT_SupportAdmin group."""
+    """Returns True if the user is a member of the Kdesk_Superusers group."""
     try:
         from integrations.graph_client import get_client
         client = get_client()

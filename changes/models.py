@@ -42,8 +42,8 @@ class Change(models.Model):
 
     SYSTEM_CHOICES = [
         ('priority', 'Priority'),
-        ('qv', 'QV'),
-        ('sf', 'SF'),
+        ('qv', 'Qlikview'),
+        ('sf', 'SalesForce'),
         ('kdesk', 'KDESK'),
         ('servers', 'Servers - Network connectivity'),
         ('other', 'Other'),
