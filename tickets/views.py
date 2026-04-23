@@ -1143,8 +1143,10 @@ def portal_ticket_detail(request, pk):
                 comment.author = request.user
                 comment.is_internal = False
                 comment.save()
+                if ticket.status not in Ticket.TERMINAL_STATUSES:
+                    ticket.status = Ticket.STATUS_USER_RESPONDED
                 ticket.updated_at = timezone.now()
-                ticket.save(update_fields=['updated_at'])
+                ticket.save(update_fields=['status', 'updated_at'])
                 if ticket.assignee and ticket.assignee.notify_on_update:
                     from tasks.scheduled import send_ticket_notification
                     send_ticket_notification.delay('update', ticket.pk, request.user.pk)
