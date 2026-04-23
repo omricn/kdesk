@@ -89,8 +89,8 @@
         <ul class="nav nav-tabs card-header-tabs px-3 pt-2" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tab-comments-btn" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">
-              <i class="bi bi-chat-left-text me-1"></i>Comments
-              {% if ticket.comments.exists %}<span class="badge bg-secondary ms-1" style="font-size:10px;">{{ ticket.comments.count }}</span>{% endif %}
+              <i class="bi bi-chat-left-text me-1"></i>Conversation
+              {% if public_comments %}<span class="badge bg-secondary ms-1" style="font-size:10px;">{{ public_comments|length }}</span>{% endif %}
             </button>
           </li>
           <li class="nav-item" role="presentation">
@@ -105,7 +105,7 @@
         <!-- Comments tab -->
         <div class="tab-pane fade show active" id="tab-comments" role="tabpanel">
           <div class="border-bottom">
-            {% for comment in ticket.comments.all %}
+            {% for comment in public_comments %}
             <div class="p-3 border-bottom">
               <div class="d-flex justify-content-between mb-1">
                 <span class="fw-semibold small">{{ comment.author|default:"System" }}</span>
@@ -114,7 +114,7 @@
               <div style="white-space:pre-wrap;" dir="auto">{{ comment.body }}</div>
             </div>
             {% empty %}
-            <div class="text-center text-muted py-3 small">No comments yet.</div>
+            <div class="text-center text-muted py-3 small">No messages yet.</div>
             {% endfor %}
           </div>
           <div class="p-3">
@@ -161,6 +161,44 @@
           {% endif %}
         </div>
 
+      </div>
+    </div>
+
+    <!-- Internal Notes (admin-only) -->
+    <div class="card border-0 shadow-sm mb-3"
+         style="border-left:3px solid #f59e0b !important;">
+      <div class="card-header fw-semibold small d-flex align-items-center gap-2"
+           style="background:rgba(245,158,11,0.08);">
+        <i class="bi bi-lock-fill" style="color:#f59e0b;"></i>
+        Internal Notes
+        <span class="text-muted fw-normal ms-1" style="font-size:11px;">— only visible to admins</span>
+        {% if internal_notes %}<span class="badge ms-auto" style="background:#f59e0b;font-size:10px;">{{ internal_notes|length }}</span>{% endif %}
+      </div>
+      {% if internal_notes %}
+      <div class="border-bottom" style="border-color:rgba(245,158,11,0.2)!important;">
+        {% for note in internal_notes %}
+        <div class="p-3 {% if not forloop.last %}border-bottom{% endif %}"
+             style="background:rgba(245,158,11,0.04);{% if not forloop.last %}border-color:rgba(245,158,11,0.15)!important;{% endif %}">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="fw-semibold small">{{ note.author|default:"System" }}</span>
+            <span class="text-muted small">{{ note.created_at|date:"d M Y H:i" }}</span>
+          </div>
+          <div style="white-space:pre-wrap;" dir="auto">{{ note.body }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="p-3">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="internal_note">
+          {{ note_form.body }}
+          <div class="mt-2">
+            <button type="submit" class="btn btn-sm btn-warning text-dark">
+              <i class="bi bi-lock me-1"></i>Save Note
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 

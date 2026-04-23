@@ -224,6 +224,7 @@ def ticket_detail(request, pk):
         Ticket.objects.select_related('assignee', 'category', 'subcategory', 'ticket_item'), pk=pk
     )
     comment_form = CommentForm()
+    note_form = CommentForm()
     update_form = TicketUpdateForm(instance=ticket)
 
     if request.method == 'POST':
@@ -235,6 +236,7 @@ def ticket_detail(request, pk):
                 comment = comment_form.save(commit=False)
                 comment.ticket = ticket
                 comment.author = request.user
+                comment.is_internal = False
                 comment.save()
                 ticket.updated_at = timezone.now()
                 ticket.save(update_fields=['updated_at'])
@@ -243,6 +245,17 @@ def ticket_detail(request, pk):
                     from tasks.scheduled import send_ticket_notification
                     send_ticket_notification.delay('update', ticket.pk, request.user.pk)
                 messages.success(request, 'Comment added.')
+                return redirect('ticket_detail', pk=pk)
+
+        elif action == 'internal_note':
+            note_form = CommentForm(request.POST)
+            if note_form.is_valid():
+                note = note_form.save(commit=False)
+                note.ticket = ticket
+                note.author = request.user
+                note.is_internal = True
+                note.save()
+                messages.success(request, 'Internal note saved.')
                 return redirect('ticket_detail', pk=pk)
 
         elif action == 'update':
@@ -338,6 +351,9 @@ def ticket_detail(request, pk):
     context = {
         'ticket': ticket,
         'comment_form': comment_form,
+        'note_form': note_form,
+        'public_comments': ticket.comments.filter(is_internal=False).select_related('author').order_by('created_at'),
+        'internal_notes': ticket.comments.filter(is_internal=True).select_related('author').order_by('created_at'),
         'update_form': update_form,
         'categories_json': _get_categories_json(),
         'ticket_history': ticket.history.select_related('changed_by').all(),
