@@ -463,6 +463,62 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
         )
 
 
+def _send_maintenance_complete_announcement(change):
+    """Send a Maintenance Completed broadcast email to all affected employees."""
+    from changes.models import Change
+    from tickets.models import SystemSetting as _SS
+    if _SS.get('emails_enabled', '1') != '1':
+        logger.info(f'[Change] Completion announcement skipped — emails disabled.')
+        return
+
+    from tickets.models import SystemSetting
+    region_recipients = {
+        Change.REGION_ISRAEL: SystemSetting.get('change_broadcast_il', 'IL_All_Employees@kramerav.com'),
+        Change.REGION_GLOBAL: SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
+    }
+    to_email = region_recipients.get(change.affected_region)
+    if not to_email:
+        logger.warning(f'[Change] Unknown region "{change.affected_region}" — skipping completion broadcast.')
+        return
+
+    system_str = change.affected_system_display
+    date_str = change.planned_date.strftime('%A, %d %B %Y') if change.planned_date else 'N/A'
+    region_str = change.get_affected_region_display()
+
+    body = _email_html(
+        header_title='Maintenance Completed',
+        header_subtitle=f'{system_str} — {date_str}',
+        header_color='#69FFC3',
+        header_text_color='#1a1a2e',
+        greeting=(
+            'Dear Employees,<br><br>'
+            f'The IT Department is pleased to inform you that the maintenance work on '
+            f'<strong>{system_str}</strong> has been <strong>completed successfully</strong>.<br><br>'
+            'All systems should be fully operational. If you experience any issues, please contact '
+            '<a href="mailto:servicedesk@kramerav.com" style="color:#8205B4;">servicedesk@kramerav.com</a>.'
+        ),
+        body_rows=(
+            _row('System', system_str) +
+            _row('Date', date_str) +
+            _row('Region', region_str)
+        ),
+    )
+    subject = f'[Maintenance Completed] {system_str} — {date_str}'
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email=settings.SERVICEDESK_EMAIL,
+            bcc_email=to_email,
+            subject=subject,
+            body_html=body,
+        )
+        logger.info(f'[Change] Completion announcement sent (BCC) to {to_email} for change #{change.pk}.')
+    except Exception as exc:
+        logger.error(f'[Change] Failed to send completion announcement: {exc}')
+
+
 def _send_maintenance_announcement(change):
     """Send a Planned Maintenance broadcast email to all affected employees."""
     import os
@@ -844,6 +900,8 @@ def notify_change(change_pk: int, event: str):
                     body_rows=done_rows,
                 ),
             )
+        # Broadcast completion to affected employees
+        _send_maintenance_complete_announcement(change)
 
     logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
 
