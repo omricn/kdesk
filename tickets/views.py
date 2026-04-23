@@ -158,7 +158,9 @@ def ticket_list(request):
     col_subject = request.GET.get('col_subject', '').strip()
     col_requester = request.GET.get('col_requester', '').strip()
 
-    if statuses:
+    if 'active' in statuses:
+        qs = qs.exclude(status__in=Ticket.TERMINAL_STATUSES)
+    elif statuses:
         qs = qs.filter(status__in=statuses)
     if assignee_list:
         q = Q()

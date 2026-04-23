@@ -26,10 +26,18 @@
             <span id="status-btn-label">{% if current_filters.status %}{{ current_filters.status|length }} Status{% if current_filters.status|length > 1 %}es{% endif %}{% else %}All Statuses{% endif %}</span>
           </button>
           <ul class="dropdown-menu shadow-sm p-1" style="min-width:210px;">
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded fw-semibold" style="cursor:pointer;">
+                <input type="checkbox" name="status" value="active" class="form-check-input flex-shrink-0 status-ck" id="status-active-ck"
+                       {% if 'active' in current_filters.status %}checked{% endif %}>
+                Active
+              </label>
+            </li>
+            <li><hr class="dropdown-divider my-1"></li>
             {% for val, label in status_choices %}
             <li>
               <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
-                <input type="checkbox" name="status" value="{{ val }}" class="form-check-input flex-shrink-0 status-ck"
+                <input type="checkbox" name="status" value="{{ val }}" class="form-check-input flex-shrink-0 status-ck status-real-ck"
                        {% if val in current_filters.status %}checked{% endif %}>
                 {{ label }}
               </label>
@@ -376,8 +384,16 @@ function updateMultiLabel(cls, labelId, allText, singularText, pluralText) {
   }
 }
 
+const activeStatusCk = document.getElementById('status-active-ck');
 document.querySelectorAll('.status-ck').forEach(cb => {
-  cb.addEventListener('change', () => updateMultiLabel('status-ck', 'status-btn-label', 'All Statuses', 'Status', 'Statuses'));
+  cb.addEventListener('change', function() {
+    if (this === activeStatusCk && this.checked) {
+      document.querySelectorAll('.status-real-ck').forEach(r => r.checked = false);
+    } else if (this !== activeStatusCk && this.checked && activeStatusCk) {
+      activeStatusCk.checked = false;
+    }
+    updateMultiLabel('status-ck', 'status-btn-label', 'All Statuses', 'Status', 'Statuses');
+  });
 });
 document.querySelectorAll('.assignee-ck').forEach(cb => {
   cb.addEventListener('change', () => updateMultiLabel('assignee-ck', 'assignee-btn-label', 'All Assignees', 'Assignee', 'Assignees'));
