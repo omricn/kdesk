@@ -454,6 +454,9 @@ def ticket_bulk_action(request):
     count = qs.count()
 
     if action == 'delete':
+        if not request.user.is_superuser:
+            messages.error(request, 'Only superusers can delete tickets.')
+            return redirect('ticket_list')
         qs.delete()
         messages.success(request, f'{count} ticket(s) deleted.')
 

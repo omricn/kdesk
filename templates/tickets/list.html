@@ -113,10 +113,12 @@
       <span class="small fw-semibold" id="bulk-count-label">0 selected</span>
       <div class="vr"></div>
 
+      {% if request.user.is_superuser %}
       <button type="button" class="btn btn-sm btn-danger" id="bulk-delete-btn">
         <i class="bi bi-trash me-1"></i>Delete
       </button>
       <div class="vr"></div>
+      {% endif %}
 
       <div class="d-flex gap-1 align-items-center">
         <select class="form-select form-select-sm" id="bulk-assignee-sel" style="width:160px;">
@@ -417,13 +419,16 @@ document.addEventListener('change', function(e) {
 });
 
 // Bulk action button handlers
-document.getElementById('bulk-delete-btn').addEventListener('click', function() {
-  const n = [...rowChecks()].filter(c => c.checked).length;
-  if (confirm(`Permanently delete ${n} ticket${n > 1 ? 's' : ''}? This cannot be undone.`)) {
-    document.getElementById('bulk-action-type').value = 'delete';
-    document.getElementById('bulk-form').submit();
-  }
-});
+const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+if (bulkDeleteBtn) {
+  bulkDeleteBtn.addEventListener('click', function() {
+    const n = [...rowChecks()].filter(c => c.checked).length;
+    if (confirm(`Permanently delete ${n} ticket${n > 1 ? 's' : ''}? This cannot be undone.`)) {
+      document.getElementById('bulk-action-type').value = 'delete';
+      document.getElementById('bulk-form').submit();
+    }
+  });
+}
 
 document.getElementById('bulk-assign-btn').addEventListener('click', function() {
   document.getElementById('bulk-action-type').value = 'assign';
