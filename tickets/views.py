@@ -380,6 +380,13 @@ def ticket_create(request):
         if form.is_valid():
             ticket = form.save(commit=False)
             ticket.source = Ticket.SOURCE_MANUAL
+            if ticket.requester_email and not ticket.requester_department:
+                from users.models import User as UserModel
+                try:
+                    ru = UserModel.objects.get(email__iexact=ticket.requester_email)
+                    ticket.requester_department = ru.department
+                except UserModel.DoesNotExist:
+                    pass
             _set_default_category(ticket)
             ticket.save()
             uploaded_file = request.FILES.get('attachment')
@@ -1102,6 +1109,7 @@ def portal_ticket_create(request):
             ticket.source = Ticket.SOURCE_MANUAL
             ticket.requester_email = request.user.email
             ticket.requester_name = request.user.display_name or ''
+            ticket.requester_department = request.user.department or ''
             _set_default_category(ticket)
             ticket.save()
             uploaded_file = request.FILES.get('attachment')

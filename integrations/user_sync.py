@@ -36,6 +36,7 @@ def sync_users():
         email = member.get('mail', '') or ''
         display_name = member.get('displayName', '') or ''
         account_enabled = member.get('accountEnabled', True)
+        department = member.get('department', '') or ''
 
         if not email:
             logger.debug(f'[UserSync] Skipping member {entra_id} — no email')
@@ -48,6 +49,7 @@ def sync_users():
             email=email,
             defaults={
                 'display_name': display_name,
+                'department': department,
                 'entra_id': entra_id,
                 'is_active': account_enabled,
             }
@@ -59,6 +61,9 @@ def sync_users():
             if not user.display_name.startswith('[OldUser]') and user.display_name != display_name:
                 user.display_name = display_name
                 changed = True
+            if user.department != department:
+                user.department = department
+                changed = True
             if user.entra_id != entra_id:
                 user.entra_id = entra_id
                 changed = True
@@ -67,7 +72,7 @@ def sync_users():
                 user.is_active = account_enabled
                 changed = True
             if changed:
-                user.save(update_fields=['display_name', 'entra_id', 'is_active', 'last_sync'])
+                user.save(update_fields=['display_name', 'department', 'entra_id', 'is_active', 'last_sync'])
 
         user.last_sync = timezone.now()
         user.save(update_fields=['last_sync'])
@@ -123,6 +128,7 @@ def sync_admins():
         email = (member.get('mail', '') or '').lower().strip()
         display_name = member.get('displayName', '') or ''
         account_enabled = member.get('accountEnabled', True)
+        department = member.get('department', '') or ''
 
         if not email:
             logger.debug(f'[AdminSync] Skipping member {entra_id} — no email')
@@ -134,6 +140,7 @@ def sync_admins():
             email=email,
             defaults={
                 'display_name': display_name,
+                'department': department,
                 'entra_id': entra_id,
                 'is_active': account_enabled,
                 'is_admin': True,
@@ -145,6 +152,7 @@ def sync_admins():
             changed = False
             for field, value in [
                 ('display_name', display_name),
+                ('department', department),
                 ('entra_id', entra_id),
                 ('is_active', account_enabled),
             ]:
@@ -156,7 +164,7 @@ def sync_admins():
                 user.is_staff = True
                 changed = True
             if changed:
-                user.save(update_fields=['display_name', 'entra_id', 'is_active', 'is_admin', 'is_staff', 'last_sync'])
+                user.save(update_fields=['display_name', 'department', 'entra_id', 'is_active', 'is_admin', 'is_staff', 'last_sync'])
 
         user.last_sync = timezone.now()
         user.save(update_fields=['last_sync'])

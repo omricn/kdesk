@@ -48,6 +48,7 @@ class Ticket(models.Model):
     # Requester info (from email — may not be a system user)
     requester_email = models.EmailField(db_index=True)
     requester_name = models.CharField(max_length=200, blank=True)
+    requester_department = models.CharField(max_length=200, blank=True)
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

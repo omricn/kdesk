@@ -160,12 +160,20 @@ def _create_ticket_from_message(msg, client, mailbox):
         body_content = _sanitize_html(body_content)
 
     from tickets.views import _set_default_category
+    from users.models import User as UserModel
+    try:
+        requester = UserModel.objects.get(email__iexact=requester_email)
+        requester_department = requester.department
+    except UserModel.DoesNotExist:
+        requester_department = ''
+
     ticket = Ticket(
         title=subject,
         description=body_content,
         description_is_html=is_html,
         requester_email=requester_email,
         requester_name=requester_name,
+        requester_department=requester_department,
         source=Ticket.SOURCE_EMAIL,
         email_message_id=msg.get('internetMessageId', msg['id']),
     )

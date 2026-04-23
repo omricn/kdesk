@@ -120,7 +120,7 @@ class GraphClient:
         """Returns all members of the given group (handles pagination)."""
         return self.get_paginated(
             f'/groups/{group_id}/members',
-            params={'$select': 'id,displayName,mail,accountEnabled'},
+            params={'$select': 'id,displayName,mail,accountEnabled,department'},
         )
 
     def get_group_id_by_email(self, group_email: str):
