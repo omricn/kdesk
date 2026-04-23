@@ -193,6 +193,17 @@
   </div>
 </div>
 
+<!-- SysAid Import -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-upload me-1"></i>SysAid Migration</div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">Import open tickets from a SysAid CSV export on the day of cutover. Each ticket will retain its original SysAid number as an internal admin note.</p>
+    <a href="{% url 'import_sysaid' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-upload me-1"></i>Import SysAid Tickets
+    </a>
+  </div>
+</div>
+
 <!-- Info -->
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white fw-semibold">System Info</div>

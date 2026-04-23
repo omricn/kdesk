@@ -1212,3 +1212,132 @@ def portal_preview_enter(request):
 def portal_preview_exit(request):
     request.session.pop('portal_preview', None)
     return redirect('dashboard')
+
+
+# ── SysAid CSV import (superuser only) ───────────────────────────────────────
+
+@admin_required
+def import_sysaid(request):
+    if not request.user.is_superuser:
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    results = None
+
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        import pytz
+        from datetime import datetime as dt_cls
+        from tickets.models import TicketCategory, TicketSubCategory, TicketComment
+        from tickets.sla import sla_deadline_for
+        from users.models import User as UserModel
+
+        STATUS_MAP = {
+            'work in progress': Ticket.STATUS_IN_PROGRESS,
+            'pending user reply': Ticket.STATUS_PENDING_USER,
+            'hold': Ticket.STATUS_HOLD,
+            'closed': Ticket.STATUS_CLOSED,
+            'new': Ticket.STATUS_NEW,
+            'in progress': Ticket.STATUS_IN_PROGRESS,
+            'pending vendor': Ticket.STATUS_PENDING_VENDOR,
+            'user responded': Ticket.STATUS_USER_RESPONDED,
+        }
+
+        il_tz = pytz.timezone('Asia/Jerusalem')
+
+        def parse_dt(s):
+            s = (s or '').strip()
+            if not s:
+                return None
+            for fmt in ('%d/%m/%Y %H:%M', '%d/%m/%Y'):
+                try:
+                    return il_tz.localize(dt_cls.strptime(s, fmt))
+                except ValueError:
+                    continue
+            return None
+
+        csv_file = request.FILES['csv_file']
+        decoded = csv_file.read().decode('utf-8-sig', errors='replace')
+        reader = csv.DictReader(io.StringIO(decoded))
+
+        created_rows = []
+        skipped_rows = []
+
+        for row in reader:
+            sysaid_id = row.get('#', '').strip()
+            title = (row.get('Title') or '').strip()
+            if not title:
+                skipped_rows.append({'id': sysaid_id or '?', 'reason': 'No title'})
+                continue
+
+            # Email: "KRAMER\rlisbon" → "rlisbon@kramerav.com"
+            raw_user = (row.get('Request username') or '').strip()
+            if '\\' in raw_user:
+                raw_user = raw_user.split('\\', 1)[1]
+            requester_email = f'{raw_user}@kramerav.com' if raw_user else f'unknown-{sysaid_id}@import.local'
+
+            raw_status = (row.get('Status') or '').strip().lower()
+            status = STATUS_MAP.get(raw_status, Ticket.STATUS_NEW)
+
+            created_at = parse_dt(row.get('Request time'))
+
+            process_manager = (row.get('Process manager') or '').strip()
+            assignee = None
+            if process_manager:
+                assignee = UserModel.objects.filter(
+                    display_name__iexact=process_manager, is_admin=True
+                ).first()
+
+            cat_name = (row.get('Category') or '').strip()
+            sub_name = (row.get('Sub-Category') or '').strip()
+            category = TicketCategory.objects.filter(name__iexact=cat_name).first() if cat_name else None
+            subcategory = None
+            if category and sub_name:
+                subcategory = TicketSubCategory.objects.filter(
+                    category=category, name__iexact=sub_name
+                ).first()
+
+            sla_deadline = sla_deadline_for(created_at) if created_at else sla_deadline_for(timezone.now())
+
+            ticket = Ticket(
+                title=title,
+                description=(row.get('Description') or '').strip(),
+                description_is_html=False,
+                status=status,
+                source=Ticket.SOURCE_MANUAL,
+                requester_email=requester_email,
+                requester_name=(row.get('Request user') or '').strip(),
+                requester_department=(row.get('Department') or '').strip(),
+                assignee=assignee,
+                category=category,
+                subcategory=subcategory,
+                sla_deadline=sla_deadline,
+            )
+            if status in Ticket.TERMINAL_STATUSES:
+                ticket.resolved_at = timezone.now()
+
+            ticket.save()
+
+            # Backdate created_at — auto_now_add prevents setting it in the constructor
+            if created_at:
+                Ticket.objects.filter(pk=ticket.pk).update(created_at=created_at)
+
+            if sysaid_id:
+                TicketComment.objects.create(
+                    ticket=ticket,
+                    author=request.user,
+                    body=f'Imported from SysAid — original ticket #{sysaid_id}',
+                    is_internal=True,
+                )
+
+            created_rows.append({
+                'sysaid_id': sysaid_id,
+                'pk': ticket.pk,
+                'title': title,
+                'requester': requester_email,
+                'assignee': str(assignee) if assignee else '—',
+                'status': ticket.get_status_display(),
+            })
+
+        results = {'created': created_rows, 'skipped': skipped_rows}
+
+    return render(request, 'tickets/import_sysaid.html', {'results': results})
