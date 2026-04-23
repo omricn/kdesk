@@ -76,8 +76,8 @@
           </thead>
           <tbody>
             {% for t in my_tickets %}
-            <tr>
-              <td><a href="{% url 'ticket_detail' t.pk %}" class="text-decoration-none">#{{ t.pk|stringformat:"04d" }}</a></td>
+            <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+              <td>#{{ t.pk|stringformat:"04d" }}</td>
               <td class="text-truncate" style="max-width:220px;">{{ t.title }}</td>
               <td>
                 {% if t.sla_deadline %}
@@ -117,8 +117,8 @@
           </thead>
           <tbody>
             {% for t in recent_tickets %}
-            <tr>
-              <td><a href="{% url 'ticket_detail' t.pk %}" class="text-decoration-none">#{{ t.pk|stringformat:"04d" }}</a></td>
+            <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+              <td>#{{ t.pk|stringformat:"04d" }}</td>
               <td class="text-truncate" style="max-width:160px;">{{ t.title }}</td>
               <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
               <td>{{ t.assignee|default:"—" }}</td>
