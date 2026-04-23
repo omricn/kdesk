@@ -81,13 +81,14 @@ def _set_default_category(ticket):
 @admin_required
 def dashboard(request):
     tickets = Ticket.objects.select_related('assignee')
-    total = tickets.count()
-    open_count = tickets.filter(status=Ticket.STATUS_NEW).count()
-    in_progress_count = tickets.filter(status=Ticket.STATUS_IN_PROGRESS).count()
-    pending_count = tickets.filter(status__in=[
+    my_qs = tickets.filter(assignee=request.user)
+    total = my_qs.count()
+    open_count = my_qs.filter(status=Ticket.STATUS_NEW).count()
+    in_progress_count = my_qs.filter(status=Ticket.STATUS_IN_PROGRESS).count()
+    pending_count = my_qs.filter(status__in=[
         Ticket.STATUS_PENDING_USER, Ticket.STATUS_PENDING_VENDOR, Ticket.STATUS_HOLD
     ]).count()
-    breached_count = tickets.filter(sla_breached=True).exclude(
+    breached_count = my_qs.filter(sla_breached=True).exclude(
         status__in=Ticket.TERMINAL_STATUSES
     ).count()
 

@@ -603,7 +603,7 @@ def generate_ai_summary(ticket_pk: int):
         from groq import Groq
         client = Groq(api_key=settings.GROQ_API_KEY)
         response = client.chat.completions.create(
-            model='llama-3.1-8b-instant',
+            model='llama-3.3-70b-versatile',
             max_tokens=60,
             messages=[{'role': 'user', 'content': prompt}],
         )
