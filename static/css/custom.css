@@ -153,22 +153,25 @@ a:hover { color: #a0ffdb; }
 }
 #sidebar.sidebar-collapsed .nav-link:hover::after { opacity: 1; }
 
-/* Sidebar toggle button */
+/* Sidebar toggle — fixed tab sitting on the border between sidebar and content */
 #sidebar-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  position: fixed;
+  top: 50%;
+  left: 220px;
+  transform: translateY(-50%);
+  z-index: 200;
+  width: 14px;
+  height: 48px;
+  border-radius: 0 8px 8px 0;
   background: var(--kramer-surface2);
   border: 1px solid var(--kramer-border);
-  color: #888;
+  border-left: none;
+  color: #777;
   cursor: pointer;
-  align-self: center;
-  flex-shrink: 0;
-  margin-top: 10px;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s, color 0.15s;
 }
 #sidebar-toggle:hover {
   background: var(--kramer-purple);
@@ -176,10 +179,10 @@ a:hover { color: #a0ffdb; }
   color: #fff;
 }
 #sidebar-toggle i {
-  font-size: 12px;
+  font-size: 10px;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-#sidebar.sidebar-collapsed #sidebar-toggle i { transform: rotate(180deg); }
+[data-theme="light"] #sidebar-toggle { background: #e8e8e8; }
 
 #sidebar .brand-title {
   font-family: var(--font-heading);
