@@ -49,7 +49,13 @@
   </button>
 </div>
 
-{% if sheets %}
+{% if budget_file and budget_file.is_processing %}
+  <div class="text-center py-5" id="processing-state">
+    <div class="spinner-border mb-3" style="color:var(--kramer-purple);width:3rem;height:3rem;" role="status"></div>
+    <p class="fw-semibold mb-1">Processing <em>{{ budget_file.original_name }}</em>…</p>
+    <p class="text-muted small">This may take a minute for large files. The page will refresh automatically.</p>
+  </div>
+{% elif sheets %}
 
   {% if sheets|length > 1 %}
   <ul class="nav nav-tabs budget-tabs mb-0" id="sheetTabs" role="tablist">
@@ -87,6 +93,12 @@
       <i class="bi bi-upload me-1"></i>Upload Budget File
     </button>
   </div>
+{% endif %}
+
+{% if budget_file and budget_file.is_processing %}
+{% block extra_js %}
+<script>setTimeout(function(){ window.location.reload(); }, 4000);</script>
+{% endblock %}
 {% endif %}
 
 <!-- Upload modal -->

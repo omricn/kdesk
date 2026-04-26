@@ -43,4 +43,4 @@ echo "[Startup] User sync complete."
 echo "[Startup] Setting subcategory assignees..."
 python manage.py fix_subcategory_assignees
 echo "[Startup] Done."
-exec gunicorn kdesk.wsgi:application --bind 0.0.0.0:8000 --workers 3
+exec gunicorn kdesk.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120

@@ -229,22 +229,22 @@ def budget_view(request):
         if not uploaded.name.lower().endswith(('.xlsx', '.xls')):
             messages.error(request, 'Only .xlsx and .xls files are supported.')
             return redirect('budget')
-        try:
-            sheets = excel_to_sheets_html(uploaded)
-        except Exception as exc:
-            logger.exception('Budget file parse error')
-            messages.error(request, f'Could not parse file: {exc}')
-            return redirect('budget')
 
-        uploaded.seek(0)
+        # Delete old files so only one budget file exists at a time
+        BudgetFile.objects.all().delete()
+
         bf = BudgetFile(
             original_name=uploaded.name,
             uploaded_by=request.user,
-            rendered_sheets=json.dumps(sheets),
+            is_processing=True,
         )
         bf.file.save(uploaded.name, uploaded)
         bf.save()
-        messages.success(request, f'"{uploaded.name}" uploaded successfully.')
+
+        from .tasks import parse_budget_file
+        parse_budget_file.delay(bf.pk)
+
+        messages.success(request, f'"{uploaded.name}" uploaded — processing in background, page will refresh automatically.')
         return redirect('budget')
 
     budget_file = BudgetFile.objects.first()

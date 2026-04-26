@@ -10,8 +10,8 @@ class BudgetFile(models.Model):
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
         related_name='budget_uploads',
     )
-    # Parsed HTML cached at upload time — list of {name, html} as JSON
     rendered_sheets = models.TextField(blank=True)
+    is_processing = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-uploaded_at']
