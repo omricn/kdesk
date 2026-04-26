@@ -52,9 +52,11 @@ def budget_view(request):
                 sheets = result['sheets']
                 if result.get('web_url'):
                     config.web_url = result['web_url']
+                if result.get('embed_url'):
+                    config.embed_url = result['embed_url']
                 config.cached_sheets = json.dumps(sheets)
                 config.cache_updated_at = timezone.now()
-                config.save(update_fields=['web_url', 'cached_sheets', 'cache_updated_at'])
+                config.save(update_fields=['web_url', 'embed_url', 'cached_sheets', 'cache_updated_at'])
             except Exception as exc:
                 status = getattr(getattr(exc, 'response', None), 'status_code', None)
                 if status == 403:

@@ -247,26 +247,23 @@
     <!-- ── SPREADSHEET PANE ── -->
     <div class="tab-pane fade {% if not dashboard %}show active{% endif %}" id="pane-spreadsheet" role="tabpanel">
 
-      {% if config.web_url %}
-        <div class="text-center py-5">
-          <i class="bi bi-file-earmark-excel" style="font-size:4rem;color:#198754;opacity:0.85;"></i>
-          <h5 class="mt-3 mb-1 fw-semibold">Budget 2026</h5>
-          <p class="text-muted small mb-4">Hosted on SharePoint · opens in Excel Online in a new tab</p>
-          <a href="{{ config.web_url }}?web=1" target="_blank"
-             class="btn btn-lg px-4 fw-semibold"
-             style="background:var(--kramer-purple);color:#fff;">
-            <i class="bi bi-box-arrow-up-right me-2"></i>Open &amp; Edit in Excel Online
+      {% if config.embed_url %}
+        <div class="d-flex align-items-center justify-content-end mb-2 gap-2">
+          {% if config.web_url %}
+          <a href="{{ config.web_url }}?web=1" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Open in new tab
           </a>
-          <div class="mt-3">
-            <a href="{{ config.web_url }}" target="_blank" class="text-muted small">
-              <i class="bi bi-download me-1"></i>Download file instead
-            </a>
-          </div>
+          {% endif %}
         </div>
+        <iframe id="sp-embed"
+                src="{{ config.embed_url }}"
+                style="width:100%;height:calc(100vh - 260px);min-height:500px;border:1px solid var(--kramer-border);border-radius:6px;"
+                allowfullscreen>
+        </iframe>
       {% elif config.sharepoint_url %}
         <div class="text-center py-5 text-muted">
           <i class="bi bi-file-earmark-spreadsheet fs-1" style="opacity:0.4;"></i>
-          <p class="mt-3 small">Click <strong>Refresh</strong> to fetch the file link from SharePoint.</p>
+          <p class="mt-3 small">Click <strong>Refresh</strong> once to load the embedded file link.</p>
         </div>
       {% else %}
         <div class="text-center py-5 text-muted">

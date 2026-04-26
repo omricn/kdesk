@@ -156,16 +156,33 @@ def fetch_sheets_html(sharing_url, token=None):
         token = _token()
     hdrs = {'Authorization': f'Bearer {token}'}
 
-    # Resolve sharing URL → driveId + itemId
+    # Resolve sharing URL → driveId + itemId + SharePoint embed info
     item = requests.get(
         f'{GRAPH}/shares/{_encode_url(sharing_url)}/driveItem',
-        headers=hdrs, timeout=15,
+        headers=hdrs,
+        params={'$select': 'id,webUrl,sharepointIds,parentReference,name'},
+        timeout=15,
     )
     item.raise_for_status()
     item = item.json()
     drive_id = item['parentReference']['driveId']
     item_id = item['id']
     web_url = item.get('webUrl', '')
+
+    # Build the Doc.aspx embed URL — this bypasses SharePoint's X-Frame-Options
+    # restriction that blocks the direct file URL in iframes.
+    sp_ids = item.get('sharepointIds', {})
+    unique_id = sp_ids.get('listItemUniqueId', '')
+    site_url = sp_ids.get('siteUrl', '').rstrip('/')
+    if unique_id and site_url:
+        embed_url = (
+            f"{site_url}/_layouts/15/Doc.aspx"
+            f"?sourcedoc=%7B{unique_id}%7D"
+            f"&action=default&mobileredirect=true&wdEmbedCode=0"
+        )
+    else:
+        embed_url = ''
+    logger.info('Budget graph: web_url=%s embed_url=%s', web_url, embed_url)
 
     # List worksheets
     ws_resp = requests.get(
@@ -228,7 +245,7 @@ def fetch_sheets_html(sharing_url, token=None):
             sheet_entry['dashboard'] = parse_dashboard_data(rows)
         result.append(sheet_entry)
 
-    return {'sheets': result, 'web_url': web_url}
+    return {'sheets': result, 'web_url': web_url, 'embed_url': embed_url}
 
 
 def _to_html(rows):
