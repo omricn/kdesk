@@ -90,15 +90,23 @@
 
         <!-- KPI cards -->
         <div class="row g-3 mb-4">
-          <div class="col-6 col-xl-3">
+          <div class="col-6 col-xl">
             <div class="card kpi-card h-100 shadow-sm border-0">
               <div class="card-body py-3">
-                <div class="kpi-label">Total Budget 2026</div>
-                <div class="kpi-value mt-1">{{ dashboard.total_budget_fmt }}</div>
+                <div class="kpi-label">CAPEX Budget 2026</div>
+                <div class="kpi-value mt-1">{{ dashboard.capex_budget_fmt }}</div>
               </div>
             </div>
           </div>
-          <div class="col-6 col-xl-3">
+          <div class="col-6 col-xl">
+            <div class="card kpi-card h-100 shadow-sm border-0" style="border-left-color:#00C2B2!important;">
+              <div class="card-body py-3">
+                <div class="kpi-label">OPEX Budget 2026</div>
+                <div class="kpi-value mt-1">{{ dashboard.opex_budget_fmt }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl">
             <div class="card kpi-card h-100 shadow-sm border-0" style="border-left-color:#0d6efd!important;">
               <div class="card-body py-3">
                 <div class="kpi-label">Actual Spent</div>
@@ -106,7 +114,7 @@
               </div>
             </div>
           </div>
-          <div class="col-6 col-xl-3">
+          <div class="col-6 col-xl">
             <div class="card kpi-card h-100 shadow-sm border-0"
                  style="border-left-color:{% if dashboard.over_budget %}#dc3545{% else %}#198754{% endif %}!important;">
               <div class="card-body py-3">
@@ -118,7 +126,7 @@
               </div>
             </div>
           </div>
-          <div class="col-6 col-xl-3">
+          <div class="col-6 col-xl">
             <div class="card kpi-card h-100 shadow-sm border-0" style="border-left-color:#fd7e14!important;">
               <div class="card-body py-3">
                 <div class="kpi-label">Budget Used</div>
