@@ -247,23 +247,28 @@
     <!-- ── SPREADSHEET PANE ── -->
     <div class="tab-pane fade {% if not dashboard %}show active{% endif %}" id="pane-spreadsheet" role="tabpanel">
 
-      {% if config.embed_url %}
-        <div class="d-flex align-items-center justify-content-end mb-2 gap-2">
-          {% if config.web_url %}
-          <a href="{{ config.web_url }}?web=1" target="_blank" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Open in new tab
-          </a>
-          {% endif %}
+      {% if config.sharepoint_url %}
+        <!-- toolbar -->
+        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+          <ul class="nav nav-tabs border-0 mb-0" id="xlSheetTabs" role="tablist"></ul>
+          <div class="d-flex gap-2">
+            <button id="xl-reload-btn" class="btn btn-sm btn-outline-secondary" title="Reload file">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            {% if config.web_url %}
+            <a href="{{ config.web_url }}?web=1" target="_blank" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-pencil-square me-1"></i>Edit in SharePoint
+            </a>
+            {% endif %}
+          </div>
         </div>
-        <iframe id="sp-embed"
-                src="{{ config.embed_url }}"
-                style="width:100%;height:calc(100vh - 260px);min-height:500px;border:1px solid var(--kramer-border);border-radius:6px;"
-                allowfullscreen>
-        </iframe>
-      {% elif config.sharepoint_url %}
-        <div class="text-center py-5 text-muted">
-          <i class="bi bi-file-earmark-spreadsheet fs-1" style="opacity:0.4;"></i>
-          <p class="mt-3 small">Click <strong>Refresh</strong> once to load the embedded file link.</p>
+        <!-- sheet render area -->
+        <div id="xl-loading" class="text-center py-5 text-muted">
+          <div class="spinner-border spinner-border-sm me-2"></div>Loading spreadsheet…
+        </div>
+        <div id="xl-error" class="alert alert-danger d-none"></div>
+        <div id="xl-wrap" class="d-none" style="overflow:auto;max-height:calc(100vh - 260px);border:1px solid var(--kramer-border);border-radius:6px;">
+          <div id="xl-sheet-content"></div>
         </div>
       {% else %}
         <div class="text-center py-5 text-muted">
@@ -424,6 +429,96 @@
         }
       }
     });
+  }
+})();
+</script>
+{% endif %}
+
+{% if config.sharepoint_url %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+(function () {
+  var tabsEl    = document.getElementById('xlSheetTabs');
+  var loadEl    = document.getElementById('xl-loading');
+  var errEl     = document.getElementById('xl-error');
+  var wrapEl    = document.getElementById('xl-wrap');
+  var contentEl = document.getElementById('xl-sheet-content');
+  var reloadBtn = document.getElementById('xl-reload-btn');
+  if (!tabsEl) return;
+
+  var workbook  = null;
+  var activeTab = null;
+
+  function showError(msg) {
+    loadEl.classList.add('d-none');
+    wrapEl.classList.add('d-none');
+    errEl.textContent = msg;
+    errEl.classList.remove('d-none');
+  }
+
+  function renderSheet(name) {
+    activeTab = name;
+    tabsEl.querySelectorAll('.nav-link').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.sheet === name);
+    });
+    var ws = workbook.Sheets[name];
+    var html = XLSX.utils.sheet_to_html(ws, {editable: false, header: ''});
+    contentEl.innerHTML = html;
+    // style the generated table
+    var tbl = contentEl.querySelector('table');
+    if (tbl) {
+      tbl.className = 'budget-table';
+      tbl.style.minWidth = '100%';
+    }
+  }
+
+  function buildTabs() {
+    tabsEl.innerHTML = '';
+    workbook.SheetNames.forEach(function(name) {
+      var li = document.createElement('li');
+      li.className = 'nav-item';
+      var btn = document.createElement('button');
+      btn.className = 'nav-link budget-tabs';
+      btn.dataset.sheet = name;
+      btn.textContent = name;
+      btn.addEventListener('click', function() { renderSheet(name); });
+      li.appendChild(btn);
+      tabsEl.appendChild(li);
+    });
+  }
+
+  function load() {
+    loadEl.classList.remove('d-none');
+    wrapEl.classList.add('d-none');
+    errEl.classList.add('d-none');
+    tabsEl.innerHTML = '';
+
+    fetch('{% url "budget_excel_proxy" %}', {credentials: 'same-origin'})
+      .then(function(r) {
+        if (!r.ok) throw new Error('Server returned ' + r.status);
+        return r.arrayBuffer();
+      })
+      .then(function(buf) {
+        workbook = XLSX.read(buf, {type: 'array', cellStyles: true, cellNF: true});
+        buildTabs();
+        loadEl.classList.add('d-none');
+        wrapEl.classList.remove('d-none');
+        var first = workbook.SheetNames[0];
+        renderSheet(activeTab && workbook.SheetNames.includes(activeTab) ? activeTab : first);
+      })
+      .catch(function(e) { showError('Could not load spreadsheet: ' + e.message); });
+  }
+
+  // Only auto-load when the Spreadsheet tab is active/shown
+  document.getElementById('tab-spreadsheet').addEventListener('shown.bs.tab', function() {
+    if (!workbook) load();
+  });
+
+  reloadBtn.addEventListener('click', function() { workbook = null; load(); });
+
+  // If Spreadsheet tab is already active on page load, load immediately
+  if (document.getElementById('pane-spreadsheet').classList.contains('show')) {
+    load();
   }
 })();
 </script>
