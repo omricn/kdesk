@@ -248,59 +248,30 @@
     <div class="tab-pane fade {% if not dashboard %}show active{% endif %}" id="pane-spreadsheet" role="tabpanel">
 
       {% if config.web_url %}
-        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-          <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>If the file doesn't load below, open it directly in SharePoint.</span>
-          <a href="{{ config.web_url }}?web=1" target="_blank" class="btn btn-sm"
+        <div class="text-center py-5">
+          <i class="bi bi-file-earmark-excel" style="font-size:4rem;color:#198754;opacity:0.85;"></i>
+          <h5 class="mt-3 mb-1 fw-semibold">Budget 2026</h5>
+          <p class="text-muted small mb-4">Hosted on SharePoint · opens in Excel Online in a new tab</p>
+          <a href="{{ config.web_url }}?web=1" target="_blank"
+             class="btn btn-lg px-4 fw-semibold"
              style="background:var(--kramer-purple);color:#fff;">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Open in Excel Online
+            <i class="bi bi-box-arrow-up-right me-2"></i>Open &amp; Edit in Excel Online
           </a>
-        </div>
-        <div id="sp-iframe-wrap" style="position:relative;">
-          <iframe id="sp-iframe"
-                  src="{{ config.web_url }}?web=1"
-                  style="width:100%;height:calc(100vh - 280px);min-height:500px;border:1px solid var(--kramer-border);border-radius:6px;"
-                  allowfullscreen>
-          </iframe>
-          <div id="sp-iframe-blocked"
-               class="d-none text-center py-5"
-               style="border:1px solid var(--kramer-border);border-radius:6px;">
-            <i class="bi bi-file-earmark-excel fs-1" style="color:#198754;opacity:0.6;"></i>
-            <p class="mt-3 mb-1 fw-semibold">Could not embed the file here</p>
-            <p class="small text-muted mb-3">SharePoint may be blocking inline embedding. Open it directly instead.</p>
-            <a href="{{ config.web_url }}?web=1" target="_blank" class="btn"
-               style="background:var(--kramer-purple);color:#fff;">
-              <i class="bi bi-box-arrow-up-right me-1"></i>Open in Excel Online
+          <div class="mt-3">
+            <a href="{{ config.web_url }}" target="_blank" class="text-muted small">
+              <i class="bi bi-download me-1"></i>Download file instead
             </a>
           </div>
         </div>
-        <script>
-        (function () {
-          var iframe = document.getElementById('sp-iframe');
-          var blocked = document.getElementById('sp-iframe-blocked');
-          if (!iframe) return;
-          iframe.addEventListener('error', function () {
-            iframe.style.display = 'none';
-            blocked.classList.remove('d-none');
-          });
-          // If the iframe loads a page that sets X-Frame-Options, it stays blank.
-          // We show the fallback after a timeout if the iframe remains empty.
-          setTimeout(function () {
-            try {
-              var doc = iframe.contentDocument || iframe.contentWindow.document;
-              if (!doc || !doc.body || doc.body.innerHTML.trim() === '') {
-                iframe.style.display = 'none';
-                blocked.classList.remove('d-none');
-              }
-            } catch (e) {
-              // cross-origin — iframe is loaded (possibly with SharePoint content), don't hide it
-            }
-          }, 5000);
-        })();
-        </script>
+      {% elif config.sharepoint_url %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-file-earmark-spreadsheet fs-1" style="opacity:0.4;"></i>
+          <p class="mt-3 small">Click <strong>Refresh</strong> to fetch the file link from SharePoint.</p>
+        </div>
       {% else %}
         <div class="text-center py-5 text-muted">
           <i class="bi bi-file-earmark-spreadsheet fs-1" style="opacity:0.4;"></i>
-          <p class="mt-3 small">Refresh the data once to get the direct SharePoint link.</p>
+          <p class="mt-3 small">Configure a SharePoint link first.</p>
         </div>
       {% endif %}
 
