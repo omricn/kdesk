@@ -82,6 +82,27 @@ def parse_dashboard_data(rows):
     total_pct = round(total_actual / total_budget * 100) if total_budget else 0
     total_bar_cls = 'bg-danger' if total_pct > 100 else ('bg-warning' if total_pct >= 80 else 'bg-success')
 
+    # CAPEX / OPEX aggregates
+    capex_rows = [r for r in data_rows if r['E'].lower() == 'capex']
+    opex_rows  = [r for r in data_rows if r['E'].lower() == 'opex']
+    capex_budget = sum(r['budget'] for r in capex_rows)
+    capex_actual = sum(r['actual'] for r in capex_rows)
+    opex_budget  = sum(r['budget'] for r in opex_rows)
+    opex_actual  = sum(r['actual'] for r in opex_rows)
+
+    # Budget Category (column H) aggregates — ordered by total budget desc
+    cat_map = {}
+    for r in data_rows:
+        cat = r['H'] or 'Uncategorised'
+        if cat not in cat_map:
+            cat_map[cat] = {'budget': 0.0, 'actual': 0.0}
+        cat_map[cat]['budget'] += r['budget']
+        cat_map[cat]['actual'] += r['actual']
+    categories_chart = sorted(
+        [{'name': k, 'budget': v['budget'], 'actual': v['actual']} for k, v in cat_map.items()],
+        key=lambda x: x['budget'], reverse=True,
+    )
+
     return {
         'headers': headers,
         'rows': data_rows,
@@ -94,6 +115,11 @@ def parse_dashboard_data(rows):
         'total_actual_fmt': _fmt_amount(total_actual),
         'remaining_fmt': _fmt_amount(abs(remaining)),
         'over_budget': remaining < 0,
+        'capex_budget': capex_budget,
+        'capex_actual': capex_actual,
+        'opex_budget': opex_budget,
+        'opex_actual': opex_actual,
+        'categories_chart': categories_chart,
     }
 
 

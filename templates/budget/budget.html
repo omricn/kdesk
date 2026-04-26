@@ -154,6 +154,44 @@
           </div>
         </div>
 
+        <!-- Pie charts row -->
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body d-flex flex-column align-items-center">
+                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-3">CAPEX — Budget vs Actual</h6>
+                <canvas id="chartCapex" style="max-height:200px;"></canvas>
+                <div class="mt-2 small text-center text-muted">
+                  Budget: <strong>{{ dashboard.capex_budget|floatformat:0 }}</strong>
+                  &nbsp;·&nbsp;
+                  Actual: <strong>{{ dashboard.capex_actual|floatformat:0 }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body d-flex flex-column align-items-center">
+                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-3">OPEX — Budget vs Actual</h6>
+                <canvas id="chartOpex" style="max-height:200px;"></canvas>
+                <div class="mt-2 small text-center text-muted">
+                  Budget: <strong>{{ dashboard.opex_budget|floatformat:0 }}</strong>
+                  &nbsp;·&nbsp;
+                  Actual: <strong>{{ dashboard.opex_actual|floatformat:0 }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body d-flex flex-column align-items-center">
+                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-3">Budget Category — Used vs Remaining</h6>
+                <canvas id="chartCategory" style="max-height:200px;"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Items table -->
         <div class="budget-scroll-dash">
           <table class="table table-sm table-hover dash-table align-middle">
@@ -285,4 +323,111 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+{% if dashboard %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var isDark = !document.documentElement.getAttribute('data-theme');
+  var textColor = isDark ? '#ccc' : '#555';
+
+  var PALETTE = [
+    '#8200B4','#00C2B2','#0d6efd','#fd7e14','#198754',
+    '#dc3545','#6f42c1','#20c997','#ffc107','#e83e8c',
+    '#17a2b8','#6c757d',
+  ];
+
+  function pieChart(id, labels, data, colors) {
+    var ctx = document.getElementById(id);
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{ data: data, backgroundColor: colors, borderWidth: 1 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '55%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor, font: { size: 11 }, boxWidth: 12, padding: 8 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(c) {
+                var total = c.dataset.data.reduce(function(a,b){return a+b;},0);
+                var pct = total ? Math.round(c.raw / total * 100) : 0;
+                return ' ' + c.raw.toLocaleString() + ' (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // CAPEX
+  var capexBudget = {{ dashboard.capex_budget|floatformat:2 }};
+  var capexActual = {{ dashboard.capex_actual|floatformat:2 }};
+  var capexRemaining = Math.max(capexBudget - capexActual, 0);
+  pieChart('chartCapex',
+    ['Actual', capexActual > capexBudget ? 'Over Budget' : 'Remaining'],
+    [capexActual, capexActual > capexBudget ? capexActual - capexBudget : capexRemaining],
+    ['#8200B4', capexActual > capexBudget ? '#dc3545' : '#e0c8f0']
+  );
+
+  // OPEX
+  var opexBudget = {{ dashboard.opex_budget|floatformat:2 }};
+  var opexActual = {{ dashboard.opex_actual|floatformat:2 }};
+  var opexRemaining = Math.max(opexBudget - opexActual, 0);
+  pieChart('chartOpex',
+    ['Actual', opexActual > opexBudget ? 'Over Budget' : 'Remaining'],
+    [opexActual, opexActual > opexBudget ? opexActual - opexBudget : opexRemaining],
+    ['#00C2B2', opexActual > opexBudget ? '#dc3545' : '#c8f0ee']
+  );
+
+  // Budget Category
+  var catData = {{ dashboard.categories_chart|safe }};
+  var catLabels = catData.map(function(c){ return c.name; });
+  var catActual = catData.map(function(c){ return c.actual; });
+  var catColors = catData.map(function(_, i){ return PALETTE[i % PALETTE.length]; });
+  var ctx2 = document.getElementById('chartCategory');
+  if (ctx2) {
+    new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: catLabels,
+        datasets: [{ data: catActual, backgroundColor: catColors, borderWidth: 1 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '55%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor, font: { size: 10 }, boxWidth: 12, padding: 6 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(c) {
+                var total = c.dataset.data.reduce(function(a,b){return a+b;},0);
+                var pct = total ? Math.round(c.raw / total * 100) : 0;
+                var budget = catData[c.dataIndex].budget;
+                return ' ' + c.raw.toLocaleString() + ' of ' + budget.toLocaleString() + ' (' + pct + '% of total actual)';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}
