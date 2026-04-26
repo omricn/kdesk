@@ -33,6 +33,11 @@ else:
     print('User not found: $ACTIVATE_USER')
 "
 fi
+if [ -n "$WIPE_TICKETS" ]; then
+    echo "[Startup] Wiping all tickets..."
+    python manage.py wipe_tickets
+    echo "[Startup] Wipe complete."
+fi
 echo "[Startup] Syncing users from Entra..."
 python manage.py shell -c "
 from integrations.user_sync import sync_users, sync_admins
