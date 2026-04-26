@@ -128,30 +128,6 @@ a:hover { color: #a0ffdb; }
   justify-content: center !important;
 }
 
-/* CSS-only tooltip on hover when collapsed */
-#sidebar.sidebar-collapsed .nav-link {
-  position: relative;
-  overflow: visible;
-}
-#sidebar.sidebar-collapsed .nav-link::after {
-  content: attr(data-label);
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--kramer-surface2);
-  border: 1px solid var(--kramer-border);
-  color: var(--kramer-neutral);
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 1050;
-}
-#sidebar.sidebar-collapsed .nav-link:hover::after { opacity: 1; }
 
 /* Sidebar toggle — fixed tab sitting on the border between sidebar and content */
 #sidebar-toggle {
