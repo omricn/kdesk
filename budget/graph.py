@@ -61,8 +61,12 @@ def fetch_sheets_html(sharing_url, token=None):
 
     result = []
     for sheet in ws_resp.json().get('value', []):
-        if sheet.get('visibility', 'Visible') != 'Visible':
+        name = sheet['name']
+        visibility = sheet.get('visibility', 'Visible')
+        if visibility == 'VeryHidden':
+            logger.info('Budget graph: skipping VeryHidden sheet %s', name)
             continue
+
         try:
             rng = requests.get(
                 f'{GRAPH}/drives/{drive_id}/items/{item_id}'
@@ -72,15 +76,13 @@ def fetch_sheets_html(sharing_url, token=None):
                 timeout=30,
             )
             rng.raise_for_status()
-        except Exception:
-            logger.warning('Budget graph: skipping sheet %s', sheet['name'])
+        except Exception as exc:
+            logger.warning('Budget graph: usedRange failed for sheet %s: %s', name, exc)
+            result.append({'name': name, 'html': '<p class="text-muted small p-2">Could not load sheet data.</p>'})
             continue
 
         rows = rng.json().get('text', [])
-        if not rows or not any(any(c for c in row) for row in rows):
-            continue
-
-        result.append({'name': sheet['name'], 'html': _to_html(rows)})
+        result.append({'name': name, 'html': _to_html(rows) if rows else '<p class="text-muted small p-2">Empty sheet.</p>'})
 
     return result
 
