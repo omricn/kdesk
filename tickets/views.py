@@ -1227,8 +1227,9 @@ def import_sysaid(request):
     if request.method == 'POST' and request.FILES.get('csv_file'):
         from datetime import datetime as dt_cls
         from zoneinfo import ZoneInfo
+        from django.db import transaction
         from tickets.models import TicketCategory, TicketSubCategory, TicketComment
-        from tickets.sla import sla_deadline_for
+        from tickets.sla import _get_sla_config, add_business_hours
         from users.models import User as UserModel
 
         STATUS_MAP = {
@@ -1255,88 +1256,109 @@ def import_sysaid(request):
                     continue
             return None
 
-        csv_file = request.FILES['csv_file']
-        decoded = csv_file.read().decode('utf-8-sig', errors='replace')
-        reader = csv.DictReader(io.StringIO(decoded))
+        # ── Pre-load all lookups — one query each instead of one per row ──────
+        categories  = {c.name.lower(): c for c in TicketCategory.objects.all()}
+        subcats     = {
+            (sc.category_id, sc.name.lower()): sc
+            for sc in TicketSubCategory.objects.select_related('category').all()
+        }
+        admins      = {
+            u.display_name.lower(): u
+            for u in UserModel.objects.filter(is_admin=True)
+        }
+        _, _, sla_hours, _ = _get_sla_config()
 
-        created_rows = []
+        # ── Parse CSV (pure Python, no DB) ────────────────────────────────────
+        csv_file = request.FILES['csv_file']
+        decoded  = csv_file.read().decode('utf-8-sig', errors='replace')
+        reader   = csv.DictReader(io.StringIO(decoded))
+
+        pending      = []
         skipped_rows = []
 
         for row in reader:
             sysaid_id = row.get('#', '').strip()
-            title = (row.get('Title') or '').strip()
+            title     = (row.get('Title') or '').strip()
             if not title:
                 skipped_rows.append({'id': sysaid_id or '?', 'reason': 'No title'})
                 continue
 
-            # Email: "KRAMER\rlisbon" → "rlisbon@kramerav.com"
             raw_user = (row.get('Request username') or '').strip()
             if '\\' in raw_user:
                 raw_user = raw_user.split('\\', 1)[1]
             requester_email = f'{raw_user}@kramerav.com' if raw_user else f'unknown-{sysaid_id}@import.local'
 
             raw_status = (row.get('Status') or '').strip().lower()
-            status = STATUS_MAP.get(raw_status, Ticket.STATUS_NEW)
-
+            status     = STATUS_MAP.get(raw_status, Ticket.STATUS_NEW)
             created_at = parse_dt(row.get('Request time'))
 
             process_manager = (row.get('Process manager') or '').strip()
-            assignee = None
-            if process_manager:
-                assignee = UserModel.objects.filter(
-                    display_name__iexact=process_manager, is_admin=True
-                ).first()
+            assignee        = admins.get(process_manager.lower()) if process_manager else None
 
-            cat_name = (row.get('Category') or '').strip()
-            sub_name = (row.get('Sub-Category') or '').strip()
-            category = TicketCategory.objects.filter(name__iexact=cat_name).first() if cat_name else None
-            subcategory = None
-            if category and sub_name:
-                subcategory = TicketSubCategory.objects.filter(
-                    category=category, name__iexact=sub_name
-                ).first()
+            cat_name  = (row.get('Category') or '').strip()
+            sub_name  = (row.get('Sub-Category') or '').strip()
+            category  = categories.get(cat_name.lower()) if cat_name else None
+            subcat    = subcats.get((category.pk, sub_name.lower())) if category and sub_name else None
 
-            sla_deadline = sla_deadline_for(created_at) if created_at else sla_deadline_for(timezone.now())
+            sla_ref      = created_at if created_at else timezone.now()
+            sla_deadline = add_business_hours(sla_ref, sla_hours)
 
-            ticket = Ticket(
-                title=title,
-                description=(row.get('Description') or '').strip(),
-                description_is_html=False,
-                status=status,
-                source=Ticket.SOURCE_MANUAL,
-                requester_email=requester_email,
-                requester_name=(row.get('Request user') or '').strip(),
-                requester_department=(row.get('Department') or '').strip(),
-                assignee=assignee,
-                category=category,
-                subcategory=subcategory,
-                sla_deadline=sla_deadline,
-            )
-            if status in Ticket.TERMINAL_STATUSES:
-                ticket.resolved_at = timezone.now()
-
-            ticket.save()
-
-            # Backdate created_at — auto_now_add prevents setting it in the constructor
-            if created_at:
-                Ticket.objects.filter(pk=ticket.pk).update(created_at=created_at)
-
-            if sysaid_id:
-                TicketComment.objects.create(
-                    ticket=ticket,
-                    author=request.user,
-                    body=f'Imported from SysAid — original ticket #{sysaid_id}',
-                    is_internal=True,
-                )
-
-            created_rows.append({
-                'sysaid_id': sysaid_id,
-                'pk': ticket.pk,
-                'title': title,
-                'requester': requester_email,
-                'assignee': str(assignee) if assignee else '—',
-                'status': ticket.get_status_display(),
+            pending.append({
+                'sysaid_id':           sysaid_id,
+                'title':               title,
+                'description':         (row.get('Description') or '').strip(),
+                'status':              status,
+                'requester_email':     requester_email,
+                'requester_name':      (row.get('Request user') or '').strip(),
+                'requester_department':(row.get('Department') or '').strip(),
+                'assignee':            assignee,
+                'category':            category,
+                'subcategory':         subcat,
+                'sla_deadline':        sla_deadline,
+                'created_at':          created_at,
             })
+
+        # ── Insert everything in one transaction ──────────────────────────────
+        created_rows = []
+        with transaction.atomic():
+            for r in pending:
+                ticket = Ticket(
+                    title=r['title'],
+                    description=r['description'],
+                    description_is_html=False,
+                    status=r['status'],
+                    source=Ticket.SOURCE_MANUAL,
+                    requester_email=r['requester_email'],
+                    requester_name=r['requester_name'],
+                    requester_department=r['requester_department'],
+                    assignee=r['assignee'],
+                    category=r['category'],
+                    subcategory=r['subcategory'],
+                    sla_deadline=r['sla_deadline'],
+                )
+                if r['status'] in Ticket.TERMINAL_STATUSES:
+                    ticket.resolved_at = timezone.now()
+                ticket.save()
+
+                if r['created_at']:
+                    Ticket.objects.filter(pk=ticket.pk).update(created_at=r['created_at'])
+
+                if r['sysaid_id']:
+                    TicketComment.objects.create(
+                        ticket=ticket,
+                        author=request.user,
+                        body=f'Imported from SysAid — original ticket #{r["sysaid_id"]}',
+                        is_internal=True,
+                    )
+
+                created_rows.append({
+                    'sysaid_id': r['sysaid_id'],
+                    'pk':        ticket.pk,
+                    'title':     r['title'],
+                    'requester': r['requester_email'],
+                    'assignee':  str(r['assignee']) if r['assignee'] else '—',
+                    'status':    ticket.get_status_display(),
+                })
 
         results = {'created': created_rows, 'skipped': skipped_rows}
 
