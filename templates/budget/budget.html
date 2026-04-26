@@ -49,6 +49,12 @@
     {% endif %}
   </div>
   <div class="d-flex gap-2">
+    {% if config.web_url %}
+    <a href="{{ config.web_url }}?web=1" target="_blank" class="btn btn-sm"
+       style="background:var(--kramer-purple);color:#fff;">
+      <i class="bi bi-pencil-square me-1"></i>Edit in SharePoint
+    </a>
+    {% endif %}
     {% if sheets %}
     <form method="post">{% csrf_token %}
       <input type="hidden" name="action" value="refresh">
