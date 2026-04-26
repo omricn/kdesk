@@ -1225,8 +1225,8 @@ def import_sysaid(request):
     results = None
 
     if request.method == 'POST' and request.FILES.get('csv_file'):
-        import pytz
         from datetime import datetime as dt_cls
+        from zoneinfo import ZoneInfo
         from tickets.models import TicketCategory, TicketSubCategory, TicketComment
         from tickets.sla import sla_deadline_for
         from users.models import User as UserModel
@@ -1242,7 +1242,7 @@ def import_sysaid(request):
             'user responded': Ticket.STATUS_USER_RESPONDED,
         }
 
-        il_tz = pytz.timezone('Asia/Jerusalem')
+        il_tz = ZoneInfo('Asia/Jerusalem')
 
         def parse_dt(s):
             s = (s or '').strip()
@@ -1250,7 +1250,7 @@ def import_sysaid(request):
                 return None
             for fmt in ('%d/%m/%Y %H:%M', '%d/%m/%Y'):
                 try:
-                    return il_tz.localize(dt_cls.strptime(s, fmt))
+                    return dt_cls.strptime(s, fmt).replace(tzinfo=il_tz)
                 except ValueError:
                     continue
             return None
