@@ -230,21 +230,26 @@ def budget_view(request):
             messages.error(request, 'Only .xlsx and .xls files are supported.')
             return redirect('budget')
 
-        # Delete old files so only one budget file exists at a time
-        BudgetFile.objects.all().delete()
+        # Read bytes into BytesIO so openpyxl can seek (Azure Blob streams are non-seekable)
+        import io
+        file_bytes = io.BytesIO(uploaded.read())
+        try:
+            sheets = excel_to_sheets_html(file_bytes)
+        except Exception as exc:
+            logger.exception('Budget file parse error')
+            messages.error(request, f'Could not parse file: {exc}')
+            return redirect('budget')
 
+        BudgetFile.objects.all().delete()
+        uploaded.seek(0)
         bf = BudgetFile(
             original_name=uploaded.name,
             uploaded_by=request.user,
-            is_processing=True,
+            rendered_sheets=json.dumps(sheets),
         )
         bf.file.save(uploaded.name, uploaded)
         bf.save()
-
-        from .tasks import parse_budget_file
-        parse_budget_file.delay(bf.pk)
-
-        messages.success(request, f'"{uploaded.name}" uploaded — processing in background, page will refresh automatically.')
+        messages.success(request, f'"{uploaded.name}" uploaded successfully.')
         return redirect('budget')
 
     budget_file = BudgetFile.objects.first()
