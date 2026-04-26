@@ -7,6 +7,94 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 GRAPH = 'https://graph.microsoft.com/v1.0'
+DASHBOARD_SHEET = 'IT'
+
+# 0-based column indices for the IT sheet dashboard
+_DASH_COLS = {
+    'E': 4, 'G': 6, 'H': 7, 'I': 8,
+    'J': 9, 'K': 10, 'L': 11, 'O': 14,
+    'Q': 16, 'R': 17,
+}
+
+
+def _parse_amount(text):
+    try:
+        return float(str(text).strip().replace(',', '').replace(' ', '') or 0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _fmt_amount(v):
+    return f'{v:,.0f}' if v else '—'
+
+
+def parse_dashboard_data(rows):
+    if not rows or len(rows) < 2:
+        return None
+
+    header_row = rows[0]
+
+    def _hdr(idx):
+        return str(header_row[idx]).strip() if idx < len(header_row) and header_row[idx] else ''
+
+    headers = {k: _hdr(v) for k, v in _DASH_COLS.items()}
+
+    data_rows = []
+    for row in rows[1:]:
+        if not any(c for c in row):
+            continue
+
+        def _cell(idx, r=row):
+            return str(r[idx]).strip() if idx < len(r) and r[idx] else ''
+
+        subject = _cell(_DASH_COLS['K'])
+        budget = _parse_amount(_cell(_DASH_COLS['Q']))
+        actual = _parse_amount(_cell(_DASH_COLS['R']))
+
+        if not subject and budget == 0:
+            continue
+
+        pct = min(round(actual / budget * 100) if budget else 0, 999)
+        bar_pct = min(pct, 100)
+        bar_cls = 'bg-danger' if pct > 100 else ('bg-warning' if pct >= 80 else 'bg-success')
+
+        data_rows.append({
+            'E': _cell(_DASH_COLS['E']),
+            'G': _cell(_DASH_COLS['G']),
+            'H': _cell(_DASH_COLS['H']),
+            'I': _cell(_DASH_COLS['I']),
+            'J': _cell(_DASH_COLS['J']),
+            'K': subject,
+            'L': _cell(_DASH_COLS['L']),
+            'O': _cell(_DASH_COLS['O']),
+            'budget': budget,
+            'actual': actual,
+            'budget_fmt': _fmt_amount(budget),
+            'actual_fmt': _fmt_amount(actual),
+            'pct': pct,
+            'bar_pct': bar_pct,
+            'bar_cls': bar_cls,
+        })
+
+    total_budget = sum(r['budget'] for r in data_rows)
+    total_actual = sum(r['actual'] for r in data_rows)
+    remaining = total_budget - total_actual
+    total_pct = round(total_actual / total_budget * 100) if total_budget else 0
+    total_bar_cls = 'bg-danger' if total_pct > 100 else ('bg-warning' if total_pct >= 80 else 'bg-success')
+
+    return {
+        'headers': headers,
+        'rows': data_rows,
+        'total_budget': total_budget,
+        'total_actual': total_actual,
+        'remaining': remaining,
+        'total_pct': total_pct,
+        'total_bar_cls': total_bar_cls,
+        'total_budget_fmt': _fmt_amount(total_budget),
+        'total_actual_fmt': _fmt_amount(total_actual),
+        'remaining_fmt': _fmt_amount(abs(remaining)),
+        'over_budget': remaining < 0,
+    }
 
 
 def _token():
@@ -108,7 +196,10 @@ def fetch_sheets_html(sharing_url, token=None):
             except Exception as exc:
                 logger.warning('Budget graph: fixed range also failed for "%s": %s', name, exc)
 
-        result.append({'name': name, 'html': _to_html(rows) if rows else '<p class="text-muted small p-2">Empty sheet.</p>'})
+        sheet_entry = {'name': name, 'html': _to_html(rows) if rows else '<p class="text-muted small p-2">Empty sheet.</p>'}
+        if name == DASHBOARD_SHEET:
+            sheet_entry['dashboard'] = parse_dashboard_data(rows)
+        result.append(sheet_entry)
 
     return result
 

@@ -17,7 +17,7 @@
   }
   .budget-scroll {
     overflow: auto;
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 300px);
     border: 1px solid #dee2e6;
     border-radius: 6px;
   }
@@ -27,6 +27,18 @@
     border-bottom-color: var(--kramer-purple);
     font-weight: 600;
   }
+  .view-tabs .nav-link.active {
+    color: var(--kramer-purple);
+    border-bottom-color: var(--kramer-purple);
+    font-weight: 600;
+  }
+  .kpi-card { border-left: 4px solid var(--kramer-purple); }
+  .kpi-card .kpi-value { font-size: 1.4rem; font-weight: 700; color: #212529; }
+  .kpi-card .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6c757d; }
+  .dash-table th { font-size: 0.78rem; white-space: nowrap; background: #f8f9fa; }
+  .dash-table td { font-size: 0.82rem; vertical-align: middle; }
+  .dash-table td.subject-col { font-weight: 600; max-width: 260px; white-space: normal; }
+  .budget-scroll-dash { overflow-x: auto; }
 </style>
 
 <!-- Header -->
@@ -73,31 +85,158 @@
 
 {% if sheets %}
 
-  {% if sheets|length > 1 %}
-  <ul class="nav nav-tabs budget-tabs mb-0" id="sheetTabs" role="tablist">
-    {% for sheet in sheets %}
+  <!-- View toggle: Dashboard / Spreadsheet -->
+  <ul class="nav nav-tabs view-tabs mb-0" id="viewTabs" role="tablist">
     <li class="nav-item" role="presentation">
-      <button class="nav-link {% if forloop.first %}active{% endif %}"
-              id="tab-{{ forloop.counter }}"
-              data-bs-toggle="tab"
-              data-bs-target="#sheet-{{ forloop.counter }}"
+      <button class="nav-link {% if dashboard %}active{% endif %}"
+              id="tab-dashboard" data-bs-toggle="tab" data-bs-target="#pane-dashboard"
               type="button" role="tab">
-        {{ sheet.name }}
+        <i class="bi bi-speedometer2 me-1"></i>Dashboard
       </button>
     </li>
-    {% endfor %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if not dashboard %}active{% endif %}"
+              id="tab-spreadsheet" data-bs-toggle="tab" data-bs-target="#pane-spreadsheet"
+              type="button" role="tab">
+        <i class="bi bi-table me-1"></i>Spreadsheet
+      </button>
+    </li>
   </ul>
-  {% endif %}
 
-  <div class="tab-content">
-    {% for sheet in sheets %}
-    <div class="tab-pane fade {% if forloop.first %}show active{% endif %}"
-         id="sheet-{{ forloop.counter }}" role="tabpanel">
-      <div class="budget-scroll">
-        {{ sheet.html|safe }}
-      </div>
+  <div class="tab-content border border-top-0 rounded-bottom p-3">
+
+    <!-- ── DASHBOARD PANE ── -->
+    <div class="tab-pane fade {% if dashboard %}show active{% endif %}" id="pane-dashboard" role="tabpanel">
+
+      {% if dashboard %}
+
+        <!-- KPI cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3">
+            <div class="card kpi-card h-100 shadow-sm border-0">
+              <div class="card-body py-3">
+                <div class="kpi-label">Total Budget 2026</div>
+                <div class="kpi-value mt-1">{{ dashboard.total_budget_fmt }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card kpi-card h-100 shadow-sm border-0" style="border-left-color:#0d6efd!important;">
+              <div class="card-body py-3">
+                <div class="kpi-label">Actual Spent</div>
+                <div class="kpi-value mt-1">{{ dashboard.total_actual_fmt }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card kpi-card h-100 shadow-sm border-0"
+                 style="border-left-color:{% if dashboard.over_budget %}#dc3545{% else %}#198754{% endif %}!important;">
+              <div class="card-body py-3">
+                <div class="kpi-label">{% if dashboard.over_budget %}Over Budget{% else %}Remaining{% endif %}</div>
+                <div class="kpi-value mt-1"
+                     style="color:{% if dashboard.over_budget %}#dc3545{% else %}#198754{% endif %};">
+                  {% if dashboard.over_budget %}-{% endif %}{{ dashboard.remaining_fmt }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card kpi-card h-100 shadow-sm border-0" style="border-left-color:#fd7e14!important;">
+              <div class="card-body py-3">
+                <div class="kpi-label">Budget Used</div>
+                <div class="kpi-value mt-1">{{ dashboard.total_pct }}%</div>
+                <div class="progress mt-2" style="height:5px;">
+                  <div class="progress-bar {{ dashboard.total_bar_cls }}"
+                       style="width:{% if dashboard.total_pct > 100 %}100{% else %}{{ dashboard.total_pct }}{% endif %}%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Items table -->
+        <div class="budget-scroll-dash">
+          <table class="table table-sm table-hover dash-table align-middle">
+            <thead>
+              <tr>
+                <th>{{ dashboard.headers.K }}</th>
+                <th>{{ dashboard.headers.E }}</th>
+                <th>{{ dashboard.headers.H }}</th>
+                <th>{{ dashboard.headers.I }}</th>
+                <th>{{ dashboard.headers.J }}</th>
+                <th>{{ dashboard.headers.G }}</th>
+                <th>{{ dashboard.headers.L }}</th>
+                <th>{{ dashboard.headers.O }}</th>
+                <th style="min-width:200px;">Budget vs Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dashboard.rows %}
+              <tr>
+                <td class="subject-col">{{ row.K|default:"—" }}</td>
+                <td>{{ row.E|default:"" }}</td>
+                <td>{{ row.H|default:"" }}</td>
+                <td>{{ row.I|default:"" }}</td>
+                <td>{{ row.J|default:"" }}</td>
+                <td>{{ row.G|default:"" }}</td>
+                <td>{{ row.L|default:"" }}</td>
+                <td>{{ row.O|default:"" }}</td>
+                <td>
+                  <div class="d-flex justify-content-between small text-muted mb-1">
+                    <span>{{ row.budget_fmt }}</span>
+                    <span>{{ row.actual_fmt }} <span class="text-secondary">({{ row.pct }}%)</span></span>
+                  </div>
+                  <div class="progress" style="height:7px;">
+                    <div class="progress-bar {{ row.bar_cls }}" style="width:{{ row.bar_pct }}%;"></div>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="9" class="text-center text-muted py-4">No data rows found in IT sheet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+      {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-bar-chart fs-1" style="opacity:0.3;"></i>
+          <p class="mt-3 small">Dashboard data will appear once the IT sheet is loaded.</p>
+        </div>
+      {% endif %}
     </div>
-    {% endfor %}
+
+    <!-- ── SPREADSHEET PANE ── -->
+    <div class="tab-pane fade {% if not dashboard %}show active{% endif %}" id="pane-spreadsheet" role="tabpanel">
+
+      {% if sheets|length > 1 %}
+      <ul class="nav nav-tabs budget-tabs mb-2" id="sheetTabs" role="tablist">
+        {% for sheet in sheets %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {% if forloop.first %}active{% endif %}"
+                  id="stab-{{ forloop.counter }}"
+                  data-bs-toggle="tab"
+                  data-bs-target="#ssheet-{{ forloop.counter }}"
+                  type="button" role="tab">
+            {{ sheet.name }}
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <div class="tab-content">
+        {% for sheet in sheets %}
+        <div class="tab-pane fade {% if forloop.first %}show active{% endif %}"
+             id="ssheet-{{ forloop.counter }}" role="tabpanel">
+          <div class="budget-scroll">
+            {{ sheet.html|safe }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+    </div>
   </div>
 
 {% elif not error %}

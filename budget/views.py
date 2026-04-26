@@ -62,15 +62,21 @@ def budget_view(request):
 
     # ── Load cached sheets ────────────────────────────────────────────────────
     sheets = []
+    dashboard = None
     if config.cached_sheets:
         try:
             sheets = json.loads(config.cached_sheets)
+            for s in sheets:
+                if s.get('name') == 'IT' and s.get('dashboard'):
+                    dashboard = s['dashboard']
+                    break
         except Exception:
             pass
 
     return render(request, 'budget/budget.html', {
         'config': config,
         'sheets': sheets,
+        'dashboard': dashboard,
         'error': error,
         'needs_relogin': needs_relogin,
     })
