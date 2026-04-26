@@ -72,7 +72,7 @@ def fetch_sheets_html(sharing_url, token=None):
                 f'{GRAPH}/drives/{drive_id}/items/{item_id}'
                 f'/workbook/worksheets/{sheet["id"]}/usedRange',
                 headers=hdrs,
-                params={'$select': 'text,rowCount,columnCount'},
+                params={'$select': 'text,values,rowCount,columnCount,address'},
                 timeout=30,
             )
             rng.raise_for_status()
@@ -81,7 +81,13 @@ def fetch_sheets_html(sharing_url, token=None):
             result.append({'name': name, 'html': '<p class="text-muted small p-2">Could not load sheet data.</p>'})
             continue
 
-        rows = rng.json().get('text', [])
+        data = rng.json()
+        logger.info('Budget graph: sheet "%s" address=%s rowCount=%s',
+                    name, data.get('address'), data.get('rowCount'))
+
+        # `text` has formatted display values; `values` has raw data.
+        # PivotTable sheets sometimes return empty `text` — fall back to `values`.
+        rows = data.get('text') or data.get('values') or []
         result.append({'name': name, 'html': _to_html(rows) if rows else '<p class="text-muted small p-2">Empty sheet.</p>'})
 
     return result
