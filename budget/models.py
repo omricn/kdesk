@@ -23,6 +23,7 @@ class BudgetFile(models.Model):
 class BudgetConfig(models.Model):
     """Singleton — always pk=1. Stores the SharePoint URL and HTML cache."""
     sharepoint_url = models.URLField(blank=True, max_length=1000)
+    web_url = models.URLField(blank=True, max_length=1000)  # direct Excel Online URL from Graph
     cached_sheets   = models.TextField(blank=True)   # JSON [{name, html}, ...]
     cache_updated_at = models.DateTimeField(null=True, blank=True)
     configured_by = models.ForeignKey(

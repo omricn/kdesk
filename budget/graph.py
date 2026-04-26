@@ -165,6 +165,7 @@ def fetch_sheets_html(sharing_url, token=None):
     item = item.json()
     drive_id = item['parentReference']['driveId']
     item_id = item['id']
+    web_url = item.get('webUrl', '')
 
     # List worksheets
     ws_resp = requests.get(
@@ -227,7 +228,7 @@ def fetch_sheets_html(sharing_url, token=None):
             sheet_entry['dashboard'] = parse_dashboard_data(rows)
         result.append(sheet_entry)
 
-    return result
+    return {'sheets': result, 'web_url': web_url}
 
 
 def _to_html(rows):
