@@ -92,7 +92,11 @@ a:hover { color: #a0ffdb; }
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-#sidebar.sidebar-collapsed { width: 56px; }
+#sidebar.sidebar-collapsed {
+  width: 56px;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
 
 /* Animated text labels */
 #sidebar .sidebar-label {
@@ -121,11 +125,16 @@ a:hover { color: #a0ffdb; }
   margin-inline-end: 0 !important;
 }
 
-/* Center items when collapsed */
+/* Center all items and strip horizontal padding so icons sit at true centre */
 #sidebar.sidebar-collapsed .nav-link,
 #sidebar.sidebar-collapsed .sidebar-logo-link,
 #sidebar.sidebar-collapsed .dropdown > a {
   justify-content: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+#sidebar.sidebar-collapsed .sidebar-logo-link {
+  margin-bottom: 0.75rem;
 }
 
 
