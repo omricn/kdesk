@@ -29,14 +29,17 @@ def _encode_url(url):
     return 'u!' + b64.replace('+', '-').replace('/', '_')
 
 
-def fetch_sheets_html(sharing_url):
+def fetch_sheets_html(sharing_url, token=None):
     """
     Read every visible worksheet from a SharePoint Excel file via Graph API.
-    Returns list of {name, html} dicts — uses Excel's pre-computed cell text
-    (numbers formatted, dates formatted, pivot totals already calculated).
-    Raises on any network/auth failure so the caller can show an error.
+    Returns list of {name, html} dicts — uses Excel's pre-computed cell text.
+
+    Pass `token` as the logged-in user's delegated access token so SharePoint
+    file permissions are enforced (users without access get a 403).
+    If token is None, falls back to the app service account (Sites.Read.All).
     """
-    token = _token()
+    if token is None:
+        token = _token()
     hdrs = {'Authorization': f'Bearer {token}'}
 
     # Resolve sharing URL → driveId + itemId

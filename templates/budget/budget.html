@@ -56,7 +56,15 @@
   </div>
 </div>
 
-{% if error %}
+{% if needs_relogin %}
+<div class="alert alert-warning d-flex align-items-center gap-2">
+  <i class="bi bi-arrow-repeat fs-5"></i>
+  <div>
+    <strong>Please sign out and sign back in</strong> — a new permission was added since your last login and your session needs to be refreshed.
+    <a href="{% url 'logout' %}" class="alert-link ms-2">Sign out now</a>
+  </div>
+</div>
+{% elif error %}
 <div class="alert alert-danger d-flex align-items-center gap-2">
   <i class="bi bi-exclamation-triangle-fill"></i>
   <div><strong>Could not load from SharePoint:</strong> {{ error }}</div>

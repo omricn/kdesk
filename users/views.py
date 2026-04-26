@@ -11,16 +11,43 @@ from django.shortcuts import redirect, render
 logger = logging.getLogger(__name__)
 
 
-def _msal_app():
+def _msal_app(token_cache=None):
     return msal.ConfidentialClientApplication(
         client_id=settings.AZURE_CLIENT_ID,
         client_credential=settings.AZURE_CLIENT_SECRET,
         authority=f'https://login.microsoftonline.com/{settings.AZURE_TENANT_ID}',
+        token_cache=token_cache,
     )
 
 
-# Scopes needed to read the user's profile at login time
-_LOGIN_SCOPES = ['User.Read']
+# Sites.Read.All lets the Budget page call Graph API as the logged-in user,
+# so SharePoint file permissions are enforced natively.
+_LOGIN_SCOPES = ['User.Read', 'Sites.Read.All']
+
+
+def get_user_graph_token(request, scopes=None):
+    """Return a fresh Graph API access token for the logged-in user.
+
+    Uses the MSAL token cache stored in the session at login.
+    Returns None if no cached token exists (user must re-login).
+    """
+    if scopes is None:
+        scopes = ['Sites.Read.All']
+    cache_data = request.session.get('msal_token_cache')
+    if not cache_data:
+        return None
+    cache = msal.SerializableTokenCache()
+    cache.deserialize(cache_data)
+    app = _msal_app(cache)
+    accounts = app.get_accounts()
+    if not accounts:
+        return None
+    result = app.acquire_token_silent(scopes=scopes, account=accounts[0])
+    if cache.has_state_changed:
+        request.session['msal_token_cache'] = cache.serialize()
+    if result and 'access_token' in result:
+        return result['access_token']
+    return None
 
 
 def login_view(request):
@@ -61,8 +88,11 @@ def auth_callback(request):
         messages.error(request, 'No authorisation code received.')
         return redirect('login')
 
-    # Exchange code for access token
-    result = _msal_app().acquire_token_by_authorization_code(
+    # Exchange code for access token; use a serializable cache so we can
+    # reuse the refresh token for delegated Graph API calls (e.g. Budget page).
+    cache = msal.SerializableTokenCache()
+    app = _msal_app(cache)
+    result = app.acquire_token_by_authorization_code(
         code=code,
         scopes=_LOGIN_SCOPES,
         redirect_uri=settings.AZURE_REDIRECT_URI,
@@ -135,6 +165,10 @@ def auth_callback(request):
 
     user.last_sync = timezone.now()
     user.save(update_fields=['last_sync'])
+
+    # Persist MSAL token cache in session for delegated Graph API calls
+    if cache.has_state_changed:
+        request.session['msal_token_cache'] = cache.serialize()
 
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     logger.info(f'[SSO] {email} logged in (is_admin={user.is_admin})')

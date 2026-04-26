@@ -36,16 +36,29 @@ def budget_view(request):
 
     # ── Fetch from SharePoint (if cache stale) ────────────────────────────────
     error = None
+    needs_relogin = False
+
     if config.sharepoint_url and not config.cache_is_fresh():
-        try:
-            from .graph import fetch_sheets_html
-            sheets = fetch_sheets_html(config.sharepoint_url)
-            config.cached_sheets = json.dumps(sheets)
-            config.cache_updated_at = timezone.now()
-            config.save(update_fields=['cached_sheets', 'cache_updated_at'])
-        except Exception as exc:
-            logger.exception('Budget SharePoint fetch failed')
-            error = str(exc)
+        from users.views import get_user_graph_token
+        user_token = get_user_graph_token(request)
+
+        if user_token is None:
+            # Token missing — user logged in before Sites.Read.All was added
+            needs_relogin = True
+        else:
+            try:
+                from .graph import fetch_sheets_html
+                sheets = fetch_sheets_html(config.sharepoint_url, token=user_token)
+                config.cached_sheets = json.dumps(sheets)
+                config.cache_updated_at = timezone.now()
+                config.save(update_fields=['cached_sheets', 'cache_updated_at'])
+            except Exception as exc:
+                status = getattr(getattr(exc, 'response', None), 'status_code', None)
+                if status == 403:
+                    error = "You don't have permission to access this file in SharePoint."
+                else:
+                    logger.exception('Budget SharePoint fetch failed')
+                    error = str(exc)
 
     # ── Load cached sheets ────────────────────────────────────────────────────
     sheets = []
@@ -59,4 +72,5 @@ def budget_view(request):
         'config': config,
         'sheets': sheets,
         'error': error,
+        'needs_relogin': needs_relogin,
     })
