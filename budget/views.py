@@ -88,63 +88,39 @@ def _fmt_value(cell):
 
 
 def excel_to_sheets_html(file_obj):
-    """Parse workbook; return list of {name, html} for every visible sheet."""
-    import openpyxl
-    from openpyxl.utils import get_column_letter
+    """Parse workbook; return list of {name, html} for every visible sheet.
 
-    wb = openpyxl.load_workbook(file_obj, data_only=True)
+    Uses read_only=True so openpyxl skips pivot table / pivot cache XML entirely,
+    which is what causes hangs on files with PivotTables.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(file_obj, data_only=True, read_only=True)
     result = []
 
     for ws in wb.worksheets:
-        # Merged cell map: top-left → (rowspan, colspan); rest → skip
-        spans, skip = {}, set()
-        for mr in ws.merged_cells.ranges:
-            r1, c1, r2, c2 = mr.min_row, mr.min_col, mr.max_row, mr.max_col
-            spans[(r1, c1)] = (r2 - r1 + 1, c2 - c1 + 1)
-            for r in range(r1, r2 + 1):
-                for c in range(c1, c2 + 1):
-                    if (r, c) != (r1, c1):
-                        skip.add((r, c))
+        buf = ['<table class="budget-table"><tbody>']
+        has_content = False
+        empty_streak = 0
 
-        max_row = ws.max_row or 1
-        max_col = ws.max_column or 1
-
-        buf = ['<table class="budget-table"><colgroup>']
-
-        for ci in range(1, max_col + 1):
-            letter = get_column_letter(ci)
-            dim = ws.column_dimensions.get(letter)
-            if dim and dim.hidden:
-                buf.append('<col class="col-hidden">')
-            elif dim and dim.width:
-                buf.append(f'<col style="width:{max(30, int(dim.width * 7.5))}px;">')
-            else:
-                buf.append('<col>')
-
-        buf.append('</colgroup><tbody>')
-
-        for ri in range(1, max_row + 1):
-            rdim = ws.row_dimensions.get(ri)
-            if rdim and rdim.hidden:
+        for row in ws.iter_rows(max_row=3000):
+            if all(c.value is None for c in row):
+                empty_streak += 1
+                if empty_streak >= 5 and has_content:
+                    break
                 continue
-            row_h = (f' style="height:{max(16, int(rdim.height * 1.33))}px;"'
-                     if rdim and rdim.height else '')
-            buf.append(f'<tr{row_h}>')
+            empty_streak = 0
+            has_content = True
 
-            for ci in range(1, max_col + 1):
-                letter = get_column_letter(ci)
-                cdim = ws.column_dimensions.get(letter)
-                if (cdim and cdim.hidden) or (ri, ci) in skip:
-                    continue
-
-                cell = ws.cell(row=ri, column=ci)
+            buf.append('<tr>')
+            for cell in row:
                 styles = []
 
                 try:
                     fill = cell.fill
                     if fill and fill.fill_type not in (None, 'none'):
                         bg = _color_css(fill.fgColor)
-                        if bg and bg.upper() not in ('#FFFFFF', '#FFFFFF'):
+                        if bg and bg.upper() != '#FFFFFF':
                             styles.append(f'background-color:{bg};')
                 except Exception:
                     pass
@@ -191,20 +167,13 @@ def excel_to_sheets_html(file_obj):
                     pass
 
                 style_attr = f' style="{" ".join(styles)}"' if styles else ''
-                span_attr = ''
-                if (ri, ci) in spans:
-                    rs, cs = spans[(ri, ci)]
-                    if rs > 1:
-                        span_attr += f' rowspan="{rs}"'
-                    if cs > 1:
-                        span_attr += f' colspan="{cs}"'
-
-                buf.append(f'<td{style_attr}{span_attr}>{_fmt_value(cell)}</td>')
+                buf.append(f'<td{style_attr}>{_fmt_value(cell)}</td>')
 
             buf.append('</tr>')
 
         buf.append('</tbody></table>')
-        result.append({'name': ws.title, 'html': ''.join(buf)})
+        if has_content:
+            result.append({'name': ws.title, 'html': ''.join(buf)})
 
     wb.close()
     return result
