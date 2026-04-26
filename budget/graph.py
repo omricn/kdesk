@@ -82,12 +82,32 @@ def fetch_sheets_html(sharing_url, token=None):
             continue
 
         data = rng.json()
+        row_count = data.get('rowCount', 0)
         logger.info('Budget graph: sheet "%s" address=%s rowCount=%s',
-                    name, data.get('address'), data.get('rowCount'))
+                    name, data.get('address'), row_count)
 
-        # `text` has formatted display values; `values` has raw data.
-        # PivotTable sheets sometimes return empty `text` — fall back to `values`.
         rows = data.get('text') or data.get('values') or []
+
+        # usedRange sometimes reports rowCount=0 even when the sheet has data
+        # (stale Excel metadata). Fall back to reading a broad fixed range.
+        if not rows or row_count == 0:
+            logger.info('Budget graph: usedRange empty for "%s", trying fixed range', name)
+            try:
+                fb = requests.get(
+                    f'{GRAPH}/drives/{drive_id}/items/{item_id}'
+                    f'/workbook/worksheets/{sheet["id"]}/range(address=\'A1:AZ2000\')',
+                    headers=hdrs,
+                    params={'$select': 'text,values,rowCount'},
+                    timeout=30,
+                )
+                fb.raise_for_status()
+                fb_data = fb.json()
+                rows = fb_data.get('text') or fb_data.get('values') or []
+                logger.info('Budget graph: fixed range for "%s" rowCount=%s',
+                            name, fb_data.get('rowCount'))
+            except Exception as exc:
+                logger.warning('Budget graph: fixed range also failed for "%s": %s', name, exc)
+
         result.append({'name': name, 'html': _to_html(rows) if rows else '<p class="text-muted small p-2">Empty sheet.</p>'})
 
     return result
