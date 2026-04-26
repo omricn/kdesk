@@ -86,8 +86,100 @@ a:hover { color: #a0ffdb; }
 #sidebar {
   background-color: #0a0a0a !important;
   border-right: 1px solid var(--kramer-border);
-  width: 220px !important;
+  width: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+#sidebar.sidebar-collapsed { width: 56px; }
+
+/* Animated text labels */
+#sidebar .sidebar-label {
+  display: inline-block;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+  transition: max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
+}
+#sidebar.sidebar-collapsed .sidebar-label {
+  max-width: 0;
+  opacity: 0;
+}
+
+/* Icon margin collapses when labels hide */
+#sidebar .nav-link i,
+#sidebar .sidebar-logo-link i,
+#sidebar .dropdown > a > i {
+  transition: margin 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#sidebar.sidebar-collapsed .nav-link i,
+#sidebar.sidebar-collapsed .sidebar-logo-link i,
+#sidebar.sidebar-collapsed .dropdown > a > i {
+  margin-right: 0 !important;
+  margin-inline-end: 0 !important;
+}
+
+/* Center items when collapsed */
+#sidebar.sidebar-collapsed .nav-link,
+#sidebar.sidebar-collapsed .sidebar-logo-link,
+#sidebar.sidebar-collapsed .dropdown > a {
+  justify-content: center !important;
+}
+
+/* CSS-only tooltip on hover when collapsed */
+#sidebar.sidebar-collapsed .nav-link {
+  position: relative;
+  overflow: visible;
+}
+#sidebar.sidebar-collapsed .nav-link::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--kramer-surface2);
+  border: 1px solid var(--kramer-border);
+  color: var(--kramer-neutral);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 1050;
+}
+#sidebar.sidebar-collapsed .nav-link:hover::after { opacity: 1; }
+
+/* Sidebar toggle button */
+#sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--kramer-surface2);
+  border: 1px solid var(--kramer-border);
+  color: #888;
+  cursor: pointer;
+  align-self: center;
+  flex-shrink: 0;
+  margin-top: 10px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#sidebar-toggle:hover {
+  background: var(--kramer-purple);
+  border-color: var(--kramer-purple);
+  color: #fff;
+}
+#sidebar-toggle i {
+  font-size: 12px;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#sidebar.sidebar-collapsed #sidebar-toggle i { transform: rotate(180deg); }
 
 #sidebar .brand-title {
   font-family: var(--font-heading);
@@ -102,6 +194,8 @@ a:hover { color: #a0ffdb; }
   border-radius: 6px;
   padding: 8px 10px;
   transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
 }
 
 #sidebar .nav-link:hover {
@@ -116,6 +210,15 @@ a:hover { color: #a0ffdb; }
 }
 
 #sidebar hr { border-color: var(--kramer-border); }
+
+[data-theme="light"] #sidebar-toggle {
+  background: var(--kramer-surface2);
+  border-color: var(--kramer-border);
+}
+[data-theme="light"] #sidebar.sidebar-collapsed .nav-link::after {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .card {
