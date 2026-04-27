@@ -58,12 +58,26 @@
           <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
           {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
         </div>
-        <div class="description-body border rounded p-3" style="word-break:break-word;overflow-x:auto;" dir="auto">
-          {% if ticket.description_is_html %}
-            {{ ticket.description|safe }}
-          {% else %}
-            <div style="white-space:pre-wrap;">{{ ticket.description|default:"(no description)" }}</div>
-          {% endif %}
+        <div style="position:relative;">
+          <div id="desc-display" class="description-body border rounded p-3" style="word-break:break-word;overflow-x:auto;" dir="auto">
+            {% if ticket.description_is_html %}
+              {{ ticket.description|safe }}
+            {% else %}
+              <div style="white-space:pre-wrap;">{{ ticket.description|default:"(no description)" }}</div>
+            {% endif %}
+          </div>
+          <button id="desc-edit-btn" type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  style="position:absolute;top:6px;right:6px;padding:2px 7px;font-size:11px;opacity:0.6;"
+                  title="Edit description">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <textarea id="desc-edit" name="description" form="update-form"
+                    class="form-control" rows="6" dir="auto" disabled
+                    style="display:none;">{{ ticket.description }}</textarea>
+          <div id="desc-edit-hint" class="text-muted mt-1" style="font-size:11px;display:none;">
+            Saved as plain text when you click <strong>Apply</strong> or <strong>Save</strong>.
+          </div>
         </div>
       </div>
     </div>
@@ -550,6 +564,24 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
     form.requestSubmit();
   });
 });
+
+// ── Inline description edit ───────────────────────────────────────────────────
+(function () {
+  var display = document.getElementById('desc-display');
+  var editTA  = document.getElementById('desc-edit');
+  var editBtn = document.getElementById('desc-edit-btn');
+  var hint    = document.getElementById('desc-edit-hint');
+  if (!editBtn) return;
+  editBtn.addEventListener('click', function () {
+    display.style.display = 'none';
+    editBtn.style.display = 'none';
+    editTA.disabled = false;
+    editTA.style.display = '';
+    hint.style.display = '';
+    editTA.focus();
+    editTA.setSelectionRange(editTA.value.length, editTA.value.length);
+  });
+})();
 
 // ── @mention autocomplete ─────────────────────────────────────────────────────
 (function () {

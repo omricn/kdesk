@@ -312,6 +312,12 @@ def ticket_detail(request, pk):
                     was_closed = old_status in Ticket.TERMINAL_STATUSES
                     updated = update_form.save(commit=False)
                     updated.solution = solution
+                    # Handle optional description edit submitted by admin
+                    if 'description' in request.POST:
+                        new_desc = request.POST.get('description', '')
+                        if new_desc != ticket.description:
+                            updated.description = new_desc
+                            updated.description_is_html = False
                     # Stamp resolved_at when closed
                     if updated.status in Ticket.TERMINAL_STATUSES and not updated.resolved_at:
                         updated.resolved_at = timezone.now()
@@ -354,6 +360,14 @@ def ticket_detail(request, pk):
                             field='Assignee',
                             old_value=str(old_assignee) if old_assignee else 'Unassigned',
                             new_value=str(updated.assignee) if updated.assignee else 'Unassigned',
+                        ))
+                    if updated.description != ticket.description:
+                        history_entries.append(TicketHistory(
+                            ticket=updated,
+                            changed_by=request.user,
+                            field='Description',
+                            old_value=None,
+                            new_value='(updated)',
                         ))
                     if history_entries:
                         TicketHistory.objects.bulk_create(history_entries)
