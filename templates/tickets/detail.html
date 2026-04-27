@@ -559,6 +559,57 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
   const ta = noteForm.querySelector('textarea');
   if (!ta) return;
   const dd = document.getElementById('mention-dropdown');
+  let _atIndex = -1;
+
+  // Mirror-div trick: measure how far down the caret is within the textarea content.
+  // Returns the Y offset (in px) from the top of the textarea's content box to the
+  // bottom of the caret's line, ignoring textarea.scrollTop.
+  function caretOffsetY() {
+    const pos = ta.selectionStart;
+    const cs = window.getComputedStyle(ta);
+    const mirror = document.createElement('div');
+    ['paddingTop','paddingRight','paddingBottom','paddingLeft',
+     'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+     'fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing'
+    ].forEach(p => { mirror.style[p] = cs[p]; });
+    mirror.style.position = 'fixed';
+    mirror.style.top = '-9999px';
+    mirror.style.left = '0';
+    mirror.style.width = ta.clientWidth + 'px';
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.wordWrap = 'break-word';
+    mirror.style.overflow = 'hidden';
+    mirror.style.visibility = 'hidden';
+    const text = document.createElement('span');
+    text.textContent = ta.value.slice(0, pos) || ' ';
+    const caret = document.createElement('span');
+    caret.textContent = '​';
+    mirror.appendChild(text);
+    mirror.appendChild(caret);
+    document.body.appendChild(mirror);
+    const mTop = mirror.getBoundingClientRect().top;
+    const cBottom = caret.getBoundingClientRect().bottom;
+    document.body.removeChild(mirror);
+    return cBottom - mTop; // px from content-top to caret-line-bottom
+  }
+
+  function positionDropdown() {
+    if (dd.style.display === 'none') return;
+    const taRect = ta.getBoundingClientRect();
+    // visible Y of caret within textarea (clamped to textarea height)
+    const visibleY = caretOffsetY() - ta.scrollTop;
+    const clampedY = Math.max(0, Math.min(visibleY, ta.clientHeight));
+    let top = taRect.top + clampedY + 4;
+    let left = taRect.left;
+    dd.style.top = top + 'px';
+    dd.style.left = left + 'px';
+    // Flip above the caret if the dropdown overflows the viewport bottom
+    const ddH = dd.offsetHeight;
+    if (top + ddH > window.innerHeight - 8) {
+      const lh = parseFloat(window.getComputedStyle(ta).lineHeight) || 20;
+      dd.style.top = (top - ddH - lh - 8) + 'px';
+    }
+  }
 
   function getMentionQuery() {
     const before = ta.value.slice(0, ta.selectionStart);
@@ -570,6 +621,7 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
   }
 
   function showDropdown(matches, atIndex) {
+    _atIndex = atIndex;
     dd.innerHTML = matches.map(a =>
       `<a class="dropdown-item d-flex align-items-center gap-2" href="#" data-name="${a.name.replace(/"/g,'&quot;')}">
         <i class="bi bi-person-fill" style="color:var(--kramer-purple);font-size:.85rem;"></i>
@@ -579,13 +631,11 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
     dd.querySelectorAll('a').forEach(function(link) {
       link.addEventListener('mousedown', function(e) {
         e.preventDefault();
-        insertMention(link.dataset.name, atIndex);
+        insertMention(link.dataset.name, _atIndex);
       });
     });
-    const rect = ta.getBoundingClientRect();
     dd.style.display = 'block';
-    dd.style.top  = (rect.bottom + 4) + 'px';
-    dd.style.left = rect.left + 'px';
+    positionDropdown();
   }
 
   function hideDropdown() { dd.style.display = 'none'; dd.innerHTML = ''; }
@@ -601,9 +651,7 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
   ta.addEventListener('input', function () {
     const ctx = getMentionQuery();
     if (!ctx) { hideDropdown(); return; }
-    const matches = ADMINS.filter(a =>
-      a.name.toLowerCase().includes(ctx.query)
-    );
+    const matches = ADMINS.filter(a => a.name.toLowerCase().includes(ctx.query));
     matches.length ? showDropdown(matches, ctx.atIndex) : hideDropdown();
   });
 
@@ -632,6 +680,9 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
     }
     if (e.key === 'Escape') { hideDropdown(); ta.focus(); }
   });
+
+  // Reposition on any scroll so the dropdown tracks the textarea
+  window.addEventListener('scroll', positionDropdown, true);
 
   document.addEventListener('click', function (e) {
     if (!dd.contains(e.target) && e.target !== ta) hideDropdown();
