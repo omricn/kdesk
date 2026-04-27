@@ -66,6 +66,7 @@
               <div style="white-space:pre-wrap;">{{ ticket.description|default:"(no description)" }}</div>
             {% endif %}
           </div>
+          {% if not ticket.description_is_html %}
           <button id="desc-edit-btn" type="button"
                   class="btn btn-sm btn-outline-secondary"
                   style="position:absolute;top:6px;right:6px;padding:2px 7px;font-size:11px;opacity:0.6;"
@@ -78,6 +79,7 @@
           <div id="desc-edit-hint" class="text-muted mt-1" style="font-size:11px;display:none;">
             Saved as plain text when you click <strong>Apply</strong> or <strong>Save</strong>.
           </div>
+          {% endif %}
         </div>
       </div>
     </div>
