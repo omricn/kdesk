@@ -65,7 +65,7 @@ def change_detail(request, pk):
             return redirect('change_detail', pk=pk)
 
     is_manager = request.user.is_it_manager
-    can_cancel = (request.user == change.submitted_by or request.user.is_superuser)
+    can_cancel = (request.user == change.submitted_by or request.user.is_superuser or request.user.is_it_manager)
     return render(request, 'changes/detail.html', {
         'change': change,
         'is_manager': is_manager,
@@ -121,6 +121,21 @@ def change_transition(request, pk):
 
     is_manager = request.user.is_it_manager
 
+    # Cancel is allowed from any status except done/already-cancelled
+    if action == 'cancel':
+        if change.status in (Change.STATUS_DONE, Change.STATUS_CANCELLED):
+            messages.error(request, 'This change cannot be cancelled.')
+            return redirect('change_detail', pk=pk)
+        if (request.user != change.submitted_by
+                and not request.user.is_superuser
+                and not request.user.is_it_manager):
+            messages.error(request, 'Only the submitter or IT Manager can cancel this change.')
+            return redirect('change_detail', pk=pk)
+        change.status = Change.STATUS_CANCELLED
+        change.save(update_fields=['status', 'updated_at'])
+        messages.success(request, f'Change #{pk:04d} has been cancelled.')
+        return redirect('change_detail', pk=pk)
+
     transitions = {
         'submit':           (Change.STATUS_NEW,              Change.STATUS_PENDING),
         'resubmit':         (Change.STATUS_PENDING_CHANGES,  Change.STATUS_PENDING),
@@ -130,7 +145,6 @@ def change_transition(request, pk):
         'start':            (Change.STATUS_APPROVED,         Change.STATUS_IN_PROGRESS),
         'complete':         (Change.STATUS_IN_PROGRESS,      Change.STATUS_DONE),
         'reopen':           (Change.STATUS_DONE,             Change.STATUS_NEW),
-        'cancel':           (Change.STATUS_NEW,              Change.STATUS_CANCELLED),
     }
 
     if action not in transitions:
@@ -140,11 +154,6 @@ def change_transition(request, pk):
     # Only managers can approve, reject, or request changes
     if action in ('approve', 'not_approve', 'request_changes') and not is_manager:
         messages.error(request, 'Only the IT Manager can approve or reject changes.')
-        return redirect('change_detail', pk=pk)
-
-    # Only submitter or superuser can cancel
-    if action == 'cancel' and request.user != change.submitted_by and not request.user.is_superuser:
-        messages.error(request, 'Only the submitter can cancel this change.')
         return redirect('change_detail', pk=pk)
 
     required_status, new_status = transitions[action]
@@ -189,8 +198,6 @@ def change_transition(request, pk):
         messages.success(request, 'Change marked as done.')
     elif action == 'start':
         messages.success(request, 'Change is now in progress.')
-    elif action == 'cancel':
-        messages.success(request, f'Change #{pk:04d} has been cancelled.')
     elif action == 'reopen':
         messages.success(request, 'Change reopened.')
 

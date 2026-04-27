@@ -169,16 +169,6 @@
             <i class="bi bi-send me-1"></i>Submit for Approval
           </button>
         </form>
-        {% if can_cancel %}
-        <form method="post" action="{% url 'change_transition' change.pk %}"
-              onsubmit="return confirm('Cancel this change request? It will remain visible in the calendar.');">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="cancel">
-          <button type="submit" class="btn btn-danger w-100">
-            <i class="bi bi-x-circle me-1"></i>Cancel Change Request
-          </button>
-        </form>
-        {% endif %}
 
         {% elif change.status == 'pending_approval' %}
         {% if is_manager %}
@@ -260,6 +250,23 @@
           <input type="hidden" name="action" value="reopen">
           <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mt-1">
             <i class="bi bi-arrow-repeat me-1"></i>Reopen
+          </button>
+        </form>
+
+        {% elif change.status == 'cancelled' %}
+        <div class="alert alert-secondary py-2 mb-0 text-center" style="font-size:14px;">
+          <i class="bi bi-x-circle me-1"></i>Cancelled
+        </div>
+        {% endif %}
+
+        {% if can_cancel and change.status != 'cancelled' and change.status != 'done' %}
+        <hr class="my-2">
+        <form method="post" action="{% url 'change_transition' change.pk %}"
+              onsubmit="return confirm('Cancel this change request?');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="cancel">
+          <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-x-circle me-1"></i>Cancel Change Request
           </button>
         </form>
         {% endif %}
