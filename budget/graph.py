@@ -89,10 +89,14 @@ def parse_dashboard_data(rows):
     capex_actual = sum(r['actual'] for r in capex_rows)
     opex_budget  = sum(r['budget'] for r in opex_rows)
     opex_actual  = sum(r['actual'] for r in opex_rows)
-    capex_budget_fmt = _fmt_amount(capex_budget)
-    capex_actual_fmt = _fmt_amount(capex_actual)
-    opex_budget_fmt  = _fmt_amount(opex_budget)
-    opex_actual_fmt  = _fmt_amount(opex_actual)
+    capex_remaining  = capex_budget - capex_actual
+    opex_remaining   = opex_budget  - opex_actual
+    capex_budget_fmt    = _fmt_amount(capex_budget)
+    capex_actual_fmt    = _fmt_amount(capex_actual)
+    capex_remaining_fmt = _fmt_amount(abs(capex_remaining))
+    opex_budget_fmt     = _fmt_amount(opex_budget)
+    opex_actual_fmt     = _fmt_amount(opex_actual)
+    opex_remaining_fmt  = _fmt_amount(abs(opex_remaining))
 
     # Budget Category (column H) aggregates — ordered by total budget desc
     cat_map = {}
@@ -138,10 +142,16 @@ def parse_dashboard_data(rows):
         'capex_actual': capex_actual,
         'capex_budget_fmt': capex_budget_fmt,
         'capex_actual_fmt': capex_actual_fmt,
+        'capex_remaining': capex_remaining,
+        'capex_remaining_fmt': capex_remaining_fmt,
+        'capex_over_budget': capex_remaining < 0,
         'opex_budget': opex_budget,
         'opex_actual': opex_actual,
         'opex_budget_fmt': opex_budget_fmt,
         'opex_actual_fmt': opex_actual_fmt,
+        'opex_remaining': opex_remaining,
+        'opex_remaining_fmt': opex_remaining_fmt,
+        'opex_over_budget': opex_remaining < 0,
         'categories_chart': categories_chart,
     }
 

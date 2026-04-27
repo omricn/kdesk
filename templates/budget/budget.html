@@ -124,12 +124,24 @@
           </div>
           <div class="col-6 col-xl">
             <div class="card kpi-card h-100 shadow-sm border-0"
-                 style="border-left-color:{% if dashboard.over_budget %}#dc3545{% else %}#198754{% endif %}!important;">
+                 style="border-left-color:{% if dashboard.capex_over_budget %}#dc3545{% else %}#198754{% endif %}!important;">
               <div class="card-body py-3">
-                <div class="kpi-label">{% if dashboard.over_budget %}Over Budget{% else %}Remaining{% endif %}</div>
+                <div class="kpi-label">CAPEX {% if dashboard.capex_over_budget %}Over Budget{% else %}Remaining{% endif %}</div>
                 <div class="kpi-value mt-1"
-                     style="color:{% if dashboard.over_budget %}#dc3545{% else %}#198754{% endif %};">
-                  {% if dashboard.over_budget %}-{% endif %}{{ dashboard.remaining_fmt }}
+                     style="color:{% if dashboard.capex_over_budget %}#dc3545{% else %}#198754{% endif %};">
+                  {% if dashboard.capex_over_budget %}-{% endif %}{{ dashboard.capex_remaining_fmt }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl">
+            <div class="card kpi-card h-100 shadow-sm border-0"
+                 style="border-left-color:{% if dashboard.opex_over_budget %}#dc3545{% else %}#0d6efd{% endif %}!important;">
+              <div class="card-body py-3">
+                <div class="kpi-label">OPEX {% if dashboard.opex_over_budget %}Over Budget{% else %}Remaining{% endif %}</div>
+                <div class="kpi-value mt-1"
+                     style="color:{% if dashboard.opex_over_budget %}#dc3545{% else %}#0d6efd{% endif %};">
+                  {% if dashboard.opex_over_budget %}-{% endif %}{{ dashboard.opex_remaining_fmt }}
                 </div>
               </div>
             </div>
@@ -140,9 +152,9 @@
         <div class="row g-3 mb-4">
           <div class="col-12 col-md-6">
             <div class="card border-0 shadow-sm h-100">
-              <div class="card-body d-flex flex-column align-items-center">
-                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-3">CAPEX — Budget vs Actual</h6>
-                <canvas id="chartCapex" style="max-height:200px;"></canvas>
+              <div class="card-body py-2 d-flex flex-column align-items-center">
+                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-2">CAPEX — Budget vs Actual</h6>
+                <canvas id="chartCapex" style="max-height:140px;max-width:240px;"></canvas>
                 <div class="mt-2 small text-center text-muted">
                   Budget: <strong>{{ dashboard.capex_budget_fmt }}</strong>
                   &nbsp;·&nbsp;
@@ -153,9 +165,9 @@
           </div>
           <div class="col-12 col-md-6">
             <div class="card border-0 shadow-sm h-100">
-              <div class="card-body d-flex flex-column align-items-center">
-                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-3">OPEX — Budget vs Actual</h6>
-                <canvas id="chartOpex" style="max-height:200px;"></canvas>
+              <div class="card-body py-2 d-flex flex-column align-items-center">
+                <h6 class="card-title text-uppercase small fw-semibold text-muted mb-2">OPEX — Budget vs Actual</h6>
+                <canvas id="chartOpex" style="max-height:140px;max-width:240px;"></canvas>
                 <div class="mt-2 small text-center text-muted">
                   Budget: <strong>{{ dashboard.opex_budget_fmt }}</strong>
                   &nbsp;·&nbsp;
