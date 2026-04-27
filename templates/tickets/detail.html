@@ -190,17 +190,19 @@
         {% endfor %}
       </div>
       {% endif %}
-      <div class="p-3">
-        <form method="post">
+      <div class="p-3" style="position:relative;">
+        <form method="post" id="note-form">
           {% csrf_token %}
           <input type="hidden" name="action" value="internal_note">
           {{ note_form.body }}
-          <div class="mt-2">
+          <div class="mt-2 d-flex align-items-center gap-2">
             <button type="submit" class="btn btn-sm btn-warning text-dark">
               <i class="bi bi-lock me-1"></i>Save Note
             </button>
+            <span class="text-muted small" style="font-size:11px;">Type @ to mention an admin</span>
           </div>
         </form>
+        <div id="mention-dropdown" class="dropdown-menu shadow" style="display:none;position:absolute;z-index:9999;min-width:200px;max-height:220px;overflow-y:auto;"></div>
       </div>
     </div>
 
@@ -546,6 +548,94 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
     form.requestSubmit();
   });
 });
+
+// ── @mention autocomplete ─────────────────────────────────────────────────────
+(function () {
+  const ADMINS = {{ mention_admins_json|safe }};
+  const noteForm = document.getElementById('note-form');
+  if (!noteForm) return;
+  const ta = noteForm.querySelector('textarea');
+  if (!ta) return;
+  const dd = document.getElementById('mention-dropdown');
+
+  function getMentionQuery() {
+    const before = ta.value.slice(0, ta.selectionStart);
+    const idx = before.lastIndexOf('@');
+    if (idx === -1) return null;
+    const fragment = before.slice(idx + 1);
+    if (fragment.includes('\n')) return null;
+    return { query: fragment.toLowerCase(), atIndex: idx };
+  }
+
+  function showDropdown(matches, atIndex) {
+    dd.innerHTML = matches.map(a =>
+      `<a class="dropdown-item d-flex align-items-center gap-2" href="#" data-name="${a.name.replace(/"/g,'&quot;')}">
+        <i class="bi bi-person-fill" style="color:var(--kramer-purple);font-size:.85rem;"></i>
+        <span>${a.name}</span>
+      </a>`
+    ).join('');
+    dd.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        insertMention(link.dataset.name, atIndex);
+      });
+    });
+    const rect = ta.getBoundingClientRect();
+    const wrapRect = ta.closest('[style*="position:relative"]').getBoundingClientRect();
+    dd.style.display = 'block';
+    dd.style.top = (rect.bottom - wrapRect.top + 4) + 'px';
+    dd.style.left = (rect.left - wrapRect.left) + 'px';
+  }
+
+  function hideDropdown() { dd.style.display = 'none'; dd.innerHTML = ''; }
+
+  function insertMention(name, atIndex) {
+    const after = ta.value.slice(ta.selectionStart);
+    ta.value = ta.value.slice(0, atIndex) + '@' + name + ' ' + after;
+    ta.selectionStart = ta.selectionEnd = atIndex + name.length + 2;
+    ta.focus();
+    hideDropdown();
+  }
+
+  ta.addEventListener('input', function () {
+    const ctx = getMentionQuery();
+    if (!ctx) { hideDropdown(); return; }
+    const matches = ADMINS.filter(a =>
+      a.name.toLowerCase().includes(ctx.query)
+    );
+    matches.length ? showDropdown(matches, ctx.atIndex) : hideDropdown();
+  });
+
+  ta.addEventListener('keydown', function (e) {
+    if (dd.style.display === 'none') return;
+    if (e.key === 'Escape') { hideDropdown(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const first = dd.querySelector('a');
+      if (first) first.focus();
+    }
+  });
+
+  dd.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const focused = dd.querySelector('a:focus');
+      const next = focused && focused.nextElementSibling;
+      if (next) next.focus();
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const focused = dd.querySelector('a:focus');
+      const prev = focused && focused.previousElementSibling;
+      prev ? prev.focus() : ta.focus();
+    }
+    if (e.key === 'Escape') { hideDropdown(); ta.focus(); }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!dd.contains(e.target) && e.target !== ta) hideDropdown();
+  });
+})();
 </script>
 {% if request.GET.confetti %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>

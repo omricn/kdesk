@@ -390,6 +390,13 @@ def ticket_detail(request, pk):
                 messages.success(request, f'Attachment "{file_obj.name}" uploaded.')
                 return redirect('ticket_detail', pk=pk)
 
+    mention_admins = list(
+        User.objects.filter(is_admin=True, is_active=True)
+        .exclude(display_name='')
+        .exclude(display_name__isnull=True)
+        .values('pk', 'display_name')
+        .order_by('display_name')
+    )
     context = {
         'ticket': ticket,
         'comment_form': comment_form,
@@ -399,6 +406,7 @@ def ticket_detail(request, pk):
         'update_form': update_form,
         'categories_json': _get_categories_json(),
         'ticket_history': ticket.history.select_related('changed_by').all(),
+        'mention_admins_json': json.dumps([{'id': a['pk'], 'name': a['display_name']} for a in mention_admins]),
     }
     return render(request, 'tickets/detail.html', context)
 
