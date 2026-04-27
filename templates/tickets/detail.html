@@ -353,7 +353,7 @@
                 {% endfor %}
               </span>
               {% if ticket.satisfaction_text %}
-              <div class="text-muted mt-1" style="font-size:12px;">"{{ ticket.satisfaction_text }}"</div>
+              <div class="text-muted mt-1" style="font-size:12px;word-break:break-word;">"{{ ticket.satisfaction_text }}"</div>
               {% endif %}
             </div>
             {% elif ticket.status == 'closed' %}
