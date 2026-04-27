@@ -132,6 +132,7 @@ def dashboard(request):
 
 @admin_required
 def ticket_list(request):
+    from django.db.models import F
     qs = Ticket.objects.select_related('assignee', 'category', 'subcategory', 'ticket_item').all()
 
     # Filters from query params
@@ -193,6 +194,31 @@ def ticket_list(request):
 
     admins = User.objects.filter(is_admin=True, is_active=True)
 
+    # Sorting
+    _SORT_MAP = {
+        'id':        'pk',
+        'requester': 'requester_name',
+        'status':    'status',
+        'assignee':  'assignee__display_name',
+        'sla':       'sla_deadline',
+        'created':   'created_at',
+    }
+    sort_by  = request.GET.get('sort', 'created')
+    sort_dir = request.GET.get('dir',  'desc')
+    if sort_by not in _SORT_MAP:
+        sort_by, sort_dir = 'created', 'desc'
+    order_expr = F(_SORT_MAP[sort_by])
+    qs = qs.order_by(
+        order_expr.asc(nulls_last=True) if sort_dir == 'asc' else order_expr.desc(nulls_last=True)
+    )
+
+    def _sort_url(key):
+        params = request.GET.copy()
+        params['sort'] = key
+        params['dir'] = ('desc' if sort_dir == 'asc' else 'asc') if sort_by == key else 'asc'
+        params.pop('page', None)
+        return '?' + params.urlencode()
+
     # Paginate — 25 tickets per page
     from django.core.paginator import Paginator
     paginator = Paginator(qs, 25)
@@ -214,6 +240,9 @@ def ticket_list(request):
             'col_requester': col_requester,
         },
         'categories_json': _get_categories_json(),
+        'sort_by':   sort_by,
+        'sort_dir':  sort_dir,
+        'sort_urls': {k: _sort_url(k) for k in _SORT_MAP},
     }
     return render(request, 'tickets/list.html', context)
 

@@ -159,14 +159,14 @@
           <thead class="table-light">
             <tr>
               <th style="width:36px;"><input type="checkbox" id="select-all" class="form-check-input"></th>
-              <th style="width:70px">#</th>
+              <th style="width:70px"><a href="{{ sort_urls.id }}" class="sort-hdr {% if sort_by == 'id' %}sort-active{% endif %}">#{% if sort_by == 'id' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
               <th>Subject</th>
-              <th>Requester</th>
-              <th>Status</th>
-              <th>Assignee</th>
+              <th><a href="{{ sort_urls.requester }}" class="sort-hdr {% if sort_by == 'requester' %}sort-active{% endif %}">Requester{% if sort_by == 'requester' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th><a href="{{ sort_urls.status }}" class="sort-hdr {% if sort_by == 'status' %}sort-active{% endif %}">Status{% if sort_by == 'status' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th><a href="{{ sort_urls.assignee }}" class="sort-hdr {% if sort_by == 'assignee' %}sort-active{% endif %}">Assignee{% if sort_by == 'assignee' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
               <th>Category</th>
-              <th>SLA</th>
-              <th>Created</th>
+              <th><a href="{{ sort_urls.sla }}" class="sort-hdr {% if sort_by == 'sla' %}sort-active{% endif %}">SLA{% if sort_by == 'sla' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th><a href="{{ sort_urls.created }}" class="sort-hdr {% if sort_by == 'created' %}sort-active{% endif %}">Created{% if sort_by == 'created' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
             </tr>
             <tr class="col-filter-row">
               <th></th>
