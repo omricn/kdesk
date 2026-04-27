@@ -1,21 +1,16 @@
-/* ── Kramer Brand — GT Eesti Fonts ───────────────────────────────────────────
-   Place your GT Eesti .woff2 files in /static/fonts/ and uncomment below.
-   Until then the UI falls back to system sans-serif.
-──────────────────────────────────────────────────────────────────────────── */
-/*
+/* ── Kramer Brand — GT Eesti Fonts ───────────────────────────────────────────── */
 @font-face {
   font-family: 'GT Eesti Display Lt';
-  src: url('../fonts/GTEestiDisplay-Light.woff2') format('woff2');
+  src: url('../fonts/GT-Eesti-Display-Light.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'GT Eesti Display Md';
-  src: url('../fonts/GTEestiDisplay-Medium.woff2') format('woff2');
+  src: url('../fonts/GT-Eesti-Display-Medium.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
 }
-*/
 
 /* ── Kramer Brand Variables ───────────────────────────────────────────────── */
 :root {
