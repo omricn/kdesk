@@ -289,16 +289,11 @@ def ticket_detail(request, pk):
                 note.author = request.user
                 note.is_internal = True
                 note.save()
-                # Fire mention notifications for every @DisplayName found in the note
-                import re as _re
-                for raw in _re.findall(r'@([\w][\w .]+)', note.body):
-                    name = raw.strip()
-                    mentioned = User.objects.filter(
-                        display_name__iexact=name, is_admin=True, is_active=True
-                    ).exclude(pk=request.user.pk).first()
-                    if mentioned:
-                        from tasks.scheduled import notify_mention
-                        notify_mention.delay(ticket.pk, note.pk, mentioned.pk, request.user.pk)
+                # Fire mention notifications — check each admin's exact @DisplayName
+                from tasks.scheduled import notify_mention
+                for admin in User.objects.filter(is_admin=True, is_active=True).exclude(pk=request.user.pk):
+                    if admin.display_name and f'@{admin.display_name}' in note.body:
+                        notify_mention.delay(ticket.pk, note.pk, admin.pk, request.user.pk)
                 messages.success(request, 'Internal note saved.')
                 return redirect('ticket_detail', pk=pk)
 
@@ -372,9 +367,10 @@ def ticket_detail(request, pk):
                         send_requester_closed.delay(ticket.pk)
 
                     messages.success(request, 'Ticket updated.')
-                    if request.POST.get('next') == 'list':
-                        return redirect('ticket_list')
                     just_closed = updated.status in Ticket.TERMINAL_STATUSES and not was_closed
+                    if request.POST.get('next') == 'list':
+                        suffix = '?confetti=1' if just_closed else ''
+                        return redirect(f'/tickets/{suffix}')
                     suffix = '?confetti=1' if just_closed else ''
                     return redirect(f'/tickets/{pk}/{suffix}')
 
