@@ -195,43 +195,38 @@ def fetch_sheets_html(sharing_url, token=None):
     )
     ws_resp.raise_for_status()
 
+    # Only the IT sheet is needed — skip all others to avoid unnecessary API calls
+    it_sheet = next(
+        (s for s in ws_resp.json().get('value', []) if s['name'] == DASHBOARD_SHEET),
+        None,
+    )
     result = []
-    for sheet in ws_resp.json().get('value', []):
-        name = sheet['name']
-        visibility = sheet.get('visibility', 'Visible')
-        if visibility == 'VeryHidden':
-            logger.info('Budget graph: skipping VeryHidden sheet %s', name)
-            continue
-
+    if it_sheet:
         try:
             rng = requests.get(
                 f'{GRAPH}/drives/{drive_id}/items/{item_id}'
-                f'/workbook/worksheets/{sheet["id"]}/usedRange',
+                f'/workbook/worksheets/{it_sheet["id"]}/usedRange',
                 headers=hdrs,
                 params={'$select': 'text,values,rowCount,columnCount,address'},
                 timeout=30,
             )
             rng.raise_for_status()
         except Exception as exc:
-            logger.warning('Budget graph: usedRange failed for sheet %s: %s', name, exc)
-            result.append({'name': name, 'html': '<p class="text-muted small p-2">Could not load sheet data.</p>'})
-            continue
+            logger.warning('Budget graph: usedRange failed for IT sheet: %s', exc)
+            return {'sheets': [], 'web_url': web_url, 'embed_url': embed_url}
 
         data = rng.json()
         row_count = data.get('rowCount', 0)
-        logger.info('Budget graph: sheet "%s" address=%s rowCount=%s',
-                    name, data.get('address'), row_count)
-
+        logger.info('Budget graph: IT sheet address=%s rowCount=%s', data.get('address'), row_count)
         rows = data.get('text') or data.get('values') or []
 
-        # usedRange sometimes reports rowCount=0 even when the sheet has data
-        # (stale Excel metadata). Fall back to reading a broad fixed range.
+        # usedRange sometimes reports rowCount=0 on stale Excel metadata — fall back to fixed range
         if not rows or row_count == 0:
-            logger.info('Budget graph: usedRange empty for "%s", trying fixed range', name)
+            logger.info('Budget graph: usedRange empty for IT sheet, trying fixed range')
             try:
                 fb = requests.get(
                     f'{GRAPH}/drives/{drive_id}/items/{item_id}'
-                    f'/workbook/worksheets/{sheet["id"]}/range(address=\'A1:AZ2000\')',
+                    f'/workbook/worksheets/{it_sheet["id"]}/range(address=\'A1:AZ2000\')',
                     headers=hdrs,
                     params={'$select': 'text,values,rowCount'},
                     timeout=30,
@@ -239,14 +234,11 @@ def fetch_sheets_html(sharing_url, token=None):
                 fb.raise_for_status()
                 fb_data = fb.json()
                 rows = fb_data.get('text') or fb_data.get('values') or []
-                logger.info('Budget graph: fixed range for "%s" rowCount=%s',
-                            name, fb_data.get('rowCount'))
             except Exception as exc:
-                logger.warning('Budget graph: fixed range also failed for "%s": %s', name, exc)
+                logger.warning('Budget graph: fixed range also failed for IT sheet: %s', exc)
 
-        sheet_entry = {'name': name, 'html': _to_html(rows) if rows else '<p class="text-muted small p-2">Empty sheet.</p>'}
-        if name == DASHBOARD_SHEET:
-            sheet_entry['dashboard'] = parse_dashboard_data(rows)
+        sheet_entry = {'name': DASHBOARD_SHEET, 'html': ''}
+        sheet_entry['dashboard'] = parse_dashboard_data(rows)
         result.append(sheet_entry)
 
     return {'sheets': result, 'web_url': web_url, 'embed_url': embed_url}

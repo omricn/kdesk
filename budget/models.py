@@ -37,7 +37,7 @@ class BudgetConfig(models.Model):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
 
-    def cache_is_fresh(self, minutes=5):
+    def cache_is_fresh(self, minutes=60):
         if not self.cache_updated_at:
             return False
         from django.utils import timezone
