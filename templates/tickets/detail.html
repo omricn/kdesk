@@ -528,4 +528,20 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
   });
 });
 </script>
+{% if request.GET.confetti %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+<script>
+(function () {
+  var end = Date.now() + 2200;
+  var colors = ['#8205B4', '#69FFC3', '#BE0078', '#ffffff'];
+  (function frame() {
+    confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0 }, colors: colors });
+    confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1 }, colors: colors });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  }());
+  // Strip ?confetti=1 from the URL without reloading
+  history.replaceState(null, '', window.location.pathname);
+})();
+</script>
+{% endif %}
 {% endblock %}

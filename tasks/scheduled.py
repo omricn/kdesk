@@ -654,6 +654,49 @@ def notify_user_closed_ticket(ticket_pk: int, actor_pk: int):
     logger.info(f'[Portal] Self-close notification sent for ticket #{ticket_pk}.')
 
 
+# ── @mention in internal notes ───────────────────────────────────────────────
+
+@shared_task(name='tasks.notify_mention')
+def notify_mention(ticket_pk: int, note_pk: int, mentioned_user_pk: int, author_pk: int):
+    """Notify an admin that they were @mentioned in an internal note."""
+    from tickets.models import Ticket, TicketComment
+    from users.models import User
+    try:
+        ticket  = Ticket.objects.select_related('assignee').get(pk=ticket_pk)
+        note    = TicketComment.objects.get(pk=note_pk)
+        mentioned = User.objects.get(pk=mentioned_user_pk)
+        author  = User.objects.get(pk=author_pk)
+    except Exception:
+        return
+
+    ticket_url   = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
+    author_name  = author.display_name or author.email
+    mention_name = mentioned.display_name or mentioned.email
+
+    body = _email_html(
+        header_title='You were mentioned in an internal note',
+        header_subtitle=f'#{ticket.pk:04d} — {ticket.title}',
+        greeting=(
+            f'Hi <strong>{mention_name}</strong>,<br><br>'
+            f'<strong>{author_name}</strong> mentioned you in an internal note '
+            f'on ticket <strong>#{ticket.pk:04d}</strong>.'
+        ),
+        body_rows=(
+            _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}') +
+            _row('Requester', f'{ticket.requester_name or ""} ({ticket.requester_email})') +
+            _row('Note', note.body[:300] + ('…' if len(note.body) > 300 else ''))
+        ),
+        cta_url=ticket_url,
+        cta_label='View Ticket',
+    )
+    _send_notification_email(
+        to=mentioned.email,
+        subject=f'[Kdesk] You were mentioned — #{ticket.pk:04d}: {ticket.title}',
+        body=body,
+    )
+    logger.info(f'[Mention] Notified {mentioned.email} about mention in ticket #{ticket_pk}.')
+
+
 # ── AI Summary ───────────────────────────────────────────────────────────────
 
 @shared_task(name='tasks.generate_ai_summary')
@@ -1044,32 +1087,149 @@ def _send_change_reminder(change, reminder_type: str):
     _send_notification_email(to=to_email, subject=subject, body=body)
 
 
+# ── Weekly digest ────────────────────────────────────────────────────────────
+
+@shared_task(name='tasks.send_weekly_digest')
+def send_weekly_digest():
+    """
+    Send each admin a personal ticket digest.
+    Superusers also receive the full org-wide summary.
+    Runs Saturday night (scheduled via CrontabSchedule).
+    """
+    from tickets.models import Ticket
+    from users.models import User
+    from datetime import timedelta
+
+    now   = timezone.now()
+    week_ago = now - timedelta(days=7)
+
+    admins = User.objects.filter(is_admin=True, is_active=True)
+
+    for admin in admins:
+        my_qs = Ticket.objects.filter(assignee=admin)
+
+        open_count    = my_qs.exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+        closed_week   = my_qs.filter(status__in=Ticket.TERMINAL_STATUSES, updated_at__gte=week_ago).count()
+        breached      = my_qs.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+        open_tickets  = (
+            my_qs.exclude(status__in=Ticket.TERMINAL_STATUSES)
+            .order_by('sla_deadline')[:10]
+        )
+
+        ticket_rows = ''
+        for t in open_tickets:
+            url = f'{settings.SITE_URL}/tickets/{t.pk}/'
+            sla_str = t.sla_deadline.strftime('%d %b %H:%M') if t.sla_deadline else '—'
+            status_label = dict(Ticket.STATUS_CHOICES).get(t.status, t.status)
+            ticket_rows += (
+                f'<tr>'
+                f'<td style="padding:4px 8px;"><a href="{url}" style="color:#8205B4;font-weight:600;">#{t.pk:04d}</a></td>'
+                f'<td style="padding:4px 8px;">{t.title[:60]}</td>'
+                f'<td style="padding:4px 8px;">{status_label}</td>'
+                f'<td style="padding:4px 8px;">{sla_str}</td>'
+                f'</tr>'
+            )
+
+        tickets_table = ''
+        if ticket_rows:
+            tickets_table = (
+                '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#333;">'
+                '<tr style="background:#f0f0f0;">'
+                '<th style="padding:6px 8px;text-align:left;">#</th>'
+                '<th style="padding:6px 8px;text-align:left;">Subject</th>'
+                '<th style="padding:6px 8px;text-align:left;">Status</th>'
+                '<th style="padding:6px 8px;text-align:left;">SLA</th>'
+                '</tr>'
+                + ticket_rows +
+                '</table>'
+            )
+        else:
+            tickets_table = '<p style="color:#888;font-size:13px;">No open tickets — great work! 🎉</p>'
+
+        extra_section = ''
+        if admin.is_superuser:
+            total_open    = Ticket.objects.exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+            total_closed  = Ticket.objects.filter(status__in=Ticket.TERMINAL_STATUSES, updated_at__gte=week_ago).count()
+            total_breached = Ticket.objects.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+            extra_section = (
+                '<br>'
+                + _row('Org — Total Open', str(total_open))
+                + _row('Org — Closed This Week', str(total_closed))
+                + _row('Org — SLA Breached', str(total_breached))
+            )
+
+        admin_name = admin.display_name or admin.email
+        kdesk_url  = f'{settings.SITE_URL}/tickets/'
+
+        body = _email_html(
+            header_title='Your Weekly Ticket Digest',
+            header_subtitle=f'Week ending {now.strftime("%d %b %Y")}',
+            greeting=(
+                f'Hi <strong>{admin_name}</strong>,<br><br>'
+                f'Here is your weekly summary of tickets assigned to you.'
+            ),
+            body_rows=(
+                _row('Open Tickets', str(open_count)) +
+                _row('Closed This Week', str(closed_week)) +
+                _row('SLA Breached (open)', str(breached)) +
+                extra_section
+            ),
+            cta_url=kdesk_url,
+            cta_label='View All Tickets',
+        )
+
+        # Append open tickets table after the standard template
+        body = body.replace(
+            '</body>',
+            f'<div style="max-width:600px;margin:0 auto 24px;padding:0 24px;">'
+            f'<p style="font-size:14px;color:#333;font-weight:600;margin-bottom:8px;">Your Open Tickets</p>'
+            f'{tickets_table}</div></body>'
+        )
+
+        _send_notification_email(
+            to=admin.email,
+            subject=f'[Kdesk] Weekly Digest — {now.strftime("%d %b %Y")}',
+            body=body,
+        )
+        logger.info(f'[Digest] Sent weekly digest to {admin.email}.')
+
+
 # ── Setup scheduled tasks in the DB ──────────────────────────────────────────
 
 def register_periodic_tasks():
     """
     Called from a management command on first run to seed the Celery Beat schedule.
     """
-    from django_celery_beat.models import PeriodicTask, IntervalSchedule
+    from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
 
     poll_interval, _ = IntervalSchedule.objects.get_or_create(
         every=30,
         period=IntervalSchedule.SECONDS,
     )
     sync_interval, _ = IntervalSchedule.objects.get_or_create(every=60, period=IntervalSchedule.MINUTES)
-    weekly_interval, _ = IntervalSchedule.objects.get_or_create(every=10080, period=IntervalSchedule.MINUTES)
     sla_interval, _ = IntervalSchedule.objects.get_or_create(every=15, period=IntervalSchedule.MINUTES)
 
-    tasks = [
-        ('Poll Mailbox', 'tasks.poll_mailbox', poll_interval),
-        ('Sync Entra Users', 'tasks.sync_users', sync_interval),
-        ('Sync Entra Admins', 'tasks.sync_admins', sync_interval),
-        ('Check SLA', 'tasks.check_sla', sla_interval),
+    # Saturday at 20:00 Israel time (UTC+3) = 17:00 UTC; day_of_week=6 = Saturday
+    digest_cron, _ = CrontabSchedule.objects.get_or_create(
+        minute='0', hour='17', day_of_week='6',
+        day_of_month='*', month_of_year='*',
+        defaults={'timezone': 'UTC'},
+    )
+
+    interval_tasks = [
+        ('Poll Mailbox',         'tasks.poll_mailbox',         poll_interval),
+        ('Sync Entra Users',     'tasks.sync_users',           sync_interval),
+        ('Sync Entra Admins',    'tasks.sync_admins',          sync_interval),
+        ('Check SLA',            'tasks.check_sla',            sla_interval),
         ('Check Change Reminders', 'tasks.check_change_reminders', sla_interval),
     ]
-
-    for name, task_name, schedule in tasks:
+    for name, task_name, schedule in interval_tasks:
         PeriodicTask.objects.get_or_create(
             name=name,
             defaults={'task': task_name, 'interval': schedule, 'enabled': True},
         )
+
+    PeriodicTask.objects.get_or_create(
+        name='Weekly Digest',
+        defaults={'task': 'tasks.send_weekly_digest', 'crontab': digest_cron, 'enabled': True},
+    )

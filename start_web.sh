@@ -52,5 +52,7 @@ sync_admins()
 echo "[Startup] User sync complete."
 echo "[Startup] Setting subcategory assignees..."
 python manage.py fix_subcategory_assignees
+echo "[Startup] Registering periodic tasks..."
+python manage.py shell -c "from tasks.scheduled import register_periodic_tasks; register_periodic_tasks()"
 echo "[Startup] Done."
 exec gunicorn kdesk.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120

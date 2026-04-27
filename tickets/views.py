@@ -289,6 +289,16 @@ def ticket_detail(request, pk):
                 note.author = request.user
                 note.is_internal = True
                 note.save()
+                # Fire mention notifications for every @DisplayName found in the note
+                import re as _re
+                for raw in _re.findall(r'@([\w][\w .]+)', note.body):
+                    name = raw.strip()
+                    mentioned = User.objects.filter(
+                        display_name__iexact=name, is_admin=True, is_active=True
+                    ).exclude(pk=request.user.pk).first()
+                    if mentioned:
+                        from tasks.scheduled import notify_mention
+                        notify_mention.delay(ticket.pk, note.pk, mentioned.pk, request.user.pk)
                 messages.success(request, 'Internal note saved.')
                 return redirect('ticket_detail', pk=pk)
 
@@ -364,7 +374,9 @@ def ticket_detail(request, pk):
                     messages.success(request, 'Ticket updated.')
                     if request.POST.get('next') == 'list':
                         return redirect('ticket_list')
-                    return redirect('ticket_detail', pk=pk)
+                    just_closed = updated.status in Ticket.TERMINAL_STATUSES and not was_closed
+                    suffix = '?confetti=1' if just_closed else ''
+                    return redirect(f'/tickets/{pk}/{suffix}')
 
         elif action == 'upload':
             file_obj = request.FILES.get('file')
@@ -1207,6 +1219,18 @@ def portal_ticket_detail(request, pk):
             messages.success(request, 'Your ticket has been closed. Glad you sorted it out!')
             return redirect('portal_ticket_detail', pk=pk)
 
+        elif action == 'rate' and ticket.status in Ticket.TERMINAL_STATUSES and not ticket.satisfaction_rating:
+            try:
+                rating = int(request.POST.get('rating', 0))
+            except (ValueError, TypeError):
+                rating = 0
+            if 1 <= rating <= 5:
+                ticket.satisfaction_rating = rating
+                ticket.satisfaction_text = request.POST.get('rating_text', '')[:25].strip()
+                ticket.save(update_fields=['satisfaction_rating', 'satisfaction_text'])
+                messages.success(request, 'Thank you for your feedback!')
+            return redirect('portal_ticket_detail', pk=pk)
+
     comments = (
         ticket.comments
         .filter(is_internal=False)
@@ -1215,6 +1239,7 @@ def portal_ticket_detail(request, pk):
     )
     can_reply = ticket.status not in Ticket.TERMINAL_STATUSES
     can_close = can_reply
+    can_rate   = (ticket.status in Ticket.TERMINAL_STATUSES and not ticket.satisfaction_rating)
 
     return render(request, 'portal/detail.html', {
         'ticket': ticket,
@@ -1222,6 +1247,7 @@ def portal_ticket_detail(request, pk):
         'comment_form': comment_form,
         'can_reply': can_reply,
         'can_close': can_close,
+        'can_rate': can_rate,
     })
 
 

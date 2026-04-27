@@ -127,6 +127,51 @@
     </div>
     {% endif %}
 
+    {% if can_rate %}
+    <div class="card mt-3" style="border-left:3px solid var(--kramer-mint);">
+      <div class="card-header fw-semibold d-flex align-items-center gap-2">
+        <i class="bi bi-star-fill" style="color:var(--kramer-mint);"></i>How did we do?
+      </div>
+      <div class="card-body">
+        <form method="post" id="rating-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="rate">
+          <input type="hidden" name="rating" id="rating-value" value="">
+          <div class="d-flex gap-2 mb-3" id="star-row">
+            {% for i in "12345" %}
+            <i class="bi bi-star fs-2 rating-star" data-val="{{ forloop.counter }}"
+               style="cursor:pointer;color:#aaa;transition:color 0.15s;"></i>
+            {% endfor %}
+          </div>
+          <input type="text" name="rating_text" maxlength="25"
+                 class="form-control form-control-sm mb-3"
+                 placeholder="Optional comment (25 chars max)">
+          <button type="submit" class="btn btn-sm btn-primary" id="rating-submit" disabled>
+            Submit Rating
+          </button>
+        </form>
+      </div>
+    </div>
+    {% elif ticket.satisfaction_rating %}
+    <div class="card mt-3" style="background:rgba(105,255,195,0.07);border-left:3px solid var(--kramer-mint);">
+      <div class="card-body py-3 d-flex align-items-center gap-3 flex-wrap">
+        <span class="fw-semibold" style="color:var(--kramer-mint);">Your rating:</span>
+        <span>
+          {% for i in "12345" %}
+            {% if forloop.counter <= ticket.satisfaction_rating %}
+              <i class="bi bi-star-fill" style="color:var(--kramer-mint);"></i>
+            {% else %}
+              <i class="bi bi-star" style="color:#aaa;"></i>
+            {% endif %}
+          {% endfor %}
+        </span>
+        {% if ticket.satisfaction_text %}
+        <span class="text-muted small">"{{ ticket.satisfaction_text }}"</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     {% if not can_reply %}
     <div class="card mt-3">
       <div class="card-body text-muted text-center py-3" style="font-size:var(--fs-body)">
@@ -186,4 +231,32 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var stars = document.querySelectorAll('.rating-star');
+  var input = document.getElementById('rating-value');
+  var btn   = document.getElementById('rating-submit');
+  if (!stars.length) return;
+
+  function paint(n) {
+    stars.forEach(function (s, i) {
+      s.className = 'bi fs-2 rating-star ' + (i < n ? 'bi-star-fill' : 'bi-star');
+      s.style.color = i < n ? 'var(--kramer-mint)' : '#aaa';
+    });
+  }
+
+  stars.forEach(function (s) {
+    s.addEventListener('mouseenter', function () { paint(+this.dataset.val); });
+    s.addEventListener('mouseleave', function () { paint(+(input.value || 0)); });
+    s.addEventListener('click', function () {
+      input.value = this.dataset.val;
+      paint(+this.dataset.val);
+      btn.disabled = false;
+    });
+  });
+})();
+</script>
 {% endblock %}

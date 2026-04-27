@@ -85,6 +85,10 @@ class Ticket(models.Model):
     # AI-generated one-sentence summary (populated asynchronously after creation)
     ai_summary = models.TextField(blank=True)
 
+    # Satisfaction rating — filled in by employee via portal after ticket closes
+    satisfaction_rating = models.PositiveSmallIntegerField(null=True, blank=True)  # 1–5
+    satisfaction_text   = models.CharField(max_length=25, blank=True)
+
     class Meta:
         ordering = ['-created_at']
 
