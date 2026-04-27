@@ -659,6 +659,13 @@ def reports(request):
         avg_hours = total_seconds / resolved.count() / 3600
         avg_resolution = round(avg_hours, 1)
 
+    rated = Ticket.objects.filter(satisfaction_rating__isnull=False)
+    avg_rating = None
+    if rated.exists():
+        from django.db.models import Avg
+        avg_rating = round(rated.aggregate(avg=Avg('satisfaction_rating'))['avg'], 1)
+    rated_30 = rated.filter(created_at__gte=last_30)
+
     context = {
         'tickets_30_count': tickets_30.count(),
         'breached_count': tickets_30.filter(sla_breached=True).count(),
@@ -666,6 +673,9 @@ def reports(request):
         'avg_resolution_hours': avg_resolution,
         'by_status': by_status,
         'by_assignee': by_assignee,
+        'avg_rating': avg_rating,
+        'rating_count': rated.count(),
+        'recent_ratings': rated_30.select_related('assignee').order_by('-updated_at')[:10],
     }
     return render(request, 'reports/index.html', context)
 

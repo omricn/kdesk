@@ -323,6 +323,25 @@
             {% if ticket.resolved_at %}
             <div class="mt-1"><strong>Resolved:</strong> {{ ticket.resolved_at|date:"d M Y H:i" }}</div>
             {% endif %}
+            {% if ticket.satisfaction_rating %}
+            <div class="mt-2">
+              <strong>Satisfaction:</strong>
+              <span class="ms-1">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= ticket.satisfaction_rating %}
+                    <i class="bi bi-star-fill" style="color:var(--kramer-mint);font-size:13px;"></i>
+                  {% else %}
+                    <i class="bi bi-star" style="color:#aaa;font-size:13px;"></i>
+                  {% endif %}
+                {% endfor %}
+              </span>
+              {% if ticket.satisfaction_text %}
+              <div class="text-muted mt-1" style="font-size:12px;">"{{ ticket.satisfaction_text }}"</div>
+              {% endif %}
+            </div>
+            {% elif ticket.status == 'closed' %}
+            <div class="mt-2 text-muted" style="font-size:12px;"><i class="bi bi-star me-1"></i>No rating yet</div>
+            {% endif %}
           </div>
         </div>
       </div>

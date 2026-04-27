@@ -87,4 +87,61 @@
     </div>
   </div>
 </div>
+
+<!-- Satisfaction ratings -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header fw-semibold small d-flex align-items-center gap-2">
+        <i class="bi bi-star-fill" style="color:var(--kramer-mint);"></i>
+        Satisfaction Ratings
+        {% if avg_rating %}
+        <span class="ms-2 badge" style="background:var(--kramer-surface2);color:var(--kramer-mint);">
+          Avg {{ avg_rating }} / 5 &nbsp;({{ rating_count }} total)
+        </span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if recent_ratings %}
+        <table class="table table-hover mb-0 small">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Subject</th>
+              <th>Assignee</th>
+              <th>Rating</th>
+              <th>Comment</th>
+              <th>Closed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in recent_ratings %}
+            <tr onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+              <td><a href="{% url 'ticket_detail' t.pk %}" class="fw-semibold text-decoration-none">#{{ t.pk|stringformat:"04d" }}</a></td>
+              <td class="text-truncate" style="max-width:200px;">{{ t.title }}</td>
+              <td>{{ t.assignee|default:"—" }}</td>
+              <td class="text-nowrap">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= t.satisfaction_rating %}
+                    <i class="bi bi-star-fill" style="color:var(--kramer-mint);font-size:13px;"></i>
+                  {% else %}
+                    <i class="bi bi-star" style="color:#aaa;font-size:13px;"></i>
+                  {% endif %}
+                {% endfor %}
+              </td>
+              <td class="text-muted">{{ t.satisfaction_text|default:"—" }}</td>
+              <td class="text-nowrap">{{ t.updated_at|date:"d M Y" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-star fs-3 d-block mb-2"></i>No ratings yet.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
