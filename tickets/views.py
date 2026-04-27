@@ -798,6 +798,12 @@ def settings_view(request):
         from django.utils.dateparse import parse_datetime
         sla_pause_started = parse_datetime(sla_pause_started_raw)
 
+    categories = TicketCategory.objects.prefetch_related(
+        'subcategories__items', 'subcategories__assignee'
+    ).all()
+    admins_qs = User.objects.filter(is_admin=True, is_active=True).order_by('display_name')
+    admins_json = json.dumps([[str(a.pk), a.display_name or a.email] for a in admins_qs])
+
     context = {
         'servicedesk_email': settings.SERVICEDESK_EMAIL,
         'notify_requester_on_close': SystemSetting.get('notify_requester_on_close', '1') == '1',
@@ -811,6 +817,9 @@ def settings_view(request):
         'change_broadcast_il':     SystemSetting.get('change_broadcast_il',     'IL_All_Employees@kramerav.com'),
         'change_broadcast_global': SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
         'emails_enabled': SystemSetting.get('emails_enabled', '1') == '1',
+        'categories': categories,
+        'admins': admins_qs,
+        'admins_json': admins_json,
     }
     return render(request, 'settings.html', context)
 
@@ -1124,6 +1133,123 @@ def email_preview(request):
     return render(request, 'tickets/email_preview.html', {
         'samples': [(i, s['label']) for i, s in enumerate(samples)],
     })
+
+
+# ── Categories API ────────────────────────────────────────────────────────────
+
+@admin_required
+def categories_api(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'ok': False, 'error': 'Superuser required'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    action = data.get('action', '')
+
+    if action == 'cat_add':
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Name required'})
+        if TicketCategory.objects.filter(name__iexact=name).exists():
+            return JsonResponse({'ok': False, 'error': 'Category already exists'})
+        cat = TicketCategory.objects.create(name=name)
+        return JsonResponse({'ok': True, 'id': cat.pk, 'name': cat.name})
+
+    elif action == 'cat_rename':
+        try:
+            cat = TicketCategory.objects.get(pk=data.get('id'))
+        except TicketCategory.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Name required'})
+        cat.name = name
+        cat.save()
+        return JsonResponse({'ok': True})
+
+    elif action == 'cat_delete':
+        try:
+            TicketCategory.objects.get(pk=data.get('id')).delete()
+        except TicketCategory.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        return JsonResponse({'ok': True})
+
+    elif action == 'subcat_add':
+        try:
+            cat = TicketCategory.objects.get(pk=data.get('cat_id'))
+        except TicketCategory.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Category not found'})
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Name required'})
+        if TicketSubCategory.objects.filter(category=cat, name__iexact=name).exists():
+            return JsonResponse({'ok': False, 'error': 'Subcategory already exists'})
+        sub = TicketSubCategory.objects.create(category=cat, name=name)
+        return JsonResponse({'ok': True, 'id': sub.pk, 'name': sub.name})
+
+    elif action == 'subcat_update':
+        try:
+            sub = TicketSubCategory.objects.get(pk=data.get('id'))
+        except TicketSubCategory.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        name = data.get('name', '').strip()
+        if name:
+            sub.name = name
+        if 'assignee_id' in data:
+            if not data['assignee_id']:
+                sub.assignee = None
+            else:
+                try:
+                    sub.assignee = User.objects.get(pk=int(data['assignee_id']), is_admin=True)
+                except (User.DoesNotExist, ValueError, TypeError):
+                    pass
+        sub.save()
+        return JsonResponse({'ok': True})
+
+    elif action == 'subcat_delete':
+        try:
+            TicketSubCategory.objects.get(pk=data.get('id')).delete()
+        except TicketSubCategory.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        return JsonResponse({'ok': True})
+
+    elif action == 'item_add':
+        try:
+            sub = TicketSubCategory.objects.get(pk=data.get('subcat_id'))
+        except TicketSubCategory.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Subcategory not found'})
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Name required'})
+        if TicketItem.objects.filter(subcategory=sub, name__iexact=name).exists():
+            return JsonResponse({'ok': False, 'error': 'Item already exists'})
+        item = TicketItem.objects.create(subcategory=sub, name=name)
+        return JsonResponse({'ok': True, 'id': item.pk, 'name': item.name})
+
+    elif action == 'item_rename':
+        try:
+            item = TicketItem.objects.get(pk=data.get('id'))
+        except TicketItem.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({'ok': False, 'error': 'Name required'})
+        item.name = name
+        item.save()
+        return JsonResponse({'ok': True})
+
+    elif action == 'item_delete':
+        try:
+            TicketItem.objects.get(pk=data.get('id')).delete()
+        except TicketItem.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        return JsonResponse({'ok': True})
+
+    return JsonResponse({'ok': False, 'error': 'Unknown action'}, status=400)
 
 
 # ── Employee Portal ───────────────────────────────────────────────────────────

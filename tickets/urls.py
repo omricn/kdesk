@@ -17,6 +17,7 @@ urlpatterns = [
     path('settings/', views.settings_view, name='settings'),
     path('dev/email-preview/', views.email_preview, name='email_preview'),
     path('settings/import-sysaid/', views.import_sysaid, name='import_sysaid'),
+    path('settings/categories/api/', views.categories_api, name='categories_api'),
     # ── Employee portal ───────────────────────────────────────────────────────
     path('portal/', views.portal_dashboard, name='portal_dashboard'),
     path('portal/new/', views.portal_ticket_create, name='portal_ticket_create'),

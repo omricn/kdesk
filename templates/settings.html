@@ -204,6 +204,81 @@
   </div>
 </div>
 
+<!-- Ticket Categories -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-diagram-3 me-1" style="color:var(--kramer-purple);"></i>Ticket Categories</span>
+    <small class="text-muted fw-normal">Category → Sub-category → Item</small>
+  </div>
+  <div class="card-body p-0">
+    <div id="cat-tree">
+      {% for cat in categories %}
+      <div class="cat-row border-bottom" data-cat-id="{{ cat.pk }}">
+        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#f8f9fa;">
+          <button class="btn btn-link p-0 text-muted" onclick="catToggle(this,'catbody-{{ cat.pk }}')" title="Expand">
+            <i class="bi bi-chevron-right" style="font-size:.75rem;transition:transform .15s;"></i>
+          </button>
+          <span class="cat-label fw-semibold">{{ cat.name }}</span>
+          <span class="badge bg-secondary ms-1" style="font-size:.7rem;">{{ cat.subcategories.count }}</span>
+          <div class="ms-auto d-flex align-items-center gap-1">
+            <button class="btn btn-sm btn-link p-0 text-secondary" onclick="startRename(this.closest('.d-flex').querySelector('.cat-label'),'cat_rename',{{ cat.pk }})" title="Rename"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-link p-0 text-danger" onclick="doDelete('cat_delete',{{ cat.pk }},this.closest('.cat-row'),'category and all its sub-categories')" title="Delete"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>
+        <div id="catbody-{{ cat.pk }}" class="d-none">
+          {% for sub in cat.subcategories.all %}
+          <div class="sub-row border-top" data-sub-id="{{ sub.pk }}">
+            <div class="d-flex align-items-center gap-2 px-3 py-2" style="padding-left:2.5rem!important;">
+              <button class="btn btn-link p-0 text-muted" onclick="catToggle(this,'subbody-{{ sub.pk }}')" title="Expand">
+                <i class="bi bi-chevron-right" style="font-size:.75rem;transition:transform .15s;"></i>
+              </button>
+              <span class="cat-label">{{ sub.name }}</span>
+              <span class="badge bg-secondary ms-1" style="font-size:.7rem;">{{ sub.items.count }}</span>
+              <select class="form-select form-select-sm ms-2" style="width:auto;max-width:170px;" onchange="doAssignee({{ sub.pk }},this.value)" title="Auto-assignee for this sub-category">
+                <option value="">No assignee</option>
+                {% for admin in admins %}
+                <option value="{{ admin.pk }}" {% if sub.assignee_id == admin.pk %}selected{% endif %}>{{ admin.display_name|default:admin.email }}</option>
+                {% endfor %}
+              </select>
+              <div class="ms-auto d-flex align-items-center gap-1">
+                <button class="btn btn-sm btn-link p-0 text-secondary" onclick="startRename(this.closest('.d-flex').querySelector('.cat-label'),'subcat_update',{{ sub.pk }})" title="Rename"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-link p-0 text-danger" onclick="doDelete('subcat_delete',{{ sub.pk }},this.closest('.sub-row'),'sub-category and all its items')" title="Delete"><i class="bi bi-trash"></i></button>
+              </div>
+            </div>
+            <div id="subbody-{{ sub.pk }}" class="d-none">
+              {% for item in sub.items.all %}
+              <div class="item-row d-flex align-items-center gap-2 px-3 py-1 border-top" data-item-id="{{ item.pk }}" style="padding-left:4.5rem!important;">
+                <i class="bi bi-dot text-muted"></i>
+                <span class="cat-label small">{{ item.name }}</span>
+                <div class="ms-auto d-flex align-items-center gap-1">
+                  <button class="btn btn-link p-0 text-secondary" style="font-size:.8rem;" onclick="startRename(this.closest('.item-row').querySelector('.cat-label'),'item_rename',{{ item.pk }})" title="Rename"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-link p-0 text-danger" style="font-size:.8rem;" onclick="doDelete('item_delete',{{ item.pk }},this.closest('.item-row'),'item')" title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+              </div>
+              {% endfor %}
+              <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:4.5rem!important;background:#f8f9ff;">
+                <input type="text" class="form-control form-control-sm" placeholder="New item…" style="max-width:200px;" id="new-item-{{ sub.pk }}" onkeydown="if(event.key==='Enter')doAddItem({{ sub.pk }},this)">
+                <button class="btn btn-sm btn-outline-secondary" onclick="doAddItem({{ sub.pk }},document.getElementById('new-item-{{ sub.pk }}'))"><i class="bi bi-plus me-1"></i>Add</button>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:2.5rem!important;background:#f0f4ff;">
+            <input type="text" class="form-control form-control-sm" placeholder="New sub-category…" style="max-width:200px;" id="new-sub-{{ cat.pk }}" onkeydown="if(event.key==='Enter')doAddSub({{ cat.pk }},this)">
+            <button class="btn btn-sm btn-outline-secondary" onclick="doAddSub({{ cat.pk }},document.getElementById('new-sub-{{ cat.pk }}'))"><i class="bi bi-plus me-1"></i>Add</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex align-items-center gap-2 p-3 border-top" style="background:#f8f9fa;">
+      <i class="bi bi-folder-plus text-muted"></i>
+      <input type="text" id="new-cat-name" class="form-control form-control-sm" placeholder="New category…" style="max-width:200px;" onkeydown="if(event.key==='Enter')doAddCat()">
+      <button class="btn btn-sm btn-outline-primary" onclick="doAddCat()"><i class="bi bi-plus me-1"></i>Add Category</button>
+    </div>
+  </div>
+</div>
+
 <!-- Info -->
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white fw-semibold">System Info</div>
@@ -214,4 +289,164 @@
     <p class="mb-0">To manage users, SLA logs, and raw data use the <a href="/admin/" target="_blank">Admin Panel</a>.</p>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const _CAT_API = '{% url "categories_api" %}';
+const _CSRF    = '{{ csrf_token }}';
+window._ADMINS = {{ admins_json|safe }};
+
+function _api(data) {
+  return fetch(_CAT_API, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': _CSRF},
+    body: JSON.stringify(data),
+  }).then(r => r.json());
+}
+
+function catToggle(btn, targetId) {
+  const body = document.getElementById(targetId);
+  const icon = btn.querySelector('i');
+  const wasHidden = body.classList.contains('d-none');
+  body.classList.toggle('d-none', !wasHidden);
+  icon.style.transform = wasHidden ? 'rotate(90deg)' : '';
+}
+
+function startRename(labelEl, action, id) {
+  const current = labelEl.textContent.trim();
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = current;
+  inp.className = 'form-control form-control-sm d-inline-block';
+  inp.style.cssText = 'width:180px;max-width:220px;';
+  labelEl.replaceWith(inp);
+  inp.focus(); inp.select();
+  const restore = (name) => {
+    const span = document.createElement('span');
+    span.className = labelEl.className;
+    span.textContent = name;
+    inp.replaceWith(span);
+  };
+  let saved = false;
+  const save = async () => {
+    if (saved) return; saved = true;
+    const name = inp.value.trim();
+    if (!name || name === current) { restore(current); return; }
+    const res = await _api({action, id, name});
+    res.ok ? restore(name) : (alert(res.error || 'Error'), restore(current));
+  };
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { saved = true; restore(current); }
+  });
+  inp.addEventListener('blur', save);
+}
+
+async function doDelete(action, id, rowEl, label) {
+  if (!confirm(`Delete this ${label}?`)) return;
+  const res = await _api({action, id});
+  res.ok ? rowEl.remove() : alert(res.error || 'Error deleting');
+}
+
+async function doAssignee(subId, assigneeId) {
+  const res = await _api({action: 'subcat_update', id: subId, assignee_id: assigneeId});
+  if (!res.ok) alert(res.error || 'Error saving assignee');
+}
+
+function _esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _adminOpts(selId) {
+  return '<option value="">No assignee</option>' +
+    window._ADMINS.map(([v,n]) => `<option value="${v}"${String(v)===String(selId)?' selected':''}>${_esc(n)}</option>`).join('');
+}
+
+function _itemHtml(id, name) {
+  return `<div class="item-row d-flex align-items-center gap-2 px-3 py-1 border-top" data-item-id="${id}" style="padding-left:4.5rem!important;">
+    <i class="bi bi-dot text-muted"></i>
+    <span class="cat-label small">${_esc(name)}</span>
+    <div class="ms-auto d-flex align-items-center gap-1">
+      <button class="btn btn-link p-0 text-secondary" style="font-size:.8rem;" onclick="startRename(this.closest('.item-row').querySelector('.cat-label'),'item_rename',${id})" title="Rename"><i class="bi bi-pencil"></i></button>
+      <button class="btn btn-link p-0 text-danger" style="font-size:.8rem;" onclick="doDelete('item_delete',${id},this.closest('.item-row'),'item')" title="Delete"><i class="bi bi-trash"></i></button>
+    </div>
+  </div>`;
+}
+
+function _subHtml(id, name) {
+  return `<div class="sub-row border-top" data-sub-id="${id}">
+    <div class="d-flex align-items-center gap-2 px-3 py-2" style="padding-left:2.5rem!important;">
+      <button class="btn btn-link p-0 text-muted" onclick="catToggle(this,'subbody-${id}')" title="Expand">
+        <i class="bi bi-chevron-right" style="font-size:.75rem;transition:transform .15s;"></i>
+      </button>
+      <span class="cat-label">${_esc(name)}</span>
+      <span class="badge bg-secondary ms-1" style="font-size:.7rem;">0</span>
+      <select class="form-select form-select-sm ms-2" style="width:auto;max-width:170px;" onchange="doAssignee(${id},this.value)" title="Auto-assignee">${_adminOpts('')}</select>
+      <div class="ms-auto d-flex align-items-center gap-1">
+        <button class="btn btn-sm btn-link p-0 text-secondary" onclick="startRename(this.closest('.d-flex').querySelector('.cat-label'),'subcat_update',${id})" title="Rename"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-link p-0 text-danger" onclick="doDelete('subcat_delete',${id},this.closest('.sub-row'),'sub-category and all its items')" title="Delete"><i class="bi bi-trash"></i></button>
+      </div>
+    </div>
+    <div id="subbody-${id}" class="d-none">
+      <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:4.5rem!important;background:#f8f9ff;">
+        <input type="text" class="form-control form-control-sm" placeholder="New item…" style="max-width:200px;" id="new-item-${id}" onkeydown="if(event.key==='Enter')doAddItem(${id},this)">
+        <button class="btn btn-sm btn-outline-secondary" onclick="doAddItem(${id},document.getElementById('new-item-${id}'))"><i class="bi bi-plus me-1"></i>Add</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _catHtml(id, name) {
+  return `<div class="cat-row border-bottom" data-cat-id="${id}">
+    <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#f8f9fa;">
+      <button class="btn btn-link p-0 text-muted" onclick="catToggle(this,'catbody-${id}')" title="Expand">
+        <i class="bi bi-chevron-right" style="font-size:.75rem;transition:transform .15s;"></i>
+      </button>
+      <span class="cat-label fw-semibold">${_esc(name)}</span>
+      <span class="badge bg-secondary ms-1" style="font-size:.7rem;">0</span>
+      <div class="ms-auto d-flex align-items-center gap-1">
+        <button class="btn btn-sm btn-link p-0 text-secondary" onclick="startRename(this.closest('.d-flex').querySelector('.cat-label'),'cat_rename',${id})" title="Rename"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-link p-0 text-danger" onclick="doDelete('cat_delete',${id},this.closest('.cat-row'),'category and all its sub-categories')" title="Delete"><i class="bi bi-trash"></i></button>
+      </div>
+    </div>
+    <div id="catbody-${id}" class="d-none">
+      <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:2.5rem!important;background:#f0f4ff;">
+        <input type="text" class="form-control form-control-sm" placeholder="New sub-category…" style="max-width:200px;" id="new-sub-${id}" onkeydown="if(event.key==='Enter')doAddSub(${id},this)">
+        <button class="btn btn-sm btn-outline-secondary" onclick="doAddSub(${id},document.getElementById('new-sub-${id}'))"><i class="bi bi-plus me-1"></i>Add</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function doAddCat() {
+  const inp = document.getElementById('new-cat-name');
+  const name = inp.value.trim(); if (!name) return;
+  const res = await _api({action: 'cat_add', name});
+  if (res.ok) { document.getElementById('cat-tree').insertAdjacentHTML('beforeend', _catHtml(res.id, res.name)); inp.value = ''; }
+  else alert(res.error || 'Error');
+}
+
+async function doAddSub(catId, inp) {
+  const name = inp.value.trim(); if (!name) return;
+  const res = await _api({action: 'subcat_add', cat_id: catId, name});
+  if (res.ok) {
+    const body = document.getElementById(`catbody-${catId}`);
+    body.querySelector('.add-bar').insertAdjacentHTML('beforebegin', _subHtml(res.id, res.name));
+    inp.value = '';
+    const badge = body.previousElementSibling.querySelector('.badge');
+    if (badge) badge.textContent = parseInt(badge.textContent || 0) + 1;
+  } else alert(res.error || 'Error');
+}
+
+async function doAddItem(subId, inp) {
+  const name = inp.value.trim(); if (!name) return;
+  const res = await _api({action: 'item_add', subcat_id: subId, name});
+  if (res.ok) {
+    const body = document.getElementById(`subbody-${subId}`);
+    body.querySelector('.add-bar').insertAdjacentHTML('beforebegin', _itemHtml(res.id, res.name));
+    inp.value = '';
+    const badge = body.closest('.sub-row').querySelector('.badge');
+    if (badge) badge.textContent = parseInt(badge.textContent || 0) + 1;
+  } else alert(res.error || 'Error');
+}
+</script>
 {% endblock %}
