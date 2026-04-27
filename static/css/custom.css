@@ -315,7 +315,7 @@ a:hover { color: #a0ffdb; }
 
 /* Status badges */
 .badge.bg-primary        { background-color: var(--kramer-purple) !important; color: #fff; }
-.badge.bg-info           { background-color: #1a4a6e !important; color: var(--kramer-neutral); }
+.badge.bg-info           { background-color: #1a4a6e !important; color: #fff; }
 .badge.bg-warning        { background-color: #7a4d00 !important; color: var(--kramer-neutral); }
 .badge.bg-success        { background-color: rgba(104,255,195,0.15) !important; color: var(--kramer-mint); border: 1px solid rgba(104,255,195,0.3); }
 .badge.bg-secondary      { background-color: var(--kramer-surface2) !important; color: #888; }
