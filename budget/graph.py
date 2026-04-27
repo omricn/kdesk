@@ -102,10 +102,25 @@ def parse_dashboard_data(rows):
             cat_map[cat] = {'budget': 0.0, 'actual': 0.0}
         cat_map[cat]['budget'] += r['budget']
         cat_map[cat]['actual'] += r['actual']
-    categories_chart = sorted(
-        [{'name': k, 'budget': v['budget'], 'actual': v['actual']} for k, v in cat_map.items()],
-        key=lambda x: x['budget'], reverse=True,
-    )
+    categories_chart = []
+    for k, v in sorted(cat_map.items(), key=lambda x: x[1]['budget'], reverse=True):
+        b, a = v['budget'], v['actual']
+        rem = b - a
+        pct = round(a / b * 100) if b else 0
+        bar_cls = 'bg-danger' if pct > 100 else ('bg-warning' if pct >= 80 else 'bg-success')
+        categories_chart.append({
+            'name': k,
+            'budget': b,
+            'actual': a,
+            'remaining': rem,
+            'over': rem < 0,
+            'pct': min(pct, 999),
+            'bar_pct': min(pct, 100),
+            'bar_cls': bar_cls,
+            'budget_fmt': _fmt_amount(b),
+            'actual_fmt': _fmt_amount(a),
+            'remaining_fmt': _fmt_amount(abs(rem)),
+        })
 
     return {
         'headers': headers,
