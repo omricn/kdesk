@@ -134,8 +134,8 @@ def _handle_ticket_reply(msg, reply_match):
         to_email='',  # The mailbox — not stored separately
     )
 
-    # Update ticket status to user_responded (unless already closed)
-    if ticket.status not in ticket.TERMINAL_STATUSES:
+    # Update ticket status to user_responded (reopens closed tickets too)
+    if ticket.status != Ticket.STATUS_USER_RESPONDED:
         ticket.status = Ticket.STATUS_USER_RESPONDED
         ticket.save(update_fields=['status'])
         logger.info(f'[EmailPoller] Ticket #{ticket_pk} marked as user_responded (reply from {sender_email})')
