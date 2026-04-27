@@ -80,48 +80,41 @@ def _set_default_category(ticket):
 
 @admin_required
 def dashboard(request):
+    from django.utils import timezone
     tickets = Ticket.objects.select_related('assignee')
     my_qs = tickets.filter(assignee=request.user)
-    total = my_qs.count()
-    open_count = my_qs.filter(status=Ticket.STATUS_NEW).count()
-    in_progress_count = my_qs.filter(status=Ticket.STATUS_IN_PROGRESS).count()
-    pending_count = my_qs.filter(status__in=[
-        Ticket.STATUS_PENDING_USER, Ticket.STATUS_PENDING_VENDOR, Ticket.STATUS_HOLD
-    ]).count()
-    breached_count = my_qs.filter(sla_breached=True).exclude(
-        status__in=Ticket.TERMINAL_STATUSES
-    ).count()
-
-    from django.utils import timezone
     today = timezone.now().date()
 
-    my_tickets = tickets.filter(
-        assignee=request.user
-    ).exclude(
+    assigned_to_me_today = my_qs.filter(created_at__date=today).count()
+    closed_by_me_today = my_qs.filter(
+        status__in=Ticket.TERMINAL_STATUSES,
+        updated_at__date=today,
+    ).count()
+
+    my_tickets = my_qs.exclude(
         status__in=Ticket.TERMINAL_STATUSES
     ).order_by('sla_deadline')[:10]
 
     if request.user.is_superuser:
+        stat_qs = tickets
         recent_tickets = (
             tickets.exclude(status__in=Ticket.TERMINAL_STATUSES)
             .order_by('-created_at')[:10]
         )
     else:
+        stat_qs = my_qs
         recent_tickets = None
 
-    assigned_to_me_today = tickets.filter(
-        assignee=request.user,
-        created_at__date=today,
-    ).count()
-
-    closed_by_me_today = tickets.filter(
-        assignee=request.user,
-        status__in=Ticket.TERMINAL_STATUSES,
-        updated_at__date=today,
+    open_count = stat_qs.filter(status=Ticket.STATUS_NEW).count()
+    in_progress_count = stat_qs.filter(status=Ticket.STATUS_IN_PROGRESS).count()
+    pending_count = stat_qs.filter(status__in=[
+        Ticket.STATUS_PENDING_USER, Ticket.STATUS_PENDING_VENDOR, Ticket.STATUS_HOLD
+    ]).count()
+    breached_count = stat_qs.filter(sla_breached=True).exclude(
+        status__in=Ticket.TERMINAL_STATUSES
     ).count()
 
     context = {
-        'total': total,
         'open_count': open_count,
         'in_progress_count': in_progress_count,
         'pending_count': pending_count,
@@ -130,6 +123,7 @@ def dashboard(request):
         'recent_tickets': recent_tickets,
         'assigned_to_me_today': assigned_to_me_today,
         'closed_by_me_today': closed_by_me_today,
+        'stats_are_global': request.user.is_superuser,
     }
     return render(request, 'dashboard.html', context)
 
