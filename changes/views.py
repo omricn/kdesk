@@ -12,11 +12,25 @@ from .models import Change, ChangeAttachment
 
 @admin_required
 def change_list(request):
-    changes = Change.objects.select_related('submitted_by').all()
+    from django.db.models import Q
+    qs = Change.objects.select_related('submitted_by').all()
+
+    q      = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip()
+
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q) |
+            Q(description__icontains=q) |
+            Q(submitted_by__display_name__icontains=q) |
+            Q(submitted_by__email__icontains=q)
+        )
+    if status:
+        qs = qs.filter(status=status)
 
     # Calendar JSON for FullCalendar
     events = []
-    for c in changes:
+    for c in qs:
         events.append({
             'id': c.pk,
             'title': f'[{c.get_risk_level_display()}] {c.title}',
@@ -29,8 +43,11 @@ def change_list(request):
         })
 
     context = {
-        'changes': changes,
+        'changes': qs,
         'events_json': json.dumps(events),
+        'q': q,
+        'status_filter': status,
+        'status_choices': Change.STATUS_CHOICES,
     }
     return render(request, 'changes/list.html', context)
 

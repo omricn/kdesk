@@ -10,6 +10,34 @@
   </a>
 </div>
 
+<!-- Search / filter bar -->
+<form method="get" class="card mb-3">
+  <div class="card-body py-2 px-3">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Search title, description, submitter…" value="{{ q }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <select name="status" class="form-select form-select-sm" style="min-width:160px;">
+          <option value="">All statuses</option>
+          {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary">Search</button>
+        {% if q or status_filter %}
+        <a href="{% url 'change_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</form>
+
 <!-- Calendar -->
 <div class="card mb-4">
   <div class="card-header"><i class="bi bi-calendar3 me-2"></i>Planned Changes Calendar</div>
@@ -20,7 +48,12 @@
 
 <!-- List -->
 <div class="card">
-  <div class="card-header"><i class="bi bi-list-ul me-2"></i>All Changes</div>
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-ul me-2"></i>All Changes</span>
+    {% if q or status_filter %}
+    <span class="badge bg-secondary">{{ changes|length }} result{{ changes|length|pluralize }}</span>
+    {% endif %}
+  </div>
   <div class="card-body p-0">
     {% if changes %}
     <table class="table table-hover mb-0">
