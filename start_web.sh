@@ -38,6 +38,11 @@ if [ -n "$WIPE_TICKETS" ]; then
     python manage.py wipe_tickets
     echo "[Startup] Wipe complete."
 fi
+if [ -n "$WIPE_CHANGES" ]; then
+    echo "[Startup] Wiping all changes..."
+    python manage.py wipe_changes
+    echo "[Startup] Wipe complete."
+fi
 echo "[Startup] Syncing users from Entra..."
 python manage.py shell -c "
 from integrations.user_sync import sync_users, sync_admins
