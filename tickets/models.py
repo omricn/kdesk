@@ -87,7 +87,7 @@ class Ticket(models.Model):
 
     # Satisfaction rating — filled in by employee via portal after ticket closes
     satisfaction_rating = models.PositiveSmallIntegerField(null=True, blank=True)  # 1–5
-    satisfaction_text   = models.CharField(max_length=25, blank=True)
+    satisfaction_text   = models.CharField(max_length=50, blank=True)
 
     class Meta:
         ordering = ['-created_at']
