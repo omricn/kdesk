@@ -1380,7 +1380,7 @@ def portal_ticket_detail(request, pk):
                 rating = 0
             if 1 <= rating <= 5:
                 ticket.satisfaction_rating = rating
-                ticket.satisfaction_text = request.POST.get('rating_text', '')[:25].strip()
+                ticket.satisfaction_text = request.POST.get('rating_text', '')[:50].strip()
                 ticket.save(update_fields=['satisfaction_rating', 'satisfaction_text'])
                 messages.success(request, 'Thank you for your feedback!')
             return redirect('portal_ticket_detail', pk=pk)
