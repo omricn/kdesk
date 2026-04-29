@@ -17,7 +17,48 @@ from .graph_client import get_client
 logger = logging.getLogger(__name__)
 
 TICKET_REPLY_RE = re.compile(r'\[Ticket #(\d+)\]', re.IGNORECASE)
-FORWARD_RE = re.compile(r'^(fwd?|fw)\s*:', re.IGNORECASE)
+FORWARD_RE      = re.compile(r'^(fwd?|fw)\s*:', re.IGNORECASE)
+
+# Subjects that unmistakably indicate an auto-reply / OOF message
+_AUTOREPLY_SUBJECT_RE = re.compile(
+    r'\b(out\s+of\s+(office|the\s+office)|automatic\s*reply|auto[\s\-]?reply|'
+    r'autoreply|ooo\b|vacation\s+notice|away\s+from\s+(the\s+)?office|'
+    r'i\s*(\'?m|am)\s+away|hors\s+du\s+bureau|automatische\s+antwort|'
+    r'abwesenheits|fuera\s+de\s+la\s+oficina|absence\s+du\s+bureau)\b',
+    re.IGNORECASE,
+)
+
+
+def _is_autoreply(msg) -> bool:
+    """Return True if the email is an automatic reply (OOF, vacation, etc.)."""
+    subject = msg.get('subject', '')
+    if _AUTOREPLY_SUBJECT_RE.search(subject):
+        return True
+
+    # Header-based detection — present when Graph API returns internetMessageHeaders
+    headers = {
+        h['name'].lower(): h['value'].lower()
+        for h in msg.get('internetMessageHeaders', [])
+    }
+
+    # RFC 3834 — the standard header for automated responses
+    auto_submitted = headers.get('auto-submitted', '')
+    if auto_submitted and auto_submitted != 'no':
+        return True
+
+    # Microsoft Exchange / Outlook OOF header
+    if headers.get('x-auto-response-suppress'):
+        return True
+
+    # Generic autoreply flag used by some MTAs
+    if headers.get('x-autoreply') == 'yes':
+        return True
+
+    # Precedence: bulk/list/junk signals machine-generated mail
+    if headers.get('precedence') in ('bulk', 'list', 'junk', 'auto-reply'):
+        return True
+
+    return False
 
 
 def poll_mailbox():
@@ -115,6 +156,15 @@ def _handle_ticket_reply(msg, reply_match):
     sender = msg.get('from', {}).get('emailAddress', {})
     sender_email = sender.get('address', 'unknown@unknown.com')
 
+    # Silently discard auto-replies (OOF, vacation notices, etc.) —
+    # they must not reopen tickets or pollute the correspondence log.
+    if _is_autoreply(msg):
+        logger.info(
+            '[EmailPoller] Ticket #%s — ignored auto-reply from %s',
+            ticket_pk, sender_email,
+        )
+        return ticket
+
     body_content = msg.get('body', {}).get('content', '')
     content_type = msg.get('body', {}).get('contentType', '').lower()
     if content_type == 'html':
@@ -149,6 +199,10 @@ def _create_ticket_from_message(msg, client, mailbox):
     sender = msg.get('from', {}).get('emailAddress', {})
     requester_email = sender.get('address', 'unknown@unknown.com')
     requester_name = sender.get('name', '')
+
+    if _is_autoreply(msg):
+        logger.info('[EmailPoller] Discarded auto-reply new-ticket attempt from %s', requester_email)
+        return None
 
     subject = msg.get('subject', '(No Subject)').strip() or '(No Subject)'
 
