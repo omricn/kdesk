@@ -883,6 +883,9 @@ def ticket_send_email(request, pk):
             'content_type': uploaded_file.content_type or 'application/octet-stream',
         })
 
+    cc_raw = request.POST.get('cc_emails', '')
+    cc_emails = [e.strip() for e in cc_raw.split(',') if e.strip()] if cc_raw else []
+
     try:
         from integrations.graph_client import get_client
         client = get_client()
@@ -892,6 +895,7 @@ def ticket_send_email(request, pk):
             subject=subject,
             body_html=html_body,
             attachments=attachments or None,
+            cc_emails=cc_emails or None,
         )
     except Exception as exc:
         messages.error(request, f'Failed to send email: {exc}')

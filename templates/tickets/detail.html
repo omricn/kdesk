@@ -284,6 +284,13 @@
             {% csrf_token %}
             <textarea name="email_body" id="email_body" class="form-control form-control-sm mb-2"
                       rows="4" placeholder="Type your message to {{ ticket.requester_name|default:ticket.requester_email }}…"></textarea>
+            <!-- CC field -->
+            <div class="mb-2">
+              <div id="cc-pills" class="d-flex flex-wrap gap-1 mb-1"></div>
+              <input type="text" id="cc-search" class="form-control form-control-sm"
+                     placeholder="CC… type a name or email" autocomplete="off">
+              <input type="hidden" name="cc_emails" id="cc-emails-input" value="">
+            </div>
             <input type="file" name="email_attachment" id="email-attachment-input" class="d-none">
             <div id="email-attachment-badge" class="d-none mb-2 d-flex align-items-center gap-2 small">
               <i class="bi bi-paperclip"></i>
@@ -299,6 +306,11 @@
               </button>
             </div>
           </form>
+          <!-- CC dropdown — outside form so it's not clipped by card overflow:hidden -->
+          <div id="cc-dropdown" style="display:none;position:fixed;z-index:9999;
+               background:var(--bs-body-bg);border:1px solid var(--bs-border-color);
+               border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.18);
+               min-width:220px;max-height:220px;overflow-y:auto;font-size:13px;"></div>
         </div>
       </div>
 
@@ -774,6 +786,90 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
     btn.classList.remove('btn-outline-primary');
     btn.classList.add('btn-outline-secondary');
   });
+})();
+</script>
+<script>
+// CC user-search with pills
+(function () {
+  const searchInput  = document.getElementById('cc-search');
+  const dropdown     = document.getElementById('cc-dropdown');
+  const pillsBox     = document.getElementById('cc-pills');
+  const hiddenInput  = document.getElementById('cc-emails-input');
+  if (!searchInput) return;
+
+  const selected = new Map(); // email -> display name
+  let debounceTimer;
+
+  function syncHidden() {
+    hiddenInput.value = Array.from(selected.keys()).join(',');
+  }
+
+  function addPill(email, displayName) {
+    if (selected.has(email)) return;
+    selected.set(email, displayName);
+    const pill = document.createElement('span');
+    pill.className = 'badge rounded-pill d-flex align-items-center gap-1';
+    pill.style.cssText = 'background:var(--kramer-purple);color:#fff;font-size:11px;font-weight:400;max-width:160px;padding:4px 8px;';
+    const label = document.createElement('span');
+    label.className = 'text-truncate';
+    label.style.maxWidth = '120px';
+    label.textContent = displayName;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'btn-close btn-close-white';
+    x.style.cssText = 'font-size:8px;flex-shrink:0;';
+    x.setAttribute('aria-label', 'Remove');
+    x.addEventListener('click', () => { selected.delete(email); pill.remove(); syncHidden(); });
+    pill.appendChild(label);
+    pill.appendChild(x);
+    pillsBox.appendChild(pill);
+    syncHidden();
+  }
+
+  function positionDropdown() {
+    if (dropdown.style.display === 'none') return;
+    const r = searchInput.getBoundingClientRect();
+    dropdown.style.left  = r.left + 'px';
+    dropdown.style.top   = (r.bottom + 2) + 'px';
+    dropdown.style.width = r.width + 'px';
+  }
+
+  function closeDropdown() { dropdown.style.display = 'none'; }
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = searchInput.value.trim();
+    if (q.length < 2) { closeDropdown(); return; }
+    debounceTimer = setTimeout(() => {
+      fetch('/tickets/user-search/?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(data => {
+          const users = data.users.filter(u => !selected.has(u.email));
+          if (!users.length) { closeDropdown(); return; }
+          dropdown.innerHTML = '';
+          users.forEach(u => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:7px 10px;cursor:pointer;';
+            item.innerHTML = '<span class="fw-semibold">' + u.name + '</span><br><small class="text-muted">' + u.email + '</small>';
+            item.addEventListener('mouseenter', () => item.style.background = 'var(--bs-secondary-bg)');
+            item.addEventListener('mouseleave', () => item.style.background = '');
+            item.addEventListener('mousedown', e => {
+              e.preventDefault();
+              addPill(u.email, u.name);
+              searchInput.value = '';
+              closeDropdown();
+            });
+            dropdown.appendChild(item);
+          });
+          positionDropdown();
+          dropdown.style.display = 'block';
+        });
+    }, 200);
+  });
+
+  searchInput.addEventListener('blur', () => setTimeout(closeDropdown, 150));
+  window.addEventListener('scroll', positionDropdown, true);
+  window.addEventListener('resize', positionDropdown);
 })();
 </script>
 {% endblock %}

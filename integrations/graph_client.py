@@ -95,10 +95,11 @@ class GraphClient:
         r.raise_for_status()
 
     def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str,
-                   bcc_email: str = None, attachments: list = None):
-        """Send an email from the servicedesk mailbox. Optionally BCC an address or attach files.
+                   bcc_email: str = None, attachments: list = None, cc_emails: list = None):
+        """Send an email from the servicedesk mailbox.
 
         attachments: list of dicts with keys 'name', 'content_bytes' (bytes), 'content_type' (str).
+        cc_emails: list of email address strings to CC.
         """
         import base64
         path = f'/users/{from_mailbox}/sendMail'
@@ -109,6 +110,8 @@ class GraphClient:
         }
         if bcc_email:
             message['bccRecipients'] = [{'emailAddress': {'address': bcc_email}}]
+        if cc_emails:
+            message['ccRecipients'] = [{'emailAddress': {'address': e}} for e in cc_emails]
         if attachments:
             message['attachments'] = [
                 {
