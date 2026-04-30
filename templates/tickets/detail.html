@@ -233,6 +233,13 @@
             <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Upload</button>
           </div>
         </form>
+        <!-- Badge for file selected to attach to the outgoing email -->
+        <div id="email-attachment-badge" class="d-none mt-2 d-flex align-items-center gap-2 small border-top pt-2">
+          <i class="bi bi-paperclip text-muted"></i>
+          <span class="text-muted" style="font-size:11px;">For email:</span>
+          <span id="email-attachment-name" class="text-truncate" style="max-width:130px;"></span>
+          <button type="button" class="btn-close ms-auto" id="email-attachment-clear" aria-label="Remove" style="font-size:9px;"></button>
+        </div>
       </div>
     </div>
 
@@ -280,7 +287,7 @@
           {% endwith %}
         </div>
         <div class="card-body">
-          <form method="post" action="{% url 'ticket_send_email' ticket.pk %}" id="send-email-form">
+          <form method="post" action="{% url 'ticket_send_email' ticket.pk %}" id="send-email-form" enctype="multipart/form-data">
             {% csrf_token %}
             <textarea name="email_body" id="email_body" class="form-control form-control-sm mb-2"
                       rows="4" placeholder="Type your message to {{ ticket.requester_name|default:ticket.requester_email }}…"></textarea>
@@ -291,9 +298,16 @@
                      placeholder="CC… type a name or email" autocomplete="off">
               <input type="hidden" name="cc_emails" id="cc-emails-input" value="">
             </div>
-            <button type="submit" class="btn btn-sm btn-primary w-100">
-              <i class="bi bi-send me-1"></i>Send Email
-            </button>
+            <!-- Hidden file input — badge is shown in the Add Attachment card -->
+            <input type="file" name="email_attachment" id="email-attachment-input" class="d-none">
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="email-attachment-btn" title="Attach file">
+                <i class="bi bi-paperclip"></i>
+              </button>
+              <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
+                <i class="bi bi-send me-1"></i>Send Email
+              </button>
+            </div>
           </form>
           <!-- CC dropdown — outside form so it's not clipped by card overflow:hidden -->
           <div id="cc-dropdown" style="display:none;position:fixed;z-index:9999;
@@ -752,6 +766,30 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
 </script>
 {% endif %}
 <script>
+// Email attachment — button in email card, badge shown in Add Attachment card
+(function () {
+  const btn   = document.getElementById('email-attachment-btn');
+  const input = document.getElementById('email-attachment-input');
+  const badge = document.getElementById('email-attachment-badge');
+  const name  = document.getElementById('email-attachment-name');
+  const clear = document.getElementById('email-attachment-clear');
+  if (!btn) return;
+  btn.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    if (input.files.length) {
+      name.textContent = input.files[0].name;
+      badge.classList.remove('d-none');
+      btn.classList.add('btn-outline-primary');
+      btn.classList.remove('btn-outline-secondary');
+    }
+  });
+  clear.addEventListener('click', () => {
+    input.value = '';
+    badge.classList.add('d-none');
+    btn.classList.remove('btn-outline-primary');
+    btn.classList.add('btn-outline-secondary');
+  });
+})();
 // CC user-search with pills
 (function () {
   const searchInput  = document.getElementById('cc-search');

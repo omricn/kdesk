@@ -877,6 +877,13 @@ def ticket_send_email(request, pk):
     cc_raw = request.POST.get('cc_emails', '')
     cc_emails = [e.strip() for e in cc_raw.split(',') if e.strip()] if cc_raw else []
 
+    att_bytes = att_name = att_content_type = None
+    uploaded_file = request.FILES.get('email_attachment')
+    if uploaded_file:
+        att_name = uploaded_file.name
+        att_bytes = uploaded_file.read()
+        att_content_type = uploaded_file.content_type or 'application/octet-stream'
+
     try:
         from integrations.graph_client import get_client
         client = get_client()
@@ -886,6 +893,7 @@ def ticket_send_email(request, pk):
             subject=subject,
             body_html=html_body,
             cc_emails=cc_emails or None,
+            attachments=[{'name': att_name, 'content_bytes': att_bytes, 'content_type': att_content_type}] if att_bytes else None,
         )
     except Exception as exc:
         messages.error(request, f'Failed to send email: {exc}')
@@ -900,6 +908,15 @@ def ticket_send_email(request, pk):
         to_email=to_email,
         sent_by=request.user,
     )
+
+    if att_bytes:
+        from django.core.files.base import ContentFile
+        TicketAttachment.objects.create(
+            ticket=ticket,
+            filename=att_name,
+            file=ContentFile(att_bytes, name=att_name),
+            file_size=len(att_bytes),
+        )
 
     messages.success(request, f'Email sent to {to_email}.')
     return redirect('ticket_detail', pk=pk)
