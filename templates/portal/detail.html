@@ -218,7 +218,7 @@
       <div class="card-header fw-semibold">Attachments</div>
       <div class="card-body p-0">
         {% for att in ticket.attachments.all %}
-        <a href="{{ att.file.url }}"
+        <a href="{% url 'download_attachment' att.pk %}"
            class="d-flex align-items-center gap-2 p-2 text-decoration-none {% if not forloop.last %}border-bottom{% endif %}"
            target="_blank">
           <i class="bi bi-paperclip text-muted"></i>

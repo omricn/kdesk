@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.contrib import messages
 from django.db.models import Count, Q
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -920,6 +920,27 @@ def ticket_send_email(request, pk):
 
     messages.success(request, f'Email sent to {to_email}.')
     return redirect('ticket_detail', pk=pk)
+
+
+# ── Attachment download (proxy — avoids public blob URL) ─────────────────────
+
+def download_attachment(request, pk):
+    """Stream an attachment through Django so Azure private blobs are accessible."""
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    att = get_object_or_404(TicketAttachment, pk=pk)
+    ticket = att.ticket
+    is_admin = getattr(request.user, 'is_admin', False) or request.user.is_superuser
+    is_requester = request.user.email.lower() == (ticket.requester_email or '').lower()
+    if not (is_admin or is_requester):
+        return HttpResponseForbidden()
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(att.filename)
+    content_type = content_type or 'application/octet-stream'
+    response = FileResponse(att.file.open('rb'), content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename="{att.filename}"'
+    return response
 
 
 # ── Email preview (superuser only) ───────────────────────────────────────────

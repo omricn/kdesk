@@ -213,7 +213,7 @@
         {% if ticket.non_inline_attachments.exists %}
         <div class="d-flex flex-wrap gap-2 mb-3">
           {% for att in ticket.non_inline_attachments %}
-          <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
           </a>
           {% endfor %}
