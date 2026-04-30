@@ -95,8 +95,12 @@ class GraphClient:
         r.raise_for_status()
 
     def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str,
-                   bcc_email: str = None):
-        """Send an email from the servicedesk mailbox. Optionally BCC an address."""
+                   bcc_email: str = None, attachments: list = None):
+        """Send an email from the servicedesk mailbox. Optionally BCC an address or attach files.
+
+        attachments: list of dicts with keys 'name', 'content_bytes' (bytes), 'content_type' (str).
+        """
+        import base64
         path = f'/users/{from_mailbox}/sendMail'
         message = {
             'subject': subject,
@@ -105,6 +109,16 @@ class GraphClient:
         }
         if bcc_email:
             message['bccRecipients'] = [{'emailAddress': {'address': bcc_email}}]
+        if attachments:
+            message['attachments'] = [
+                {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': att['name'],
+                    'contentType': att.get('content_type', 'application/octet-stream'),
+                    'contentBytes': base64.b64encode(att['content_bytes']).decode('ascii'),
+                }
+                for att in attachments
+            ]
         self.post(path, {'message': message})
 
     # ── Users / Groups ────────────────────────────────────────────────────────

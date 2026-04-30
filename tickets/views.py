@@ -874,6 +874,15 @@ def ticket_send_email(request, pk):
         messages.warning(request, 'Email sending is currently disabled. Re-enable it in Settings.')
         return redirect('ticket_detail', pk=pk)
 
+    attachments = []
+    uploaded_file = request.FILES.get('email_attachment')
+    if uploaded_file:
+        attachments.append({
+            'name': uploaded_file.name,
+            'content_bytes': uploaded_file.read(),
+            'content_type': uploaded_file.content_type or 'application/octet-stream',
+        })
+
     try:
         from integrations.graph_client import get_client
         client = get_client()
@@ -882,6 +891,7 @@ def ticket_send_email(request, pk):
             to_email=to_email,
             subject=subject,
             body_html=html_body,
+            attachments=attachments or None,
         )
     except Exception as exc:
         messages.error(request, f'Failed to send email: {exc}')
