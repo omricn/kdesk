@@ -875,12 +875,16 @@ def ticket_send_email(request, pk):
         return redirect('ticket_detail', pk=pk)
 
     attachments = []
+    att_bytes = att_name = att_content_type = None
     uploaded_file = request.FILES.get('email_attachment')
     if uploaded_file:
+        att_name = uploaded_file.name
+        att_bytes = uploaded_file.read()
+        att_content_type = uploaded_file.content_type or 'application/octet-stream'
         attachments.append({
-            'name': uploaded_file.name,
-            'content_bytes': uploaded_file.read(),
-            'content_type': uploaded_file.content_type or 'application/octet-stream',
+            'name': att_name,
+            'content_bytes': att_bytes,
+            'content_type': att_content_type,
         })
 
     cc_raw = request.POST.get('cc_emails', '')
@@ -910,6 +914,15 @@ def ticket_send_email(request, pk):
         to_email=to_email,
         sent_by=request.user,
     )
+
+    if att_bytes:
+        from django.core.files.base import ContentFile
+        TicketAttachment.objects.create(
+            ticket=ticket,
+            filename=att_name,
+            file=ContentFile(att_bytes, name=att_name),
+            file_size=len(att_bytes),
+        )
 
     messages.success(request, f'Email sent to {to_email}.')
     return redirect('ticket_detail', pk=pk)
