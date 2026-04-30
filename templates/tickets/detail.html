@@ -210,9 +210,20 @@
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold small"><i class="bi bi-paperclip me-1"></i>Attachments</div>
       <div class="card-body">
-        {% if ticket.non_inline_attachments.exists %}
+        {% if my_attachments %}
+        <p class="small text-muted mb-1 fw-semibold">Sent by me</p>
         <div class="d-flex flex-wrap gap-2 mb-3">
-          {% for att in ticket.non_inline_attachments %}
+          {% for att in my_attachments %}
+          <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if user_attachments %}
+        <p class="small text-muted mb-1 fw-semibold">From user</p>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          {% for att in user_attachments %}
           <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
           </a>

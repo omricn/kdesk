@@ -399,6 +399,7 @@ def ticket_detail(request, pk):
                     filename=file_obj.name,
                     file=file_obj,
                     file_size=file_obj.size,
+                    uploaded_by=request.user,
                 )
                 att.save()
                 messages.success(request, f'Attachment "{file_obj.name}" uploaded.')
@@ -411,6 +412,9 @@ def ticket_detail(request, pk):
         .values('pk', 'display_name')
         .order_by('display_name')
     )
+    non_inline = ticket.non_inline_attachments.select_related('uploaded_by').order_by('uploaded_at')
+    my_attachments   = [a for a in non_inline if a.uploaded_by_id == request.user.pk]
+    user_attachments = [a for a in non_inline if a.uploaded_by_id != request.user.pk]
     context = {
         'ticket': ticket,
         'comment_form': comment_form,
@@ -421,6 +425,8 @@ def ticket_detail(request, pk):
         'categories_json': _get_categories_json(),
         'ticket_history': ticket.history.select_related('changed_by').all(),
         'mention_admins_json': json.dumps([{'id': a['pk'], 'name': a['display_name']} for a in mention_admins]),
+        'my_attachments': my_attachments,
+        'user_attachments': user_attachments,
     }
     return render(request, 'tickets/detail.html', context)
 
@@ -916,6 +922,7 @@ def ticket_send_email(request, pk):
             filename=att_name,
             file=ContentFile(att_bytes, name=att_name),
             file_size=len(att_bytes),
+            uploaded_by=request.user,
         )
 
     messages.success(request, f'Email sent to {to_email}.')

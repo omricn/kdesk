@@ -206,6 +206,12 @@ class TicketAttachment(models.Model):
     file_size = models.PositiveIntegerField(default=0)
     content_id = models.CharField(max_length=500, blank=True)  # CID reference for inline images
     is_inline = models.BooleanField(default=False)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='uploaded_attachments',
+    )
 
     def __str__(self):
         return self.filename
