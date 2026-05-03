@@ -225,11 +225,24 @@ def fetch_sheets_html(sharing_url, token=None):
     ws_resp.raise_for_status()
 
     # Only the IT sheet is needed — skip all others to avoid unnecessary API calls
+    all_sheets = ws_resp.json().get('value', [])
+    all_sheet_names = [s['name'] for s in all_sheets]
     it_sheet = next(
-        (s for s in ws_resp.json().get('value', []) if s['name'] == DASHBOARD_SHEET),
+        (s for s in all_sheets if s['name'] == DASHBOARD_SHEET),
         None,
     )
     result = []
+    if not it_sheet:
+        logger.warning(
+            'Budget graph: IT sheet not found. Available sheets: %s',
+            all_sheet_names,
+        )
+        return {
+            'sheets': [],
+            'web_url': web_url,
+            'embed_url': embed_url,
+            'available_sheets': all_sheet_names,
+        }
     if it_sheet:
         try:
             rng = requests.get(

@@ -55,7 +55,7 @@
       <i class="bi bi-pencil-square me-1"></i>Edit in SharePoint
     </a>
     {% endif %}
-    {% if sheets %}
+    {% if config.sharepoint_url %}
     <form method="post">{% csrf_token %}
       <input type="hidden" name="action" value="refresh">
       <button class="btn btn-outline-secondary btn-sm">

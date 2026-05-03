@@ -57,7 +57,24 @@ def budget_view(request):
                 if result.get('embed_url'):
                     config.embed_url = result['embed_url']
                 config.cached_sheets = json.dumps(sheets)
-                config.cache_updated_at = timezone.now()
+                if sheets:
+                    config.cache_updated_at = timezone.now()
+                else:
+                    # Don't mark cache as fresh when no IT sheet data found —
+                    # next page load must retry rather than serve stale empty result.
+                    config.cache_updated_at = None
+                    available = result.get('available_sheets', [])
+                    if available:
+                        error = (
+                            f'SharePoint file loaded but the "IT" worksheet was not found. '
+                            f'Available sheets: {", ".join(available)}. '
+                            f'Rename the sheet to "IT" and click Refresh.'
+                        )
+                    else:
+                        error = (
+                            'SharePoint file loaded but no worksheet data was returned. '
+                            'Check that the file is a valid Excel workbook with an "IT" sheet.'
+                        )
                 config.save(update_fields=['web_url', 'embed_url', 'cached_sheets', 'cache_updated_at'])
             except Exception as exc:
                 status = getattr(getattr(exc, 'response', None), 'status_code', None)
