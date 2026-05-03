@@ -178,13 +178,16 @@ def _encode_url(url):
 
 def fetch_sheets_html(sharing_url, token=None):
     """
-    Read every visible worksheet from a SharePoint Excel file via Graph API.
-    Returns list of {name, html} dicts — uses Excel's pre-computed cell text.
+    Download the SharePoint Excel file and parse the IT sheet with openpyxl.
+    Avoids the unreliable Graph workbook session API for SharePoint-hosted files.
 
     Pass `token` as the logged-in user's delegated access token so SharePoint
     file permissions are enforced (users without access get a 403).
     If token is None, falls back to the app service account (Sites.Read.All).
     """
+    import io
+    import openpyxl
+
     if token is None:
         token = _token()
     hdrs = {'Authorization': f'Bearer {token}'}
@@ -202,8 +205,7 @@ def fetch_sheets_html(sharing_url, token=None):
     item_id = item['id']
     web_url = item.get('webUrl', '')
 
-    # Build the Doc.aspx embed URL — this bypasses SharePoint's X-Frame-Options
-    # restriction that blocks the direct file URL in iframes.
+    # Build the Doc.aspx embed URL
     sp_ids = item.get('sharepointIds', {})
     unique_id = sp_ids.get('listItemUniqueId', '')
     site_url = sp_ids.get('siteUrl', '').rstrip('/')
@@ -217,73 +219,46 @@ def fetch_sheets_html(sharing_url, token=None):
         embed_url = ''
     logger.info('Budget graph: web_url=%s embed_url=%s', web_url, embed_url)
 
-    # List worksheets
-    ws_resp = requests.get(
-        f'{GRAPH}/drives/{drive_id}/items/{item_id}/workbook/worksheets',
-        headers=hdrs, timeout=15,
+    # Download raw Excel file bytes
+    file_resp = requests.get(
+        f'{GRAPH}/drives/{drive_id}/items/{item_id}/content',
+        headers=hdrs,
+        timeout=60,
+        allow_redirects=True,
     )
-    ws_resp.raise_for_status()
+    file_resp.raise_for_status()
+    logger.info('Budget graph: downloaded %d bytes', len(file_resp.content))
 
-    # Only the IT sheet is needed — skip all others to avoid unnecessary API calls
-    all_sheets = ws_resp.json().get('value', [])
-    all_sheet_names = [s['name'] for s in all_sheets]
-    it_sheet = next(
-        (s for s in all_sheets if s['name'] == DASHBOARD_SHEET),
-        None,
-    )
-    result = []
-    if not it_sheet:
-        logger.warning(
-            'Budget graph: IT sheet not found. Available sheets: %s',
-            all_sheet_names,
-        )
+    # Parse with openpyxl (data_only=True reads cached formula values, not formulas)
+    wb = openpyxl.load_workbook(io.BytesIO(file_resp.content), data_only=True, read_only=True)
+    all_sheet_names = wb.sheetnames
+    logger.info('Budget graph: workbook sheets: %s', all_sheet_names)
+
+    if DASHBOARD_SHEET not in all_sheet_names:
+        logger.warning('Budget graph: IT sheet not found. Available: %s', all_sheet_names)
+        wb.close()
         return {
             'sheets': [],
             'web_url': web_url,
             'embed_url': embed_url,
             'available_sheets': all_sheet_names,
         }
-    if it_sheet:
-        try:
-            rng = requests.get(
-                f'{GRAPH}/drives/{drive_id}/items/{item_id}'
-                f'/workbook/worksheets/{it_sheet["id"]}/usedRange',
-                headers=hdrs,
-                params={'$select': 'text,values,rowCount,columnCount,address'},
-                timeout=30,
-            )
-            rng.raise_for_status()
-        except Exception as exc:
-            logger.warning('Budget graph: usedRange failed for IT sheet: %s', exc)
-            return {'sheets': [], 'web_url': web_url, 'embed_url': embed_url}
 
-        data = rng.json()
-        row_count = data.get('rowCount', 0)
-        logger.info('Budget graph: IT sheet address=%s rowCount=%s', data.get('address'), row_count)
-        rows = data.get('text') or data.get('values') or []
+    ws = wb[DASHBOARD_SHEET]
+    rows = []
+    for row in ws.iter_rows(values_only=True):
+        # Convert each cell to string (or empty string for None)
+        rows.append([str(c) if c is not None else '' for c in row])
+    wb.close()
 
-        # usedRange sometimes reports rowCount=0 on stale Excel metadata — fall back to fixed range
-        if not rows or row_count == 0:
-            logger.info('Budget graph: usedRange empty for IT sheet, trying fixed range')
-            try:
-                fb = requests.get(
-                    f'{GRAPH}/drives/{drive_id}/items/{item_id}'
-                    f'/workbook/worksheets/{it_sheet["id"]}/range(address=\'A1:AZ2000\')',
-                    headers=hdrs,
-                    params={'$select': 'text,values,rowCount'},
-                    timeout=30,
-                )
-                fb.raise_for_status()
-                fb_data = fb.json()
-                rows = fb_data.get('text') or fb_data.get('values') or []
-            except Exception as exc:
-                logger.warning('Budget graph: fixed range also failed for IT sheet: %s', exc)
+    # Trim trailing empty rows
+    while rows and not any(c for c in rows[-1]):
+        rows.pop()
 
-        sheet_entry = {'name': DASHBOARD_SHEET, 'html': ''}
-        sheet_entry['dashboard'] = parse_dashboard_data(rows)
-        result.append(sheet_entry)
+    logger.info('Budget graph: IT sheet has %d rows', len(rows))
 
-    return {'sheets': result, 'web_url': web_url, 'embed_url': embed_url}
+    sheet_entry = {'name': DASHBOARD_SHEET, 'html': '', 'dashboard': parse_dashboard_data(rows)}
+    return {'sheets': [sheet_entry], 'web_url': web_url, 'embed_url': embed_url}
 
 
 def _to_html(rows):
