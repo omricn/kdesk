@@ -26,7 +26,10 @@ def budget_view(request):
         config.cache_updated_at = None
         config.configured_by = request.user
         config.save()
-        messages.success(request, 'SharePoint URL saved — loading data…')
+        if url:
+            from .tasks import refresh_budget_cache
+            refresh_budget_cache.delay(config.pk)
+            messages.success(request, 'SharePoint URL saved — loading data in background…')
         return redirect('budget')
 
     # ── Force refresh ─────────────────────────────────────────────────────────
@@ -34,66 +37,36 @@ def budget_view(request):
         config.cached_sheets = ''
         config.cache_updated_at = None
         config.save(update_fields=['cached_sheets', 'cache_updated_at'])
+        from .tasks import refresh_budget_cache
+        refresh_budget_cache.delay(config.pk)
+        messages.success(request, 'Refresh started — this page will update automatically.')
         return redirect('budget')
 
-    # ── Fetch from SharePoint (if cache stale) ────────────────────────────────
-    error = None
-    needs_relogin = False
+    # ── Trigger background fetch if cache is stale (but don't block) ─────────
+    if config.sharepoint_url and not config.cached_sheets and not config.cache_updated_at:
+        # First-ever load with no task yet dispatched — kick one off
+        from .tasks import refresh_budget_cache
+        refresh_budget_cache.delay(config.pk)
 
-    if config.sharepoint_url and not config.cache_is_fresh():
-        from users.views import get_user_graph_token
-        user_token = get_user_graph_token(request)
-
-        if user_token is None:
-            # Token missing — user logged in before Sites.Read.All was added
-            needs_relogin = True
-        else:
-            try:
-                from .graph import fetch_sheets_html
-                result = fetch_sheets_html(config.sharepoint_url, token=user_token)
-                sheets = result['sheets']
-                if result.get('web_url'):
-                    config.web_url = result['web_url']
-                if result.get('embed_url'):
-                    config.embed_url = result['embed_url']
-                config.cached_sheets = json.dumps(sheets)
-                if sheets:
-                    config.cache_updated_at = timezone.now()
-                else:
-                    # Don't mark cache as fresh when no IT sheet data found —
-                    # next page load must retry rather than serve stale empty result.
-                    config.cache_updated_at = None
-                    available = result.get('available_sheets', [])
-                    if available:
-                        error = (
-                            f'SharePoint file loaded but the "IT" worksheet was not found. '
-                            f'Available sheets: {", ".join(available)}. '
-                            f'Rename the sheet to "IT" and click Refresh.'
-                        )
-                    else:
-                        error = (
-                            'SharePoint file loaded but no worksheet data was returned. '
-                            'Check that the file is a valid Excel workbook with an "IT" sheet.'
-                        )
-                config.save(update_fields=['web_url', 'embed_url', 'cached_sheets', 'cache_updated_at'])
-            except Exception as exc:
-                status = getattr(getattr(exc, 'response', None), 'status_code', None)
-                if status == 403:
-                    error = "You don't have permission to access this file in SharePoint."
-                else:
-                    logger.exception('Budget SharePoint fetch failed')
-                    error = str(exc)
-
-    # ── Load cached sheets ────────────────────────────────────────────────────
+    # ── Read from cache ───────────────────────────────────────────────────────
     sheets = []
     dashboard = None
-    if config.cached_sheets:
+    loading = False
+    error = None
+
+    if config.sharepoint_url and not config.cached_sheets:
+        loading = True  # task is in-flight; page will auto-refresh
+    elif config.cached_sheets:
         try:
-            sheets = json.loads(config.cached_sheets)
-            for s in sheets:
-                if s.get('name') == 'IT' and s.get('dashboard'):
-                    dashboard = s['dashboard']
-                    break
+            data = json.loads(config.cached_sheets)
+            if isinstance(data, dict) and '_error' in data:
+                error = data['_error']
+            elif isinstance(data, list):
+                sheets = data
+                for s in sheets:
+                    if s.get('name') == 'IT' and s.get('dashboard'):
+                        dashboard = s['dashboard']
+                        break
         except Exception:
             pass
 
@@ -101,8 +74,8 @@ def budget_view(request):
         'config': config,
         'sheets': sheets,
         'dashboard': dashboard,
+        'loading': loading,
         'error': error,
-        'needs_relogin': needs_relogin,
     })
 
 
