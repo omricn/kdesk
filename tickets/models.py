@@ -9,6 +9,7 @@ class Ticket(models.Model):
     STATUS_PENDING_USER = 'pending_user'
     STATUS_PENDING_VENDOR = 'pending_vendor'
     STATUS_HOLD = 'hold'
+    STATUS_PENDING_MANAGER = 'pending_manager'
     STATUS_CLOSED = 'closed'
     STATUS_USER_RESPONDED = 'user_responded'
 
@@ -18,6 +19,7 @@ class Ticket(models.Model):
         (STATUS_PENDING_USER, 'Pending User Reply'),
         (STATUS_PENDING_VENDOR, 'Pending Vendor'),
         (STATUS_HOLD, 'Hold'),
+        (STATUS_PENDING_MANAGER, 'Pending Manager Approval'),
         (STATUS_CLOSED, 'Closed'),
         (STATUS_USER_RESPONDED, 'User Responded'),
     ]

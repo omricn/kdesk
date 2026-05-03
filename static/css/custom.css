@@ -320,7 +320,8 @@ a:hover { color: #a0ffdb; }
 .badge.bg-success        { background-color: rgba(104,255,195,0.15) !important; color: var(--kramer-mint); border: 1px solid rgba(104,255,195,0.3); }
 .badge.bg-secondary      { background-color: var(--kramer-surface2) !important; color: #888; }
 .badge.bg-danger         { background-color: var(--kramer-pink) !important; color: #fff; }
-.badge.bg-user-responded { background-color: rgba(200,160,0,0.25) !important; color: #f5c842; border: 1px solid rgba(200,160,0,0.4); }
+.badge.bg-user-responded  { background-color: rgba(200,160,0,0.25) !important; color: #f5c842; border: 1px solid rgba(200,160,0,0.4); }
+.badge.bg-pending-manager { background-color: rgba(190,0,120,0.18) !important; color: #e05aad; border: 1px solid rgba(190,0,120,0.35); }
 
 /* User-responded row highlight */
 tr.row-user-responded td { background-color: rgba(200,160,0,0.08) !important; }
