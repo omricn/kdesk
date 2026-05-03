@@ -178,16 +178,13 @@ def _encode_url(url):
 
 def fetch_sheets_html(sharing_url, token=None):
     """
-    Download the SharePoint Excel file and parse the IT sheet with openpyxl.
-    Avoids the unreliable Graph workbook session API for SharePoint-hosted files.
+    Read the IT sheet from a SharePoint Excel file using the Graph workbook API
+    with a read-only session. Sessions fix the 'empty worksheets' response that
+    the stateless API returns for SharePoint-hosted files.
 
-    Pass `token` as the logged-in user's delegated access token so SharePoint
-    file permissions are enforced (users without access get a 403).
-    If token is None, falls back to the app service account (Sites.Read.All).
+    Pass `token` as the logged-in user's delegated access token.
+    If token is None, falls back to the app service account.
     """
-    import io
-    import openpyxl
-
     if token is None:
         token = _token()
     hdrs = {'Authorization': f'Bearer {token}'}
@@ -205,7 +202,6 @@ def fetch_sheets_html(sharing_url, token=None):
     item_id = item['id']
     web_url = item.get('webUrl', '')
 
-    # Build the Doc.aspx embed URL
     sp_ids = item.get('sharepointIds', {})
     unique_id = sp_ids.get('listItemUniqueId', '')
     site_url = sp_ids.get('siteUrl', '').rstrip('/')
@@ -219,46 +215,90 @@ def fetch_sheets_html(sharing_url, token=None):
         embed_url = ''
     logger.info('Budget graph: web_url=%s embed_url=%s', web_url, embed_url)
 
-    # Download raw Excel file bytes
-    file_resp = requests.get(
-        f'{GRAPH}/drives/{drive_id}/items/{item_id}/content',
-        headers=hdrs,
-        timeout=60,
-        allow_redirects=True,
-    )
-    file_resp.raise_for_status()
-    logger.info('Budget graph: downloaded %d bytes', len(file_resp.content))
+    base = f'{GRAPH}/drives/{drive_id}/items/{item_id}/workbook'
 
-    # Parse with openpyxl (data_only=True reads cached formula values, not formulas)
-    wb = openpyxl.load_workbook(io.BytesIO(file_resp.content), data_only=True, read_only=True)
-    all_sheet_names = wb.sheetnames
-    logger.info('Budget graph: workbook sheets: %s', all_sheet_names)
+    # Create a read-only workbook session — stateless calls return empty worksheets
+    # for SharePoint-hosted files; a session fixes this.
+    session_id = None
+    try:
+        sess = requests.post(
+            f'{base}/createSession',
+            headers={**hdrs, 'Content-Type': 'application/json'},
+            json={'persistChanges': False},
+            timeout=30,
+        )
+        sess.raise_for_status()
+        session_id = sess.json().get('id')
+        logger.info('Budget graph: workbook session created')
+    except Exception as exc:
+        logger.warning('Budget graph: could not create workbook session (%s), continuing without', exc)
 
-    if DASHBOARD_SHEET not in all_sheet_names:
-        logger.warning('Budget graph: IT sheet not found. Available: %s', all_sheet_names)
-        wb.close()
-        return {
-            'sheets': [],
-            'web_url': web_url,
-            'embed_url': embed_url,
-            'available_sheets': all_sheet_names,
-        }
+    if session_id:
+        whdrs = {**hdrs, 'workbook-session-id': session_id}
+    else:
+        whdrs = hdrs
 
-    ws = wb[DASHBOARD_SHEET]
-    rows = []
-    # Limit to 2000 rows and 30 cols — dashboard only reads up to column R (index 17)
-    for row in ws.iter_rows(values_only=True, max_row=2000, max_col=30):
-        rows.append([str(c) if c is not None else '' for c in row])
-    wb.close()
+    try:
+        # List worksheets
+        ws_resp = requests.get(f'{base}/worksheets', headers=whdrs, timeout=15)
+        ws_resp.raise_for_status()
+        ws_data = ws_resp.json()
+        if 'error' in ws_data:
+            raise Exception(f"Worksheets API: {ws_data['error'].get('message', ws_data['error'])}")
 
-    # Trim trailing empty rows
-    while rows and not any(c for c in rows[-1]):
-        rows.pop()
+        all_sheets = ws_data.get('value', [])
+        all_sheet_names = [s['name'] for s in all_sheets]
+        logger.info('Budget graph: sheets via API: %s', all_sheet_names)
 
-    logger.info('Budget graph: IT sheet has %d rows', len(rows))
+        it_sheet = next((s for s in all_sheets if s['name'] == DASHBOARD_SHEET), None)
 
-    sheet_entry = {'name': DASHBOARD_SHEET, 'html': '', 'dashboard': parse_dashboard_data(rows)}
-    return {'sheets': [sheet_entry], 'web_url': web_url, 'embed_url': embed_url}
+        if not it_sheet:
+            return {
+                'sheets': [], 'web_url': web_url, 'embed_url': embed_url,
+                'available_sheets': all_sheet_names,
+            }
+
+        # Fetch used range — select only text values to keep response small
+        rng = requests.get(
+            f'{base}/worksheets/{it_sheet["id"]}/usedRange',
+            headers=whdrs,
+            params={'$select': 'text,rowCount'},
+            timeout=60,
+        )
+        rng.raise_for_status()
+        rng_data = rng.json()
+        if 'error' in rng_data:
+            raise Exception(f"usedRange API: {rng_data['error'].get('message', rng_data['error'])}")
+
+        rows = rng_data.get('text') or []
+        logger.info('Budget graph: IT sheet rowCount=%s, rows=%d', rng_data.get('rowCount'), len(rows))
+
+        # If usedRange came back empty, try a fixed range as fallback
+        if not rows:
+            logger.info('Budget graph: usedRange empty, trying fixed range A1:AZ2000')
+            fb = requests.get(
+                f"{base}/worksheets/{it_sheet['id']}/range(address='A1:AZ500')",
+                headers=whdrs,
+                params={'$select': 'text'},
+                timeout=60,
+            )
+            fb.raise_for_status()
+            rows = fb.json().get('text') or []
+
+        sheet_entry = {'name': DASHBOARD_SHEET, 'html': '', 'dashboard': parse_dashboard_data(rows)}
+        return {'sheets': [sheet_entry], 'web_url': web_url, 'embed_url': embed_url}
+
+    finally:
+        # Always close the session to avoid leaking resources
+        if session_id:
+            try:
+                requests.post(
+                    f'{base}/closeSession',
+                    headers={**hdrs, 'workbook-session-id': session_id},
+                    timeout=10,
+                )
+            except Exception:
+                pass
 
 
 def _to_html(rows):
