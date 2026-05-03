@@ -258,10 +258,10 @@ def fetch_sheets_html(sharing_url, token=None):
                 'available_sheets': all_sheet_names,
             }
 
-        # Fetch used range — embed $select in URL directly; requests encodes $ as %24 which Graph rejects
-        sheet_id = it_sheet['id']
+        # Address sheet by name — avoids curly-brace ID which requests percent-encodes (%7B…%7D)
+        sheet_name = it_sheet['name']  # e.g. 'IT'
         rng = requests.get(
-            f'{base}/worksheets/{sheet_id}/usedRange?$select=text,rowCount',
+            f"{base}/worksheets('{sheet_name}')/usedRange",
             headers=whdrs,
             timeout=60,
         )
@@ -270,19 +270,19 @@ def fetch_sheets_html(sharing_url, token=None):
         if 'error' in rng_data:
             raise Exception(f"usedRange API: {rng_data['error'].get('message', rng_data['error'])}")
 
-        rows = rng_data.get('text') or []
+        rows = rng_data.get('text') or rng_data.get('values') or []
         logger.info('Budget graph: IT sheet rowCount=%s, rows=%d', rng_data.get('rowCount'), len(rows))
 
         # If usedRange came back empty, try a fixed range as fallback
         if not rows:
             logger.info('Budget graph: usedRange empty, trying fixed range A1:AZ500')
             fb = requests.get(
-                f"{base}/worksheets/{sheet_id}/range(address='A1:AZ500')?$select=text",
+                f"{base}/worksheets('{sheet_name}')/range(address='A1:AZ500')",
                 headers=whdrs,
                 timeout=60,
             )
             fb.raise_for_status()
-            rows = fb.json().get('text') or []
+            rows = fb.json().get('text') or fb.json().get('values') or []
 
         sheet_entry = {'name': DASHBOARD_SHEET, 'html': '', 'dashboard': parse_dashboard_data(rows)}
         return {'sheets': [sheet_entry], 'web_url': web_url, 'embed_url': embed_url}
