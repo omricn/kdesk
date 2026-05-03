@@ -258,11 +258,11 @@ def fetch_sheets_html(sharing_url, token=None):
                 'available_sheets': all_sheet_names,
             }
 
-        # Fetch used range — select only text values to keep response small
+        # Fetch used range — embed $select in URL directly; requests encodes $ as %24 which Graph rejects
+        sheet_id = it_sheet['id']
         rng = requests.get(
-            f'{base}/worksheets/{it_sheet["id"]}/usedRange',
+            f'{base}/worksheets/{sheet_id}/usedRange?$select=text,rowCount',
             headers=whdrs,
-            params={'$select': 'text,rowCount'},
             timeout=60,
         )
         rng.raise_for_status()
@@ -275,11 +275,10 @@ def fetch_sheets_html(sharing_url, token=None):
 
         # If usedRange came back empty, try a fixed range as fallback
         if not rows:
-            logger.info('Budget graph: usedRange empty, trying fixed range A1:AZ2000')
+            logger.info('Budget graph: usedRange empty, trying fixed range A1:AZ500')
             fb = requests.get(
-                f"{base}/worksheets/{it_sheet['id']}/range(address='A1:AZ500')",
+                f"{base}/worksheets/{sheet_id}/range(address='A1:AZ500')?$select=text",
                 headers=whdrs,
-                params={'$select': 'text'},
                 timeout=60,
             )
             fb.raise_for_status()
