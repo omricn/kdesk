@@ -246,8 +246,8 @@ def fetch_sheets_html(sharing_url, token=None):
 
     ws = wb[DASHBOARD_SHEET]
     rows = []
-    for row in ws.iter_rows(values_only=True):
-        # Convert each cell to string (or empty string for None)
+    # Limit to 2000 rows and 30 cols — dashboard only reads up to column R (index 17)
+    for row in ws.iter_rows(values_only=True, max_row=2000, max_col=30):
         rows.append([str(c) if c is not None else '' for c in row])
     wb.close()
 
