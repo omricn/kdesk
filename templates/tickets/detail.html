@@ -44,7 +44,11 @@
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-start">
-          <h5 class="card-title mb-1" dir="auto">{{ ticket.title }}</h5>
+          <input type="text" name="title" form="update-form"
+                 value="{{ ticket.title }}"
+                 class="form-control-plaintext fw-semibold p-0 mb-1 w-100"
+                 style="font-size:1.15rem;line-height:1.3;color:var(--kramer-neutral);"
+                 dir="auto">
           <div class="d-flex gap-1 ms-2 flex-shrink-0">
             <span class="badge {{ ticket.status|status_badge }}">{{ ticket.get_status_display }}</span>
           </div>
@@ -333,6 +337,15 @@
         </div>
       </div>
 
+      <!-- Hidden update form anchor (inputs throughout the page use form="update-form") -->
+      <form method="post" id="update-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update">
+        {% if update_form.non_field_errors %}
+        <div class="alert alert-danger py-2 small mb-3">{{ update_form.non_field_errors }}</div>
+        {% endif %}
+      </form>
+
       <!-- Category -->
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-white fw-semibold small"><i class="bi bi-tag me-1"></i>Category</div>
@@ -345,6 +358,19 @@
           </select>
           <select id="det-item" name="item_id" form="update-form" class="form-select form-select-sm mb-2 cat-inactive">
             <option value="">— Item —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Assignee -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white fw-semibold small"><i class="bi bi-person me-1"></i>Assignee</div>
+        <div class="card-body py-2">
+          <select name="assignee" id="id_assignee" form="update-form" class="form-select form-select-sm">
+            <option value="">— Unassigned —</option>
+            {% for u in update_form.fields.assignee.queryset %}
+            <option value="{{ u.pk }}" {% if ticket.assignee_id == u.pk %}selected{% endif %}>{{ u.display_name|default:u.email }}</option>
+            {% endfor %}
           </select>
         </div>
       </div>
@@ -364,61 +390,42 @@
         </div>
       </div>
 
-      <!-- Edit Ticket -->
+      <!-- Ticket Info -->
       <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white fw-semibold small"><i class="bi bi-pencil-square me-1"></i>Edit Ticket</div>
-        <div class="card-body">
-          <form method="post" id="update-form">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="update">
-            {% if update_form.non_field_errors %}
-            <div class="alert alert-danger py-2 small mb-2">{{ update_form.non_field_errors }}</div>
-            {% endif %}
-            {% for field in update_form %}
-            {% if field.name != 'status' %}
-            <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1">{{ field.label }}</label>
-              {{ field }}
-              {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-            </div>
-            {% endif %}
-            {% endfor %}
-          </form>
-          <hr>
-          <div class="small text-muted">
-            <div><strong>SLA Deadline:</strong>
-              {% if ticket.sla_deadline %}
-                {{ ticket.sla_deadline|date:"d M Y H:i" }}
-                <div class="progress mt-1" style="height:6px;" title="{{ ticket.sla_percent_elapsed }}% elapsed">
-                  <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}"
-                       style="width:{{ ticket.sla_percent_elapsed|default:0 }}%"></div>
-                </div>
-              {% else %}—{% endif %}
-            </div>
-            <div class="mt-2"><strong>Last Updated:</strong> {{ ticket.updated_at|date:"d M Y H:i" }}</div>
-            {% if ticket.resolved_at %}
-            <div class="mt-1"><strong>Resolved:</strong> {{ ticket.resolved_at|date:"d M Y H:i" }}</div>
-            {% endif %}
-            {% if ticket.satisfaction_rating %}
-            <div class="mt-2">
-              <strong>Satisfaction:</strong>
-              <span class="ms-1">
-                {% for i in "12345" %}
-                  {% if forloop.counter <= ticket.satisfaction_rating %}
-                    <i class="bi bi-star-fill" style="color:var(--kramer-mint);font-size:13px;"></i>
-                  {% else %}
-                    <i class="bi bi-star" style="color:#aaa;font-size:13px;"></i>
-                  {% endif %}
-                {% endfor %}
-              </span>
-              {% if ticket.satisfaction_text %}
-              <div class="text-muted mt-1" style="font-size:12px;word-break:break-word;">"{{ ticket.satisfaction_text }}"</div>
-              {% endif %}
-            </div>
-            {% elif ticket.status == 'closed' %}
-            <div class="mt-2 text-muted" style="font-size:12px;"><i class="bi bi-star me-1"></i>No rating yet</div>
+        <div class="card-header bg-white fw-semibold small"><i class="bi bi-info-circle me-1"></i>Ticket Info</div>
+        <div class="card-body small text-muted">
+          <div><strong>SLA Deadline:</strong>
+            {% if ticket.sla_deadline %}
+              {{ ticket.sla_deadline|date:"d M Y H:i" }}
+              <div class="progress mt-1" style="height:6px;" title="{{ ticket.sla_percent_elapsed }}% elapsed">
+                <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}"
+                     style="width:{{ ticket.sla_percent_elapsed|default:0 }}%"></div>
+              </div>
+            {% else %}—{% endif %}
+          </div>
+          <div class="mt-2"><strong>Last Updated:</strong> {{ ticket.updated_at|date:"d M Y H:i" }}</div>
+          {% if ticket.resolved_at %}
+          <div class="mt-1"><strong>Resolved:</strong> {{ ticket.resolved_at|date:"d M Y H:i" }}</div>
+          {% endif %}
+          {% if ticket.satisfaction_rating %}
+          <div class="mt-2">
+            <strong>Satisfaction:</strong>
+            <span class="ms-1">
+              {% for i in "12345" %}
+                {% if forloop.counter <= ticket.satisfaction_rating %}
+                  <i class="bi bi-star-fill" style="color:var(--kramer-mint);font-size:13px;"></i>
+                {% else %}
+                  <i class="bi bi-star" style="color:#aaa;font-size:13px;"></i>
+                {% endif %}
+              {% endfor %}
+            </span>
+            {% if ticket.satisfaction_text %}
+            <div class="text-muted mt-1" style="font-size:12px;word-break:break-word;">"{{ ticket.satisfaction_text }}"</div>
             {% endif %}
           </div>
+          {% elif ticket.status == 'closed' %}
+          <div class="mt-2 text-muted" style="font-size:12px;"><i class="bi bi-star me-1"></i>No rating yet</div>
+          {% endif %}
         </div>
       </div>
 
@@ -549,7 +556,7 @@ dSub.addEventListener('change', function() {
   setActive(dItem, !!id);
 
   // Auto-select assignee based on subcategory mapping
-  const assigneeSel = document.querySelector('#update-form select[name="assignee"]');
+  const assigneeSel = document.getElementById('id_assignee');
   if (assigneeSel && id) {
     const sub = CAT_DATA.subcategories.find(s => s.id === id);
     if (sub && sub.assignee_id) {
