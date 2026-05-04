@@ -88,7 +88,7 @@
           {% for att in attachments %}
           <li class="d-flex align-items-center gap-2 py-1" style="font-size:14px;">
             <i class="bi bi-file-earmark text-muted"></i>
-            <a href="{{ att.file.url }}" target="_blank">{{ att.filename }}</a>
+            <a href="{% url 'change_download_attachment' att.pk %}">{{ att.filename }}</a>
             <span class="text-muted">({{ att.file_size|filesizeformat }})</span>
             {% if change.submitted_by == request.user or request.user.is_superuser %}
             <form method="post" class="d-inline ms-auto" onsubmit="return confirm('Remove this attachment?');">

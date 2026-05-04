@@ -224,7 +224,12 @@ def change_transition(request, pk):
 def _save_attachments(request, change):
     """Save uploaded files from request.FILES['attachments'] to ChangeAttachment."""
     from django.contrib import messages as msg
+    from kdesk.upload_utils import allowed_upload
     for f in request.FILES.getlist('attachments'):
+        err = allowed_upload(f.name)
+        if err:
+            msg.error(request, err)
+            continue
         if f.size > 3 * 1024 * 1024:
             msg.error(request, f'"{f.name}" exceeds the 3 MB limit and was skipped.')
             continue
@@ -234,3 +239,10 @@ def _save_attachments(request, change):
             file=f,
             file_size=f.size,
         )
+
+
+@admin_required
+def change_download_attachment(request, pk):
+    from django.http import FileResponse
+    att = get_object_or_404(ChangeAttachment, pk=pk)
+    return FileResponse(att.file.open('rb'), as_attachment=True, filename=att.filename)

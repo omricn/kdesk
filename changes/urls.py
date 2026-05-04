@@ -7,4 +7,5 @@ urlpatterns = [
     path('changes/<int:pk>/',     views.change_detail,     name='change_detail'),
     path('changes/<int:pk>/edit/', views.change_edit,      name='change_edit'),
     path('changes/<int:pk>/transition/', views.change_transition, name='change_transition'),
+    path('changes/attachments/<int:pk>/download/', views.change_download_attachment, name='change_download_attachment'),
 ]

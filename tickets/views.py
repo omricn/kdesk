@@ -366,7 +366,7 @@ def ticket_detail(request, pk):
                             ticket=updated,
                             changed_by=request.user,
                             field='Description',
-                            old_value=None,
+                            old_value='',
                             new_value='(updated)',
                         ))
                     if history_entries:
@@ -382,15 +382,44 @@ def ticket_detail(request, pk):
 
                     messages.success(request, 'Ticket updated.')
                     just_closed = updated.status in Ticket.TERMINAL_STATUSES and not was_closed
-                    if request.POST.get('next') == 'list':
+                    next_val = request.POST.get('next', '')
+                    if next_val == 'list':
                         suffix = '?confetti=1' if just_closed else ''
                         return redirect(f'/tickets/{suffix}')
+                    if next_val == 'kb' and just_closed:
+                        from kb.models import KBArticle
+                        existing = KBArticle.objects.filter(source_ticket=updated).first()
+                        if existing:
+                            messages.info(request, 'A KB article already exists for this ticket — opening it.')
+                            return redirect('kb_edit', pk=existing.pk)
+                        try:
+                            is_hr = bool(updated.subcategory and updated.subcategory.category.name == 'HR')
+                        except Exception:
+                            is_hr = False
+                        if not is_hr and updated.solution.strip():
+                            article = KBArticle.objects.create(
+                                title=updated.title,
+                                body=updated.description or '',
+                                solution=updated.solution,
+                                subcategory_id=updated.subcategory_id,
+                                ticket_item_id=updated.ticket_item_id,
+                                source_ticket=updated,
+                                author=request.user,
+                                status=KBArticle.STATUS_DRAFT,
+                            )
+                            messages.success(request, 'Saved as KB draft. Review the article and publish when ready.')
+                            return redirect(f'/kb/{article.pk}/edit/?confetti=1')
                     suffix = '?confetti=1' if just_closed else ''
                     return redirect(f'/tickets/{pk}/{suffix}')
 
         elif action == 'upload':
             file_obj = request.FILES.get('file')
             if file_obj:
+                from kdesk.upload_utils import allowed_upload
+                err = allowed_upload(file_obj.name)
+                if err:
+                    messages.error(request, err)
+                    return redirect('ticket_detail', pk=pk)
                 if file_obj.size > 3 * 1024 * 1024:
                     messages.error(request, 'File exceeds the 3 MB limit. Please upload a smaller file.')
                     return redirect('ticket_detail', pk=pk)
@@ -415,6 +444,15 @@ def ticket_detail(request, pk):
     non_inline = ticket.non_inline_attachments.select_related('uploaded_by').order_by('uploaded_at')
     my_attachments   = [a for a in non_inline if a.uploaded_by_id == request.user.pk]
     user_attachments = [a for a in non_inline if a.uploaded_by_id != request.user.pk]
+    try:
+        _is_hr = bool(ticket.subcategory_id and ticket.subcategory.category.name == 'HR')
+    except Exception:
+        _is_hr = False
+    kb_prompt_eligible = (
+        ticket.status not in Ticket.TERMINAL_STATUSES
+        and not ticket.kb_articles.exists()
+        and not _is_hr
+    )
     context = {
         'ticket': ticket,
         'comment_form': comment_form,
@@ -427,6 +465,7 @@ def ticket_detail(request, pk):
         'mention_admins_json': json.dumps([{'id': a['pk'], 'name': a['display_name']} for a in mention_admins]),
         'my_attachments': my_attachments,
         'user_attachments': user_attachments,
+        'kb_prompt_eligible': kb_prompt_eligible,
     }
     return render(request, 'tickets/detail.html', context)
 
@@ -452,7 +491,11 @@ def ticket_create(request):
             ticket.save()
             uploaded_file = request.FILES.get('attachment')
             if uploaded_file:
-                if uploaded_file.size > 3 * 1024 * 1024:
+                from kdesk.upload_utils import allowed_upload
+                err = allowed_upload(uploaded_file.name)
+                if err:
+                    messages.error(request, err)
+                elif uploaded_file.size > 3 * 1024 * 1024:
                     messages.error(request, 'Attachment exceeds the 3 MB limit and was not saved.')
                 else:
                     TicketAttachment.objects.create(
@@ -514,7 +557,7 @@ def user_search(request):
 @admin_required
 @require_POST
 def ticket_bulk_action(request):
-    ticket_ids = request.POST.getlist('ticket_ids')
+    ticket_ids = [tid for tid in request.POST.getlist('ticket_ids') if str(tid).isdigit()]
     action = request.POST.get('action')
 
     if not ticket_ids:
@@ -598,7 +641,9 @@ def ticket_categorize(request, pk):
         except TicketSubCategory.DoesNotExist:
             pass
 
-    update_fields = ['category', 'subcategory', 'ticket_item']
+    from django.utils import timezone as _tz
+    ticket.updated_at = _tz.now()
+    update_fields = ['category', 'subcategory', 'ticket_item', 'updated_at']
     if ticket.assignee != old_assignee:
         update_fields.append('assignee')
 
@@ -867,11 +912,12 @@ def ticket_send_email(request, pk):
     to_email = ticket.requester_email
     sender_name = request.user.display_name or request.user.email
 
+    from django.utils.html import escape as _esc
     html_body = f"""
-    <p>{body.replace(chr(10), '<br>')}</p>
+    <p>{_esc(body).replace(chr(10), '<br>')}</p>
     <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
     <p style="color:#888;font-size:12px;">
-      {sender_name} · IT Support Team<br>
+      {_esc(sender_name)} · IT Support Team<br>
       Ticket reference: <strong>#{ticket.pk:04d}</strong>
     </p>
     """
@@ -886,6 +932,9 @@ def ticket_send_email(request, pk):
     att_bytes = att_name = att_content_type = None
     uploaded_file = request.FILES.get('email_attachment')
     if uploaded_file:
+        if uploaded_file.size > 3 * 1024 * 1024:
+            messages.error(request, 'Email attachment exceeds the 3 MB limit.')
+            return redirect('ticket_detail', pk=pk)
         att_name = uploaded_file.name
         att_bytes = uploaded_file.read()
         att_content_type = uploaded_file.content_type or 'application/octet-stream'
@@ -942,12 +991,7 @@ def download_attachment(request, pk):
     is_requester = request.user.email.lower() == (ticket.requester_email or '').lower()
     if not (is_admin or is_requester):
         return HttpResponseForbidden()
-    import mimetypes
-    content_type, _ = mimetypes.guess_type(att.filename)
-    content_type = content_type or 'application/octet-stream'
-    response = FileResponse(att.file.open('rb'), content_type=content_type)
-    response['Content-Disposition'] = f'inline; filename="{att.filename}"'
-    return response
+    return FileResponse(att.file.open('rb'), as_attachment=True, filename=att.filename)
 
 
 # ── Email preview (superuser only) ───────────────────────────────────────────
@@ -1354,7 +1398,11 @@ def portal_ticket_create(request):
             ticket.save()
             uploaded_file = request.FILES.get('attachment')
             if uploaded_file:
-                if uploaded_file.size > 3 * 1024 * 1024:
+                from kdesk.upload_utils import allowed_upload
+                err = allowed_upload(uploaded_file.name)
+                if err:
+                    messages.error(request, err)
+                elif uploaded_file.size > 3 * 1024 * 1024:
                     messages.error(request, 'Attachment exceeds the 3 MB limit and was not saved.')
                 else:
                     TicketAttachment.objects.create(

@@ -11,7 +11,8 @@ class KBArticle(models.Model):
     ]
 
     title = models.CharField(max_length=300)
-    body = models.TextField()
+    body = models.TextField(blank=True, default='')
+    solution = models.TextField(blank=True, default='')
     subcategory = models.ForeignKey(
         'tickets.TicketSubCategory', null=True, blank=True,
         on_delete=models.SET_NULL, related_name='kb_articles',
@@ -43,7 +44,8 @@ class KBArticle(models.Model):
 
     @property
     def body_snippet(self):
-        return self.body[:200].strip()
+        text = self.solution or self.body
+        return text[:200].strip()
 
 
 class KBAttachment(models.Model):

@@ -333,6 +333,7 @@ tr.row-user-responded:hover td { background-color: rgba(200,160,0,0.14) !importa
   border-color: var(--kramer-border);
   color: var(--kramer-neutral);
   font-size: var(--fs-body);
+  font-family: var(--font-body);
 }
 
 .form-control:disabled, .form-select:disabled {

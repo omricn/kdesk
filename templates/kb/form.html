@@ -18,6 +18,8 @@
   <div class="col-lg-8">
     <form method="post" enctype="multipart/form-data" id="article-form">
       {% csrf_token %}
+
+      <!-- Title + Category -->
       <div class="card mb-3">
         <div class="card-body">
           <div class="mb-3">
@@ -25,7 +27,7 @@
             {{ form.title }}
             {% if form.title.errors %}<div class="text-danger small mt-1">{{ form.title.errors.0 }}</div>{% endif %}
           </div>
-          <div class="row g-3 mb-3">
+          <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label fw-semibold">Subcategory</label>
               {{ form.subcategory }}
@@ -35,12 +37,30 @@
               {{ form.ticket_item }}
             </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Body</label>
-            {{ form.body }}
-            <div class="form-text">Plain text. Use blank lines to separate paragraphs.</div>
-            {% if form.body.errors %}<div class="text-danger small mt-1">{{ form.body.errors.0 }}</div>{% endif %}
-          </div>
+        </div>
+      </div>
+
+      <!-- Issue Description -->
+      <div class="card mb-3">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-journal-text me-1"></i>Issue Description
+        </div>
+        <div class="card-body">
+          {{ form.body }}
+          <div class="form-text mt-1">Describe the problem or topic. Use blank lines to separate paragraphs.</div>
+          {% if form.body.errors %}<div class="text-danger small mt-1">{{ form.body.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+
+      <!-- Solution -->
+      <div class="card mb-3" style="border-left:3px solid var(--kramer-purple);">
+        <div class="card-header fw-semibold" style="border-bottom:1px solid var(--kramer-border);">
+          <i class="bi bi-check2-circle me-1" style="color:var(--kramer-purple);"></i>Solution
+        </div>
+        <div class="card-body">
+          {{ form.solution }}
+          <div class="form-text mt-1">The resolution or steps to fix the issue. This is shown prominently to readers.</div>
+          {% if form.solution.errors %}<div class="text-danger small mt-1">{{ form.solution.errors.0 }}</div>{% endif %}
         </div>
       </div>
 
@@ -56,6 +76,9 @@
             <li class="list-group-item d-flex align-items-center justify-content-between px-0">
               <a href="{% url 'kb_download_attachment' att.pk %}" class="text-decoration-none" target="_blank">
                 <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
+                <span class="text-muted ms-1" style="font-size:11px;">
+                  ({{ att.file_size|filesizeformat }})
+                </span>
               </a>
               <form method="post" class="d-inline">
                 {% csrf_token %}
@@ -70,10 +93,13 @@
             {% endfor %}
           </ul>
           {% endif %}
-          <div>
-            <label class="form-label" style="font-size:var(--fs-body)">Add files</label>
-            <input type="file" name="files" multiple class="form-control form-control-sm">
+
+          <label class="form-label fw-semibold mb-1">Add files</label>
+          <div class="form-text mb-2">
+            Select one or multiple files at once — hold <kbd>Ctrl</kbd> (or <kbd>⌘</kbd> on Mac) to pick several.
           </div>
+          <input type="file" name="files" multiple id="file-input" class="form-control form-control-sm">
+          <ul id="file-list" class="list-unstyled mt-2 mb-0" style="font-size:var(--fs-body);"></ul>
         </div>
       </div>
 
@@ -105,11 +131,8 @@
             <i class="bi bi-globe me-1"></i>Publish Article
           </button>
         </form>
-        {% else %}
-        <a href="{% url 'portal_kb_article' article.pk %}" target="_blank" class="btn btn-outline-secondary w-100">
-          <i class="bi bi-eye me-1"></i>View in Portal
-        </a>
         {% endif %}
+        {% if request.user.is_superuser or article.author == request.user %}
         <form method="post" action="{% url 'kb_delete' article.pk %}"
               onsubmit="return confirm('Delete this article permanently?')">
           {% csrf_token %}
@@ -117,6 +140,7 @@
             <i class="bi bi-trash me-1"></i>Delete
           </button>
         </form>
+        {% endif %}
       </div>
     </div>
     <div class="card">
@@ -148,37 +172,72 @@
 {% block extra_js %}
 <script>
 (function () {
+  // ── Dynamic item dropdown ──────────────────────────────────────────────────
   var subSel  = document.getElementById('id_subcategory');
   var itemSel = document.getElementById('id_ticket_item');
-  if (!subSel || !itemSel) return;
+  if (subSel && itemSel) {
+    var currentItem = '{{ article.ticket_item_id|default:"" }}';
 
-  var currentItem = '{{ article.ticket_item_id|default:"" }}';
-
-  function loadItems(subId, selectVal) {
-    if (!subId) {
-      itemSel.innerHTML = '<option value="">Select item (optional)…</option>';
-      return;
-    }
-    fetch('/kb/api/items/?subcategory=' + subId)
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
+    function loadItems(subId, selectVal) {
+      if (!subId) {
         itemSel.innerHTML = '<option value="">Select item (optional)…</option>';
-        data.items.forEach(function (item) {
-          var opt = document.createElement('option');
-          opt.value = item.id;
-          opt.textContent = item.name;
-          if (String(item.id) === String(selectVal)) opt.selected = true;
-          itemSel.appendChild(opt);
+        return;
+      }
+      fetch('/kb/api/items/?subcategory=' + subId)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          itemSel.innerHTML = '<option value="">Select item (optional)…</option>';
+          data.items.forEach(function (item) {
+            var opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.name;
+            if (String(item.id) === String(selectVal)) opt.selected = true;
+            itemSel.appendChild(opt);
+          });
         });
-      });
+    }
+
+    subSel.addEventListener('change', function () { loadItems(this.value, ''); });
+
+    if (subSel.value) {
+      loadItems(subSel.value, currentItem);
+    }
   }
 
-  subSel.addEventListener('change', function () { loadItems(this.value, ''); });
-
-  // On page load, if subcategory already selected, populate items
-  if (subSel.value) {
-    loadItems(subSel.value, currentItem);
+  // ── File list preview ──────────────────────────────────────────────────────
+  var fileInput = document.getElementById('file-input');
+  var fileList  = document.getElementById('file-list');
+  if (fileInput && fileList) {
+    fileInput.addEventListener('change', function () {
+      fileList.innerHTML = '';
+      Array.from(this.files).forEach(function (f) {
+        var li = document.createElement('li');
+        li.className = 'd-flex align-items-center gap-2 py-1';
+        var size = f.size < 1024 ? f.size + ' B'
+                 : f.size < 1048576 ? (f.size / 1024).toFixed(1) + ' KB'
+                 : (f.size / 1048576).toFixed(1) + ' MB';
+        li.innerHTML = '<i class="bi bi-file-earmark" style="color:var(--kramer-purple);"></i>'
+                     + '<span>' + f.name + '</span>'
+                     + '<span class="text-muted ms-auto" style="font-size:11px;">' + size + '</span>';
+        fileList.appendChild(li);
+      });
+    });
   }
 })();
 </script>
+{% if request.GET.confetti %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+<script>
+(function () {
+  var end = Date.now() + 1000;
+  var colors = ['#8205B4', '#69FFC3', '#BE0078', '#ffffff'];
+  (function frame() {
+    confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0 }, colors: colors });
+    confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1 }, colors: colors });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  }());
+  history.replaceState(null, '', window.location.pathname);
+})();
+</script>
+{% endif %}
 {% endblock %}

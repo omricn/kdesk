@@ -254,20 +254,9 @@
 
     <!-- Solution -->
     <div class="card border-0 shadow-sm" id="solution-card">
-      <div class="card-header bg-white fw-semibold small d-flex align-items-center justify-content-between gap-2">
-        <span>
-          <i class="bi bi-check-circle me-1"></i>Solution
-          <span id="solution-required-badge" class="badge bg-danger ms-2 d-none" style="font-size:11px;">Required to close</span>
-        </span>
-        {% if ticket.subcategory.category.name != 'HR' %}
-        <form method="post" action="{% url 'kb_from_ticket' ticket.pk %}" class="d-inline">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm fw-bold"
-                  style="background:var(--kramer-purple);color:#fff;border:none;font-size:12px;">
-            <i class="bi bi-book-half me-1"></i>Save as Knowledge Base
-          </button>
-        </form>
-        {% endif %}
+      <div class="card-header bg-white fw-semibold small d-flex align-items-center gap-2">
+        <i class="bi bi-check-circle me-1"></i>Solution
+        <span id="solution-required-badge" class="badge bg-danger ms-2 d-none" style="font-size:11px;">Required to close</span>
       </div>
       <div class="card-body">
         <textarea name="solution" id="id_solution" form="update-form"
@@ -429,9 +418,51 @@
         </div>
       </div>
 
+      {% if not ticket.subcategory or ticket.subcategory.category.name != 'HR' %}
+      <form method="post" action="{% url 'kb_from_ticket' ticket.pk %}" class="d-flex justify-content-end mt-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm fw-semibold"
+                style="background:var(--kramer-purple);color:#fff;border:none;font-size:12px;">
+          <i class="bi bi-book-half me-1"></i>Save as Knowledge Base
+        </button>
+      </form>
+      {% endif %}
+
     </div>
   </div>
 
+</div>
+
+<!-- KB Prompt Modal — shown automatically when ticket is newly closed and KB-eligible -->
+<div class="modal fade" id="kbPromptModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header border-0 pb-1">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-book-half fs-5" style="color:var(--kramer-purple);"></i>
+          <h5 class="modal-title fw-semibold mb-0">Save to Knowledge Base?</h5>
+        </div>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted mb-3" style="font-size:13px;">
+          This ticket has been resolved. Would you like to save it to the Knowledge Base so others can find the solution?
+        </p>
+        <div class="rounded p-3" style="background:var(--kramer-surface);border:1px solid var(--kramer-border);font-size:13px;">
+          <div class="fw-semibold mb-1 text-truncate" style="color:var(--kramer-neutral);">{{ ticket.title }}</div>
+          {% if ticket.solution %}
+          <div class="text-muted" style="white-space:pre-wrap;max-height:64px;overflow:hidden;line-height:1.4;">{{ ticket.solution|truncatechars:150 }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-2">
+        <button type="button" class="btn btn-outline-secondary" id="kb-prompt-no">No, thanks</button>
+        <button type="button" class="btn fw-semibold" id="kb-prompt-yes"
+                style="background:var(--kramer-purple);color:#fff;border:none;">
+          <i class="bi bi-book-half me-1"></i>Yes, save to KB
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- @mention dropdown — outside all overflow contexts -->
@@ -484,6 +515,12 @@
 
 {% block extra_css %}
 <style>
+  /* Blurred backdrop scoped to KB prompt modal only */
+  .kb-modal-open .modal-backdrop {
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+
   input[name="title"] {
     border: 1px solid transparent;
     border-radius: 5px;
@@ -633,21 +670,73 @@ if (INIT_CAT) {
   }
 })();
 
-// Apply / Save buttons
-document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    const form = document.getElementById('update-form');
-    let hidden = form.querySelector('input[name="next"]');
-    if (!hidden) {
-      hidden = document.createElement('input');
-      hidden.type = 'hidden';
-      hidden.name = 'next';
-      form.appendChild(hidden);
-    }
-    hidden.value = this.dataset.next;
-    form.requestSubmit();
+// Apply / Save buttons — with KB prompt intercept on close
+(function () {
+  var KB_ELIGIBLE = {{ kb_prompt_eligible|yesno:"true,false" }};
+  var INITIAL_STATUS = '{{ ticket.status }}';
+  var modalEl = document.getElementById('kbPromptModal');
+  var modal = null;
+  var _pendingNext = null;
+
+  function getNextInput() {
+    var form = document.getElementById('update-form');
+    var h = form.querySelector('input[name="next"]');
+    if (!h) { h = document.createElement('input'); h.type = 'hidden'; h.name = 'next'; form.appendChild(h); }
+    return h;
+  }
+
+  function submitWithNext(val) {
+    getNextInput().value = val;
+    document.getElementById('update-form').requestSubmit();
+  }
+
+  document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var originalNext = this.dataset.next || '';
+      var statusSel = document.getElementById('id_status');
+      var isClosing = statusSel && statusSel.value === 'closed' && INITIAL_STATUS !== 'closed';
+
+      if (KB_ELIGIBLE && isClosing && modalEl) {
+        _pendingNext = originalNext;
+        document.documentElement.classList.add('kb-modal-open');
+        if (!modal) modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        return;
+      }
+      submitWithNext(originalNext);
+    });
   });
-});
+
+  if (modalEl) {
+    function onHide(nextVal) {
+      document.documentElement.classList.remove('kb-modal-open');
+      submitWithNext(nextVal);
+    }
+
+    var noBtn = document.getElementById('kb-prompt-no');
+    if (noBtn) {
+      noBtn.addEventListener('click', function() {
+        var next = _pendingNext;
+        modal.hide();
+        modalEl.addEventListener('hidden.bs.modal', function h() {
+          modalEl.removeEventListener('hidden.bs.modal', h);
+          onHide(next);
+        });
+      });
+    }
+
+    var yesBtn = document.getElementById('kb-prompt-yes');
+    if (yesBtn) {
+      yesBtn.addEventListener('click', function() {
+        modal.hide();
+        modalEl.addEventListener('hidden.bs.modal', function h() {
+          modalEl.removeEventListener('hidden.bs.modal', h);
+          onHide('kb');
+        });
+      });
+    }
+  }
+})();
 
 // ── Inline description edit ───────────────────────────────────────────────────
 (function () {
@@ -809,7 +898,7 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
 (function () {
-  var end = Date.now() + 1100;
+  var end = Date.now() + 1000;
   var colors = ['#8205B4', '#69FFC3', '#BE0078', '#ffffff'];
   (function frame() {
     confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0 }, colors: colors });
@@ -928,5 +1017,7 @@ document.querySelectorAll('[data-action-submit]').forEach(function(btn) {
   window.addEventListener('scroll', positionDropdown, true);
   window.addEventListener('resize', positionDropdown);
 })();
+
+
 </script>
 {% endblock %}

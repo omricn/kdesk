@@ -322,23 +322,39 @@ def _strip_quoted_reply(text: str) -> str:
 
 def _sanitize_html(html: str) -> str:
     """
-    Strip dangerous elements from email HTML, extract body content,
-    and preserve inline images and formatting.
+    Strip dangerous elements from email HTML using nh3 allowlist sanitizer.
+    Extracts body content and preserves safe formatting and inline images.
     """
     import re
+    import nh3
+
     # Extract just the <body> content if this is a full HTML document
     body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.DOTALL | re.IGNORECASE)
     if body_match:
         html = body_match.group(1)
-    # Remove script blocks
-    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-    # Remove style blocks (avoid polluting page CSS)
-    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
-    # Remove iframes
-    html = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html, flags=re.DOTALL | re.IGNORECASE)
-    # Remove javascript: hrefs
-    html = re.sub(r'href\s*=\s*["\']javascript:[^"\']*["\']', 'href="#"', html, flags=re.IGNORECASE)
-    # Remove on* event handlers
-    html = re.sub(r'\s+on\w+\s*=\s*"[^"]*"', '', html, flags=re.IGNORECASE)
-    html = re.sub(r"\s+on\w+\s*=\s*'[^']*'", '', html, flags=re.IGNORECASE)
-    return html.strip()
+
+    ALLOWED_TAGS = {
+        'a', 'b', 'i', 'strong', 'em', 'u', 's', 'br', 'p', 'div', 'span',
+        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'hr', 'pre', 'code', 'blockquote',
+        'table', 'thead', 'tbody', 'tr', 'td', 'th',
+        'img',
+    }
+    ALLOWED_ATTRS = {
+        'a':     {'href', 'title', 'target'},
+        'img':   {'src', 'alt', 'width', 'height', 'style'},
+        'td':    {'colspan', 'rowspan', 'align', 'style'},
+        'th':    {'colspan', 'rowspan', 'align', 'style'},
+        'div':   {'style'},
+        'span':  {'style'},
+        'p':     {'style'},
+        'table': {'style', 'border', 'cellpadding', 'cellspacing'},
+    }
+
+    return nh3.clean(
+        html,
+        tags=ALLOWED_TAGS,
+        attributes=ALLOWED_ATTRS,
+        url_schemes={'http', 'https', 'mailto', 'cid'},
+        link_rel=None,
+    ).strip()

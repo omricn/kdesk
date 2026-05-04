@@ -86,6 +86,15 @@ LOGOUT_REDIRECT_URL = '/login/'
 # ── Session ───────────────────────────────────────────────────────────────────
 SESSION_COOKIE_AGE = 43200          # 12 hours hard expiry from login
 
+# ── Security headers (production only) ───────────────────────────────────────
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},

@@ -35,12 +35,35 @@
 
 <div class="row g-4">
   <div class="col-lg-8">
+    {% if article.body %}
     <div class="card mb-3">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-journal-text me-1"></i>Issue Description
+      </div>
       <div class="card-body">
-        <h5 class="mb-3">{{ article.title }}</h5>
         <div style="white-space:pre-wrap;line-height:1.7;">{{ article.body }}</div>
       </div>
     </div>
+    {% endif %}
+
+    {% if article.solution %}
+    <div class="card mb-3" style="border-left:3px solid var(--kramer-purple);">
+      <div class="card-header fw-semibold" style="border-bottom:1px solid var(--kramer-border);">
+        <i class="bi bi-check2-circle me-1" style="color:var(--kramer-purple);"></i>Solution
+      </div>
+      <div class="card-body">
+        <div style="white-space:pre-wrap;line-height:1.7;">{{ article.solution }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if not article.body and not article.solution %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="mb-3">{{ article.title }}</h5>
+      </div>
+    </div>
+    {% endif %}
 
     {% if article.attachments.all %}
     <div class="card">

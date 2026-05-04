@@ -175,8 +175,11 @@ def auth_callback(request):
 
     # Redirect: admins follow ?next (or go to dashboard); employees go to portal
     next_url = request.GET.get('next', '')
+    # Validate next_url to prevent open-redirect phishing (must be a local path)
+    def _safe_next(url):
+        return url if (url and url.startswith('/') and not url.startswith('//')) else ''
     if user.is_admin:
-        return redirect(next_url or 'dashboard')
+        return redirect(_safe_next(next_url) or 'dashboard')
     # For employees, only follow ?next if it points to the portal
     if next_url and next_url.startswith('/portal/'):
         return redirect(next_url)
@@ -236,7 +239,7 @@ def profile_view(request):
         user.notify_on_assign = 'notify_on_assign' in request.POST
         user.notify_on_update = 'notify_on_update' in request.POST
         user.notify_on_sla_breach = 'notify_on_sla_breach' in request.POST
-        user.save()
+        user.save(update_fields=['notify_on_assign', 'notify_on_update', 'notify_on_sla_breach'])
         messages.success(request, 'Preferences saved.')
         return redirect('profile')
     return render(request, 'users/profile.html')

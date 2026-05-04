@@ -36,7 +36,7 @@ def kb_list(request):
         'subcategory__category', 'ticket_item', 'author', 'source_ticket'
     )
     if q:
-        articles = articles.filter(Q(title__icontains=q) | Q(body__icontains=q))
+        articles = articles.filter(Q(title__icontains=q) | Q(body__icontains=q) | Q(solution__icontains=q))
     if status_filter in ('draft', 'published'):
         articles = articles.filter(status=status_filter)
 
@@ -59,7 +59,8 @@ def kb_create(request):
             ticket = Ticket.objects.select_related('subcategory__category', 'ticket_item').get(pk=ticket_id)
             initial = {
                 'title': ticket.title,
-                'body': ticket.solution,
+                'body': ticket.description or '',
+                'solution': ticket.solution or '',
                 'subcategory': ticket.subcategory,
                 'ticket_item': ticket.ticket_item,
                 'status': KBArticle.STATUS_DRAFT,
@@ -125,6 +126,9 @@ def kb_edit(request, pk):
 @require_POST
 def kb_delete(request, pk):
     article = get_object_or_404(KBArticle, pk=pk)
+    if not request.user.is_superuser and article.author != request.user:
+        messages.error(request, 'Only the article author or a superadmin can delete this article.')
+        return redirect('kb_edit', pk=pk)
     article.delete()
     messages.success(request, 'Article deleted.')
     return redirect('kb_list')
@@ -150,7 +154,10 @@ def kb_download_attachment(request, pk):
 @require_POST
 def kb_from_ticket(request, ticket_pk):
     from tickets.models import Ticket
-    ticket = get_object_or_404(Ticket, pk=ticket_pk)
+    ticket = get_object_or_404(
+        Ticket.objects.select_related('subcategory__category', 'ticket_item'),
+        pk=ticket_pk,
+    )
 
     if not ticket.solution.strip():
         messages.warning(request, 'Add a solution to the ticket before saving to the Knowledge Base.')
@@ -167,7 +174,8 @@ def kb_from_ticket(request, ticket_pk):
 
     article = KBArticle.objects.create(
         title=ticket.title,
-        body=ticket.solution,
+        body=ticket.description or '',
+        solution=ticket.solution,
         subcategory=ticket.subcategory,
         ticket_item=ticket.ticket_item,
         source_ticket=ticket,
@@ -179,7 +187,15 @@ def kb_from_ticket(request, ticket_pk):
 
 
 def _save_attachments(request, article):
+    from kdesk.upload_utils import allowed_upload
     for f in request.FILES.getlist('files'):
+        err = allowed_upload(f.name)
+        if err:
+            messages.error(request, err)
+            continue
+        if f.size > 10 * 1024 * 1024:
+            messages.error(request, f'"{f.name}" exceeds the 10 MB limit and was skipped.')
+            continue
         KBAttachment.objects.create(
             article=article,
             filename=f.name,
@@ -314,7 +330,7 @@ def portal_kb_search(request):
         articles = (
             KBArticle.objects
             .filter(status=KBArticle.STATUS_PUBLISHED)
-            .filter(Q(title__icontains=q) | Q(body__icontains=q))
+            .filter(Q(title__icontains=q) | Q(body__icontains=q) | Q(solution__icontains=q))
             .select_related('subcategory__category', 'ticket_item')
             .exclude(subcategory__category__name='HR')
             .order_by('-updated_at')

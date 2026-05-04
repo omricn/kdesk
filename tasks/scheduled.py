@@ -6,6 +6,7 @@ import logging
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
+from django.utils.html import escape as _esc
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
                        font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.3;">
               {header_title}
             </h1>
-            {f'<p style="margin:4px 0 0;color:{header_text_color};opacity:{subtitle_opacity};font-size:13px;font-family:Segoe UI,Calibri,Arial,sans-serif;">{header_subtitle}</p>' if header_subtitle else ''}
+            {f'<p style="margin:4px 0 0;color:{header_text_color};opacity:{subtitle_opacity};font-size:13px;font-family:Segoe UI,Calibri,Arial,sans-serif;">{_esc(header_subtitle)}</p>' if header_subtitle else ''}
           </td>
           <td style="text-align:right;vertical-align:middle;padding-left:16px;">
             <img src="{logo_url}" alt="Kramer" width="110" height="auto"
@@ -235,13 +236,13 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 def _row(label: str, value: str, color: str = '#8205B4') -> str:
     return (f'<tr>'
             f'<td style="color:{color};font-weight:600;white-space:nowrap;width:140px;'
-            f'    vertical-align:top;padding:4px 16px 4px 0;">{label}</td>'
-            f'<td style="color:#333333;vertical-align:top;padding:4px 0;">{value}</td>'
+            f'    vertical-align:top;padding:4px 16px 4px 0;">{_esc(label)}</td>'
+            f'<td style="color:#333333;vertical-align:top;padding:4px 0;">{_esc(value)}</td>'
             f'</tr>')
 
 
 def _send_sla_breach_email(ticket):
-    name = ticket.assignee.display_name or ticket.assignee.email
+    name = _esc(ticket.assignee.display_name or ticket.assignee.email)
     deadline = ticket.sla_deadline.strftime('%d %b %Y %H:%M') if ticket.sla_deadline else 'N/A'
     ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
     body = _email_html(
@@ -267,7 +268,7 @@ def _send_sla_breach_email(ticket):
 
 
 def _send_sla_warning_email(ticket):
-    name = ticket.assignee.display_name or ticket.assignee.email
+    name = _esc(ticket.assignee.display_name or ticket.assignee.email)
     deadline = ticket.sla_deadline.strftime('%d %b %Y %H:%M') if ticket.sla_deadline else 'N/A'
     ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
     body = _email_html(
@@ -302,7 +303,7 @@ def send_requester_created(ticket_pk: int):
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
         return
-    name = ticket.requester_name or ticket.requester_email
+    name = _esc(ticket.requester_name or ticket.requester_email)
     submitted = ticket.created_at.strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'
     body = _email_html(
         header_title='We received your request',
@@ -335,7 +336,7 @@ def send_requester_closed(ticket_pk: int):
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
         return
-    name = ticket.requester_name or ticket.requester_email
+    name = _esc(ticket.requester_name or ticket.requester_email)
     closed = ticket.resolved_at.strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
     solution_row = _row('Resolution', ticket.solution) if ticket.solution else ''
     body = _email_html(
@@ -370,8 +371,8 @@ def send_requester_comment(ticket_pk: int, comment_pk: int):
         return
     if not ticket.requester_email:
         return
-    name = ticket.requester_name or ticket.requester_email
-    author_name = comment.author.display_name or comment.author.email if comment.author else 'IT Support'
+    name = _esc(ticket.requester_name or ticket.requester_email)
+    author_name = _esc(comment.author.display_name or comment.author.email if comment.author else 'IT Support')
     body = _email_html(
         header_title='New reply on your ticket',
         header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
@@ -382,7 +383,7 @@ def send_requester_comment(ticket_pk: int, comment_pk: int):
         body_rows=(
             _row('Ticket #', f'#{ticket.pk:04d}') +
             _row('Subject', ticket.title) +
-            _row('Reply', comment.body.replace('\n', '<br>'))
+            _row('Reply', comment.body[:300] + ('…' if len(comment.body) > 300 else ''))
         ),
     )
     _send_notification_email(
@@ -420,7 +421,7 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
     ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
 
     if event_type == 'assign' and ticket.assignee:
-        name = ticket.assignee.display_name or ticket.assignee.email
+        name = _esc(ticket.assignee.display_name or ticket.assignee.email)
         deadline = ticket.sla_deadline.strftime('%d %b %Y %H:%M') if ticket.sla_deadline else 'N/A'
         body = _email_html(
             header_title='Ticket Assigned to You',
@@ -442,12 +443,13 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
         )
 
     elif event_type == 'update' and ticket.assignee:
-        name = ticket.assignee.display_name or ticket.assignee.email
+        name = _esc(ticket.assignee.display_name or ticket.assignee.email)
+        actor_name_esc = _esc(actor_name)
         body = _email_html(
             header_title='Ticket Updated',
             header_subtitle=f'#{ticket.pk:04d} — {ticket.title}',
             greeting=(f'Hi <strong>{name}</strong>,<br><br>'
-                      f'Ticket <strong>#{ticket.pk:04d}</strong> was updated by <strong>{actor_name}</strong>.'),
+                      f'Ticket <strong>#{ticket.pk:04d}</strong> was updated by <strong>{actor_name_esc}</strong>.'),
             body_rows=(
                 _row('Ticket', f'#{ticket.pk:04d} — {ticket.title}') +
                 _row('Status', ticket.get_status_display()) +
@@ -628,8 +630,8 @@ def notify_user_closed_ticket(ticket_pk: int, actor_pk: int):
     except User.DoesNotExist:
         actor = None
 
-    actor_name = actor.display_name or actor.email if actor else ticket.requester_name or 'The requester'
-    assignee_name = ticket.assignee.display_name or ticket.assignee.email
+    actor_name = _esc(actor.display_name or actor.email if actor else ticket.requester_name or 'The requester')
+    assignee_name = _esc(ticket.assignee.display_name or ticket.assignee.email)
     ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
 
     body = _email_html(
@@ -670,8 +672,8 @@ def notify_mention(ticket_pk: int, note_pk: int, mentioned_user_pk: int, author_
         return
 
     ticket_url   = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
-    author_name  = author.display_name or author.email
-    mention_name = mentioned.display_name or mentioned.email
+    author_name  = _esc(author.display_name or author.email)
+    mention_name = _esc(mentioned.display_name or mentioned.email)
 
     body = _email_html(
         header_title='You were mentioned in an internal note',
@@ -769,7 +771,7 @@ def notify_change(change_pk: int, event: str):
         return
 
     submitter_email = change.submitted_by.email if change.submitted_by else None
-    submitter_name = (
+    submitter_name = _esc(
         change.submitted_by.display_name or change.submitted_by.email
         if change.submitted_by else 'IT Team'
     )
@@ -1026,7 +1028,7 @@ def _send_change_reminder(change, reminder_type: str):
         return
 
     to_email = change.submitted_by.email
-    submitter_name = change.submitted_by.display_name or change.submitted_by.email
+    submitter_name = _esc(change.submitted_by.display_name or change.submitted_by.email)
     change_url = f'{settings.SITE_URL}/changes/{change.pk}/'
 
     if change.planned_from and change.planned_to:
@@ -1045,13 +1047,15 @@ def _send_change_reminder(change, reminder_type: str):
         _row('Timeframe', timeframe)
     )
 
+    system_esc = _esc(change.affected_system_display)
+
     if reminder_type == 'start':
         subject = f'[Kdesk] Reminder: Mark Change #{change.pk:04d} as In Progress'
         header_title = 'Action Needed — Mark as In Progress'
         action_label = 'Mark as In Progress'
         greeting = (
             f'Hi <strong>{submitter_name}</strong>,<br><br>'
-            f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
+            f'The planned maintenance window for <strong>{system_esc}</strong> '
             f'has started ({timeframe}). Please mark the change as <strong>In Progress</strong> '
             f'in Kdesk so the team knows the work has begun.'
         )
@@ -1061,7 +1065,7 @@ def _send_change_reminder(change, reminder_type: str):
         action_label = 'Mark as Done'
         greeting = (
             f'Hi <strong>{submitter_name}</strong>,<br><br>'
-            f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
+            f'The planned maintenance window for <strong>{system_esc}</strong> '
             f'ended over an hour ago ({timeframe}), but the change has not been marked as '
             f'<strong>Done</strong> yet. Please update the status as soon as the work is complete.'
         )
@@ -1071,7 +1075,7 @@ def _send_change_reminder(change, reminder_type: str):
         action_label = 'Mark as Done'
         greeting = (
             f'Hi <strong>{submitter_name}</strong>,<br><br>'
-            f'The planned maintenance window for <strong>{change.affected_system_display}</strong> '
+            f'The planned maintenance window for <strong>{system_esc}</strong> '
             f'has ended ({timeframe}). Please mark the change as <strong>Done</strong> '
             f'in Kdesk once the work is complete.'
         )
@@ -1124,9 +1128,9 @@ def send_weekly_digest():
             ticket_rows += (
                 f'<tr>'
                 f'<td style="padding:4px 8px;"><a href="{url}" style="color:#8205B4;font-weight:600;">#{t.pk:04d}</a></td>'
-                f'<td style="padding:4px 8px;">{t.title[:60]}</td>'
-                f'<td style="padding:4px 8px;">{status_label}</td>'
-                f'<td style="padding:4px 8px;">{sla_str}</td>'
+                f'<td style="padding:4px 8px;">{_esc(t.title[:60])}</td>'
+                f'<td style="padding:4px 8px;">{_esc(status_label)}</td>'
+                f'<td style="padding:4px 8px;">{_esc(sla_str)}</td>'
                 f'</tr>'
             )
 
@@ -1158,7 +1162,7 @@ def send_weekly_digest():
                 + _row('Org — SLA Breached', str(total_breached))
             )
 
-        admin_name = admin.display_name or admin.email
+        admin_name = _esc(admin.display_name or admin.email)
         kdesk_url  = f'{settings.SITE_URL}/tickets/'
 
         body = _email_html(
