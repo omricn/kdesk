@@ -110,16 +110,16 @@
     {% endif %}
 
     {% if can_close %}
-    <div class="card mt-3" style="background:#1a3a2a;border:1px solid #2d6a4a;">
+    <div class="card mt-3" style="background:rgba(130,5,180,0.15);border:1px solid rgba(130,5,180,0.4);">
       <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-        <span style="font-size:var(--fs-body);color:#6ee49a;font-weight:500;">
+        <span style="font-size:var(--fs-body);color:var(--kramer-purple);font-weight:500;">
           <i class="bi bi-check2-circle me-1"></i>Resolved it yourself?
         </span>
         <form method="post"
               onsubmit="return confirm('Close this ticket? This will notify your IT contact.');">
           {% csrf_token %}
           <input type="hidden" name="action" value="self_close">
-          <button type="submit" class="btn btn-sm" style="background:#2d9e5f;color:#fff;border:none;">
+          <button type="submit" class="btn btn-sm" style="background:var(--kramer-purple);color:#fff;border:none;">
             <i class="bi bi-x-circle me-1"></i>Close — I solved it myself
           </button>
         </form>
