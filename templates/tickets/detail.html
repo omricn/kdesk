@@ -250,9 +250,20 @@
 
     <!-- Solution -->
     <div class="card border-0 shadow-sm" id="solution-card">
-      <div class="card-header bg-white fw-semibold small">
-        <i class="bi bi-check-circle me-1"></i>Solution
-        <span id="solution-required-badge" class="badge bg-danger ms-2 d-none" style="font-size:11px;">Required to close</span>
+      <div class="card-header bg-white fw-semibold small d-flex align-items-center justify-content-between gap-2">
+        <span>
+          <i class="bi bi-check-circle me-1"></i>Solution
+          <span id="solution-required-badge" class="badge bg-danger ms-2 d-none" style="font-size:11px;">Required to close</span>
+        </span>
+        {% if ticket.subcategory.category.name != 'HR' %}
+        <form method="post" action="{% url 'kb_from_ticket' ticket.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm fw-bold"
+                  style="background:var(--kramer-purple);color:#fff;border:none;font-size:12px;">
+            <i class="bi bi-book-half me-1"></i>Save as Knowledge Base
+          </button>
+        </form>
+        {% endif %}
       </div>
       <div class="card-body">
         <textarea name="solution" id="id_solution" form="update-form"

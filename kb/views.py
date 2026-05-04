@@ -146,6 +146,38 @@ def kb_download_attachment(request, pk):
     return FileResponse(att.file.open('rb'), as_attachment=True, filename=att.filename)
 
 
+@admin_required
+@require_POST
+def kb_from_ticket(request, ticket_pk):
+    from tickets.models import Ticket
+    ticket = get_object_or_404(Ticket, pk=ticket_pk)
+
+    if not ticket.solution.strip():
+        messages.warning(request, 'Add a solution to the ticket before saving to the Knowledge Base.')
+        return redirect('ticket_detail', pk=ticket_pk)
+
+    if ticket.subcategory and ticket.subcategory.category.name == 'HR':
+        messages.warning(request, 'HR-category tickets are not saved to the Knowledge Base.')
+        return redirect('ticket_detail', pk=ticket_pk)
+
+    existing = KBArticle.objects.filter(source_ticket=ticket).first()
+    if existing:
+        messages.info(request, 'A KB article already exists for this ticket — opening it.')
+        return redirect('kb_edit', pk=existing.pk)
+
+    article = KBArticle.objects.create(
+        title=ticket.title,
+        body=ticket.solution,
+        subcategory=ticket.subcategory,
+        ticket_item=ticket.ticket_item,
+        source_ticket=ticket,
+        author=request.user,
+        status=KBArticle.STATUS_DRAFT,
+    )
+    messages.success(request, 'Saved as KB draft. Review the article and publish when ready.')
+    return redirect('kb_edit', pk=article.pk)
+
+
 def _save_attachments(request, article):
     for f in request.FILES.getlist('files'):
         KBAttachment.objects.create(

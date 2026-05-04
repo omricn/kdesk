@@ -10,6 +10,7 @@ urlpatterns = [
     path('kb/<int:pk>/publish/', views.kb_publish, name='kb_publish'),
     path('kb/api/items/', views.kb_items_api, name='kb_items_api'),
     path('kb/attachments/<int:pk>/download/', views.kb_download_attachment, name='kb_download_attachment'),
+    path('tickets/<int:ticket_pk>/save-kb/', views.kb_from_ticket, name='kb_from_ticket'),
 
     # Portal
     path('portal/kb/', views.portal_kb, name='portal_kb'),
