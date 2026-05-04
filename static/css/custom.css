@@ -356,7 +356,7 @@ tr.row-user-responded:hover td { background-color: rgba(200,160,0,0.14) !importa
 input[type="text"].form-control,
 input[type="email"].form-control,
 input[type="search"].form-control,
-textarea.form-control { unicode-bidi: plaintext; }
+textarea.form-control { unicode-bidi: plaintext; font-family: var(--font-body); }
 .form-label { color: var(--kramer-neutral); font-size: var(--fs-body); }
 .form-text  { color: #666; }
 .form-check-input:checked { background-color: var(--kramer-purple); border-color: var(--kramer-purple); }

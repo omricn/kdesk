@@ -10,8 +10,8 @@ class KBArticleForm(forms.ModelForm):
             'title': forms.TextInput(attrs={'class': 'form-control'}),
             'subcategory': forms.Select(attrs={'class': 'form-select', 'id': 'id_subcategory'}),
             'ticket_item': forms.Select(attrs={'class': 'form-select', 'id': 'id_ticket_item'}),
-            'body': forms.Textarea(attrs={'class': 'form-control font-monospace', 'rows': 8}),
-            'solution': forms.Textarea(attrs={'class': 'form-control font-monospace', 'rows': 8}),
+            'body': forms.Textarea(attrs={'class': 'form-control', 'rows': 8}),
+            'solution': forms.Textarea(attrs={'class': 'form-control', 'rows': 8}),
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
 
