@@ -9,4 +9,5 @@ urlpatterns = [
     path('', include('users.urls')),
     path('', include('changes.urls')),
     path('', include('budget.urls')),
+    path('', include('kb.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

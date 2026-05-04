@@ -1,0 +1,95 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ article.title }} — Knowledge Base{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="
+    {%- if article.subcategory and article.ticket_item -%}
+      {% url 'portal_kb_item' article.subcategory.pk article.ticket_item.pk %}
+    {%- elif article.subcategory -%}
+      {% url 'portal_kb_subcategory' article.subcategory.pk %}
+    {%- else -%}
+      {% url 'portal_kb' %}
+    {%- endif -%}
+  " class="text-muted text-decoration-none">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0" style="font-size:var(--fs-body)">
+      <li class="breadcrumb-item"><a href="{% url 'portal_kb' %}">Knowledge Base</a></li>
+      {% if article.subcategory %}
+        <li class="breadcrumb-item">
+          <a href="{% url 'portal_kb_subcategory' article.subcategory.pk %}">{{ article.subcategory.name }}</a>
+        </li>
+      {% endif %}
+      {% if article.ticket_item %}
+        <li class="breadcrumb-item">
+          <a href="{% url 'portal_kb_item' article.subcategory.pk article.ticket_item.pk %}">{{ article.ticket_item.name }}</a>
+        </li>
+      {% endif %}
+      <li class="breadcrumb-item active text-truncate">{{ article.title }}</li>
+    </ol>
+  </nav>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="mb-3">{{ article.title }}</h5>
+        <div style="white-space:pre-wrap;line-height:1.7;">{{ article.body }}</div>
+      </div>
+    </div>
+
+    {% if article.attachments.all %}
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-paperclip me-1"></i>Attachments
+      </div>
+      <div class="card-body p-0">
+        {% for att in article.attachments.all %}
+        <a href="{% url 'kb_download_attachment' att.pk %}"
+           class="d-flex align-items-center gap-2 p-2 text-decoration-none {% if not forloop.last %}border-bottom{% endif %}"
+           target="_blank">
+          <i class="bi bi-file-earmark text-muted"></i>
+          <span class="text-truncate" style="font-size:var(--fs-body)">{{ att.filename }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header fw-semibold">Details</div>
+      <div class="card-body" style="font-size:var(--fs-body)">
+        <dl class="mb-0 row g-2">
+          {% if article.subcategory %}
+          <dt class="col-5 text-muted mb-0">Category</dt>
+          <dd class="col-7 mb-0">
+            {{ article.subcategory.category.name }} › {{ article.subcategory.name }}
+          </dd>
+          {% endif %}
+          {% if article.ticket_item %}
+          <dt class="col-5 text-muted mb-0">Topic</dt>
+          <dd class="col-7 mb-0">{{ article.ticket_item.name }}</dd>
+          {% endif %}
+          <dt class="col-5 text-muted mb-0">Updated</dt>
+          <dd class="col-7 mb-0">{{ article.updated_at|date:"d M Y" }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-body text-center py-3">
+        <div class="text-muted mb-2" style="font-size:var(--fs-body)">Didn't find what you need?</div>
+        <a href="{% url 'portal_ticket_create' %}" class="btn btn-sm" style="background:var(--kramer-purple);color:#fff;border:none;">
+          <i class="bi bi-plus-circle me-1"></i>Open a Ticket
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

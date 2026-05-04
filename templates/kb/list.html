@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
+  <div>
+    <h4 class="mb-0">Knowledge Base</h4>
+    <div class="text-muted" style="font-size:var(--fs-body)">Manage articles — drafts, published, and ticket-sourced</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'portal_kb' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-eye me-1"></i>Browse KB
+    </a>
+    <a href="{% url 'kb_create' %}" class="btn btn-sm" style="background:var(--kramer-purple);color:#fff;border:none;">
+      <i class="bi bi-plus-circle me-1"></i>New Article
+    </a>
+  </div>
+</div>
+
+<!-- Search + filter bar -->
+<div class="card mb-4">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex gap-2 flex-wrap align-items-center">
+      <input type="search" name="q" value="{{ q }}" class="form-control form-control-sm"
+             placeholder="Search title or body…" style="max-width:320px;">
+      <div class="btn-group btn-group-sm" role="group">
+        <a href="?{% if q %}q={{ q }}&{% endif %}"
+           class="btn {% if not status_filter %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All</a>
+        <a href="?{% if q %}q={{ q }}&{% endif %}status=draft"
+           class="btn {% if status_filter == 'draft' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+          Drafts
+          {% if draft_count %}<span class="badge bg-warning text-dark ms-1">{{ draft_count }}</span>{% endif %}
+        </a>
+        <a href="?{% if q %}q={{ q }}&{% endif %}status=published"
+           class="btn {% if status_filter == 'published' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Published</a>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary">Search</button>
+    </form>
+  </div>
+</div>
+
+{% if articles %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle" style="font-size:var(--fs-body)">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Subcategory</th>
+          <th>Item</th>
+          <th>Status</th>
+          <th>Author</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for article in articles %}
+        <tr>
+          <td>
+            <a href="{% url 'kb_edit' article.pk %}" class="text-decoration-none fw-semibold">
+              {{ article.title }}
+            </a>
+            {% if article.source_ticket %}
+              <a href="{% url 'ticket_detail' article.source_ticket.pk %}" class="badge bg-secondary text-decoration-none ms-1"
+                 title="From ticket #{{ article.source_ticket.pk|stringformat:'04d' }}">
+                #{{ article.source_ticket.pk|stringformat:"04d" }}
+              </a>
+            {% endif %}
+          </td>
+          <td>
+            {% if article.subcategory %}
+              <span class="text-muted">{{ article.subcategory.category.name }} /</span>
+              {{ article.subcategory.name }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ article.ticket_item.name|default:"—" }}</td>
+          <td>
+            {% if article.status == 'published' %}
+              <span class="badge" style="background:var(--kramer-mint);color:#000;">Published</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Draft</span>
+            {% endif %}
+          </td>
+          <td>{{ article.author.display_name|default:article.author.email|default:"—" }}</td>
+          <td class="text-muted">{{ article.updated_at|date:"d M Y" }}</td>
+          <td class="text-end">
+            <a href="{% url 'kb_edit' article.pk %}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-pencil"></i>
+            </a>
+            {% if article.status == 'draft' %}
+            <form method="post" action="{% url 'kb_publish' article.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button class="btn btn-sm btn-outline-success" title="Publish">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'kb_delete' article.pk %}" class="d-inline"
+                  onsubmit="return confirm('Delete this article?')">
+              {% csrf_token %}
+              <button class="btn btn-sm btn-outline-danger" title="Delete">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-book fs-1 d-block mb-2"></i>
+    {% if q %}No articles match "{{ q }}".{% else %}No articles yet. <a href="{% url 'kb_create' %}">Create one</a>.{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

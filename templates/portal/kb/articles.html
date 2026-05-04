@@ -1,0 +1,67 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ item.name|default:"General" }} — {{ subcategory.name }} — Knowledge Base{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{% url 'portal_kb_subcategory' subcategory.pk %}" class="text-muted text-decoration-none">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0" style="font-size:var(--fs-body)">
+      <li class="breadcrumb-item"><a href="{% url 'portal_kb' %}">Knowledge Base</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'portal_kb_subcategory' subcategory.pk %}">{{ subcategory.name }}</a></li>
+      <li class="breadcrumb-item active">{{ item.name|default:"General" }}</li>
+    </ol>
+  </nav>
+</div>
+
+<h4 class="mb-1">{{ item.name|default:"General" }}</h4>
+<div class="text-muted mb-4" style="font-size:var(--fs-body)">{{ subcategory.category.name }} › {{ subcategory.name }}</div>
+
+{% if articles %}
+<div class="d-flex flex-column gap-3">
+  {% for article in articles %}
+  <a href="{% url 'portal_kb_article' article.pk %}" class="card text-decoration-none kb-article-card">
+    <div class="card-body p-3">
+      <div class="d-flex align-items-start gap-3">
+        <i class="bi bi-file-earmark-text fs-4 mt-1" style="color:var(--kramer-purple);flex-shrink:0;"></i>
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold mb-1">{{ article.title }}</div>
+          <div class="text-muted" style="font-size:var(--fs-body);white-space:pre-wrap;overflow:hidden;max-height:3.2em;">{{ article.body_snippet }}</div>
+          <div class="text-muted mt-2" style="font-size:var(--fs-body)">
+            Updated {{ article.updated_at|date:"d M Y" }}
+            {% if article.attachments.count %}
+              <span class="ms-2"><i class="bi bi-paperclip"></i> {{ article.attachments.count }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <i class="bi bi-chevron-right text-muted align-self-center flex-shrink-0"></i>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-book fs-1 d-block mb-2"></i>
+    No articles here yet.
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.kb-article-card {
+  background: var(--kramer-surface);
+  border: 1px solid var(--kramer-border);
+  transition: border-color .15s, box-shadow .15s;
+}
+.kb-article-card:hover {
+  border-color: var(--kramer-purple);
+  box-shadow: 0 0 0 3px rgba(130,5,180,.12);
+}
+</style>
+{% endblock %}

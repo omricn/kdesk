@@ -1,0 +1,87 @@
+{% extends "portal/base.html" %}
+{% block title %}Search — Knowledge Base{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{% url 'portal_kb' %}" class="text-muted text-decoration-none">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="mb-0">Knowledge Base Search</h4>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex gap-2">
+      <input type="search" name="q" value="{{ q }}" class="form-control"
+             placeholder="Search knowledge base…" autofocus>
+      <button class="btn" style="background:var(--kramer-purple);color:#fff;border:none;white-space:nowrap;">
+        <i class="bi bi-search me-1"></i>Search
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if q %}
+  {% if articles %}
+  <div class="mb-2 text-muted" style="font-size:var(--fs-body)">
+    {{ articles|length }} result{{ articles|length|pluralize }} for "<strong>{{ q }}</strong>"
+  </div>
+  <div class="d-flex flex-column gap-3 mt-3">
+    {% for article in articles %}
+    <a href="{% url 'portal_kb_article' article.pk %}" class="card text-decoration-none kb-article-card">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-file-earmark-text fs-4 mt-1" style="color:var(--kramer-purple);flex-shrink:0;"></i>
+          <div class="flex-grow-1 min-w-0">
+            <div class="fw-semibold mb-1">{{ article.title }}</div>
+            {% if article.subcategory %}
+            <div class="mb-1" style="font-size:var(--fs-body);">
+              <span class="badge bg-secondary">{{ article.subcategory.category.name }}</span>
+              <span class="badge bg-secondary ms-1">{{ article.subcategory.name }}</span>
+              {% if article.ticket_item %}
+              <span class="badge bg-secondary ms-1">{{ article.ticket_item.name }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+            <div class="text-muted" style="font-size:var(--fs-body);white-space:pre-wrap;overflow:hidden;max-height:3.2em;">{{ article.body_snippet }}</div>
+          </div>
+          <i class="bi bi-chevron-right text-muted align-self-center flex-shrink-0"></i>
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-search fs-1 d-block mb-2"></i>
+      No results for "<strong>{{ q }}</strong>".
+      <div class="mt-2">
+        <a href="{% url 'portal_ticket_create' %}">Open a ticket</a> if you need help.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-search fs-1 d-block mb-2"></i>
+    Enter a search term above.
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.kb-article-card {
+  background: var(--kramer-surface);
+  border: 1px solid var(--kramer-border);
+  transition: border-color .15s, box-shadow .15s;
+}
+.kb-article-card:hover {
+  border-color: var(--kramer-purple);
+  box-shadow: 0 0 0 3px rgba(130,5,180,.12);
+}
+</style>
+{% endblock %}

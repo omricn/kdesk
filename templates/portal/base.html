@@ -65,6 +65,11 @@
             <i class="bi bi-plus-circle me-2"></i>Submit Ticket
           </a>
         </li>
+        <li>
+          <a href="{% url 'portal_kb' %}" class="nav-link {% if request.resolver_match.url_name in 'portal_kb,portal_kb_subcategory,portal_kb_item,portal_kb_article,portal_kb_search,portal_kb_uncategorized' %}active{% endif %}">
+            <i class="bi bi-book-half me-2"></i>Knowledge Base
+          </a>
+        </li>
       </ul>
     </div>
   </div>
@@ -91,6 +96,11 @@
         <li>
           <a href="{% url 'portal_ticket_create' %}" class="nav-link {% if request.resolver_match.url_name == 'portal_ticket_create' %}active{% endif %}">
             <i class="bi bi-plus-circle me-2"></i>Submit Ticket
+          </a>
+        </li>
+        <li>
+          <a href="{% url 'portal_kb' %}" class="nav-link {% if request.resolver_match.url_name in 'portal_kb,portal_kb_subcategory,portal_kb_item,portal_kb_article,portal_kb_search,portal_kb_uncategorized' %}active{% endif %}">
+            <i class="bi bi-book-half me-2"></i>Knowledge Base
           </a>
         </li>
       </ul>

@@ -1,0 +1,73 @@
+{% extends "portal/base.html" %}
+{% block title %}Knowledge Base{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h4 class="mb-1">Knowledge Base</h4>
+  <div class="text-muted" style="font-size:var(--fs-body)">Find answers, guides and solutions</div>
+</div>
+
+<!-- Search -->
+<div class="card mb-4">
+  <div class="card-body py-2">
+    <form method="get" action="{% url 'portal_kb_search' %}" class="d-flex gap-2">
+      <input type="search" name="q" value="{{ q }}" class="form-control"
+             placeholder="Search knowledge base…" autofocus>
+      <button class="btn" style="background:var(--kramer-purple);color:#fff;border:none;white-space:nowrap;">
+        <i class="bi bi-search me-1"></i>Search
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if grouped %}
+  {% for cat_name, subcategories in grouped.items %}
+  <div class="mb-4">
+    <h6 class="text-muted text-uppercase fw-semibold mb-3" style="letter-spacing:.05em;font-size:.75rem;">
+      {{ cat_name }}
+    </h6>
+    <div class="row g-3">
+      {% for sub in subcategories %}
+      <div class="col-sm-6 col-lg-4">
+        <a href="{% url 'portal_kb_subcategory' sub.pk %}" class="card h-100 text-decoration-none kb-card">
+          <div class="card-body d-flex align-items-start gap-3 p-3">
+            <div class="kb-card-icon">
+              <i class="bi bi-folder2-open fs-4" style="color:var(--kramer-purple);"></i>
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-truncate">{{ sub.name }}</div>
+              <div class="text-muted" style="font-size:var(--fs-body)">
+                {{ sub.article_count }} article{{ sub.article_count|pluralize }}
+              </div>
+            </div>
+            <i class="bi bi-chevron-right text-muted align-self-center"></i>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-book fs-1 d-block mb-2"></i>
+    No knowledge base articles available yet.
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.kb-card {
+  background: var(--kramer-surface);
+  border: 1px solid var(--kramer-border);
+  transition: border-color .15s, box-shadow .15s;
+}
+.kb-card:hover {
+  border-color: var(--kramer-purple);
+  box-shadow: 0 0 0 3px rgba(130,5,180,.12);
+}
+</style>
+{% endblock %}

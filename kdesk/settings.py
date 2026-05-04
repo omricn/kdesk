@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'tasks',
     'changes',
     'budget',
+    'kb',
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,79 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ subcategory.name }} — Knowledge Base{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-4">
+  <a href="{% url 'portal_kb' %}" class="text-muted text-decoration-none">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0" style="font-size:var(--fs-body)">
+      <li class="breadcrumb-item"><a href="{% url 'portal_kb' %}">Knowledge Base</a></li>
+      <li class="breadcrumb-item active">{{ subcategory.name }}</li>
+    </ol>
+  </nav>
+</div>
+
+<h4 class="mb-1">{{ subcategory.name }}</h4>
+<div class="text-muted mb-4" style="font-size:var(--fs-body)">{{ subcategory.category.name }}</div>
+
+{% if items or uncategorized_count %}
+<div class="row g-3">
+  {% for item in items %}
+  <div class="col-sm-6 col-lg-4">
+    <a href="{% url 'portal_kb_item' subcategory.pk item.pk %}" class="card h-100 text-decoration-none kb-card">
+      <div class="card-body d-flex align-items-start gap-3 p-3">
+        <i class="bi bi-file-text fs-4 mt-1" style="color:var(--kramer-mint);"></i>
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold text-truncate">{{ item.name }}</div>
+          <div class="text-muted" style="font-size:var(--fs-body)">
+            {{ item.article_count }} article{{ item.article_count|pluralize }}
+          </div>
+        </div>
+        <i class="bi bi-chevron-right text-muted align-self-center"></i>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+
+  {% if uncategorized_count %}
+  <div class="col-sm-6 col-lg-4">
+    <a href="{% url 'portal_kb_uncategorized' subcategory.pk %}" class="card h-100 text-decoration-none kb-card">
+      <div class="card-body d-flex align-items-start gap-3 p-3">
+        <i class="bi bi-file-text fs-4 mt-1" style="color:var(--kramer-mint);"></i>
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold text-truncate">General</div>
+          <div class="text-muted" style="font-size:var(--fs-body)">
+            {{ uncategorized_count }} article{{ uncategorized_count|pluralize }}
+          </div>
+        </div>
+        <i class="bi bi-chevron-right text-muted align-self-center"></i>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-book fs-1 d-block mb-2"></i>
+    No articles in this category yet.
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.kb-card {
+  background: var(--kramer-surface);
+  border: 1px solid var(--kramer-border);
+  transition: border-color .15s, box-shadow .15s;
+}
+.kb-card:hover {
+  border-color: var(--kramer-purple);
+  box-shadow: 0 0 0 3px rgba(130,5,180,.12);
+}
+</style>
+{% endblock %}

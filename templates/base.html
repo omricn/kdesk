@@ -83,6 +83,11 @@
             <i class="bi bi-arrow-repeat me-2"></i>Changes
           </a>
         </li>
+        <li>
+          <a href="{% url 'kb_list' %}" class="nav-link {% if request.resolver_match.url_name in 'kb_list,kb_create,kb_edit' %}active{% endif %}">
+            <i class="bi bi-book-half me-2"></i>Knowledge Base
+          </a>
+        </li>
         {% endif %}
         {% if user.is_superuser %}
         <li>
@@ -138,6 +143,11 @@
         <li>
           <a href="{% url 'change_list' %}" class="nav-link {% if request.resolver_match.url_name in 'change_list,change_detail,change_create,change_edit' %}active{% endif %}" data-label="Changes">
             <i class="bi bi-arrow-repeat me-2"></i><span class="sidebar-label">Changes</span>
+          </a>
+        </li>
+        <li>
+          <a href="{% url 'kb_list' %}" class="nav-link {% if request.resolver_match.url_name in 'kb_list,kb_create,kb_edit' %}active{% endif %}" data-label="Knowledge Base">
+            <i class="bi bi-book-half me-2"></i><span class="sidebar-label">Knowledge Base</span>
           </a>
         </li>
         {% endif %}
