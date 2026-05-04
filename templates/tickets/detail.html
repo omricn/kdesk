@@ -484,6 +484,22 @@
 
 {% block extra_css %}
 <style>
+  input[name="title"] {
+    border: 1px solid transparent;
+    border-radius: 5px;
+    transition: border-color .15s, padding .15s, box-shadow .15s;
+  }
+  input[name="title"]:hover {
+    border-color: var(--kramer-border);
+  }
+  input[name="title"]:focus {
+    outline: none;
+    border-color: var(--kramer-purple) !important;
+    padding: 4px 8px !important;
+    box-shadow: 0 0 0 3px rgba(130,5,180,.15);
+    background: var(--kramer-surface);
+  }
+
   #tab-comments-btn, #tab-history-btn {
     color: #888 !important;
     background: transparent !important;
