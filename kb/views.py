@@ -3,7 +3,6 @@ from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import FileResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -141,11 +140,9 @@ def kb_publish(request, pk):
     return redirect('kb_edit', pk=pk)
 
 
-@login_required
+@admin_required
 def kb_download_attachment(request, pk):
     att = get_object_or_404(KBAttachment, pk=pk)
-    if not request.user.is_admin and att.article.status != KBArticle.STATUS_PUBLISHED:
-        return HttpResponseForbidden()
     return FileResponse(att.file.open('rb'), as_attachment=True, filename=att.filename)
 
 
@@ -175,7 +172,7 @@ def kb_items_api(request):
 
 # ── Portal views ──────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def portal_kb(request):
     from tickets.models import TicketSubCategory
     q = request.GET.get('q', '').strip()
@@ -205,7 +202,7 @@ def portal_kb(request):
     })
 
 
-@login_required
+@admin_required
 def portal_kb_subcategory(request, subcategory_pk):
     from tickets.models import TicketSubCategory, TicketItem
     subcategory = get_object_or_404(
@@ -233,7 +230,7 @@ def portal_kb_subcategory(request, subcategory_pk):
     })
 
 
-@login_required
+@admin_required
 def portal_kb_item(request, subcategory_pk, item_pk):
     from tickets.models import TicketSubCategory, TicketItem
     subcategory = get_object_or_404(
@@ -253,7 +250,7 @@ def portal_kb_item(request, subcategory_pk, item_pk):
     })
 
 
-@login_required
+@admin_required
 def portal_kb_uncategorized(request, subcategory_pk):
     from tickets.models import TicketSubCategory
     subcategory = get_object_or_404(
@@ -271,13 +268,13 @@ def portal_kb_uncategorized(request, subcategory_pk):
     })
 
 
-@login_required
+@admin_required
 def portal_kb_article(request, pk):
     article = get_object_or_404(KBArticle, pk=pk, status=KBArticle.STATUS_PUBLISHED)
     return render(request, 'portal/kb/article.html', {'article': article})
 
 
-@login_required
+@admin_required
 def portal_kb_search(request):
     q = request.GET.get('q', '').strip()
     articles = []
