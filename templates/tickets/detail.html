@@ -338,6 +338,21 @@
         </div>
       </div>
 
+      <!-- Status -->
+      <div class="card border-0 shadow-sm mb-3" style="border-left:3px solid var(--kramer-purple) !important;">
+        <div class="card-header fw-semibold small d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-record-circle me-1" style="color:var(--kramer-purple);"></i>Status</span>
+          <span class="badge {{ ticket.status|status_badge }}">{{ ticket.get_status_display }}</span>
+        </div>
+        <div class="card-body py-2">
+          <select name="status" id="id_status" form="update-form" class="form-control form-select fw-semibold">
+            {% for val, label in update_form.fields.status.choices %}
+            <option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
       <!-- Edit Ticket -->
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-white fw-semibold small"><i class="bi bi-pencil-square me-1"></i>Edit Ticket</div>
@@ -349,11 +364,13 @@
             <div class="alert alert-danger py-2 small mb-2">{{ update_form.non_field_errors }}</div>
             {% endif %}
             {% for field in update_form %}
+            {% if field.name != 'status' %}
             <div class="mb-2">
               <label class="form-label small fw-semibold mb-1">{{ field.label }}</label>
               {{ field }}
               {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
             </div>
+            {% endif %}
             {% endfor %}
           </form>
           <hr>
@@ -549,7 +566,7 @@ if (INIT_CAT) {
 
 // ── Solution required when closing ───────────────────────────────────────────
 (function() {
-  const statusSel = document.querySelector('#update-form select[name="status"]');
+  const statusSel = document.getElementById('id_status');
   const solutionTA = document.getElementById('id_solution');
   const badge = document.getElementById('solution-required-badge');
   const card = document.getElementById('solution-card');
