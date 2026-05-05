@@ -208,8 +208,8 @@
               <td>
                 {% if t.sla_deadline %}
                   {% with s=t.sla_status %}
-                  <span class="badge {% if s == 'breached' %}bg-danger{% elif s == 'warning' %}bg-warning text-dark{% elif s == 'resolved' %}bg-secondary{% else %}bg-success{% endif %}" title="{{ t.sla_deadline }}">
-                    {% if s == 'breached' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% endif %}
+                  <span class="badge {% if s == 'breached' %}bg-danger{% elif s == 'warning' %}bg-warning text-dark{% elif s == 'resolved' %}bg-secondary{% elif s == 'paused' %}bg-secondary{% else %}bg-success{% endif %}" title="{{ t.sla_deadline }}">
+                    {% if s == 'breached' %}<i class="bi bi-exclamation-triangle-fill me-1"></i>{% elif s == 'paused' %}<i class="bi bi-pause-fill me-1"></i>{% endif %}
                     {{ t.sla_deadline|date:"d M H:i" }}
                   </span>
                   {% endwith %}

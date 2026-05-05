@@ -27,6 +27,14 @@ class Ticket(models.Model):
     # Statuses considered "terminal" (SLA stops, ticket is done)
     TERMINAL_STATUSES = [STATUS_CLOSED]
 
+    # Statuses where the SLA clock is paused (waiting on someone else)
+    SLA_PAUSED_STATUSES = [
+        STATUS_PENDING_USER,
+        STATUS_PENDING_VENDOR,
+        STATUS_HOLD,
+        STATUS_PENDING_MANAGER,
+    ]
+
     SOURCE_EMAIL = 'email'
     SOURCE_MANUAL = 'manual'
     SOURCE_CHOICES = [
@@ -60,6 +68,7 @@ class Ticket(models.Model):
     # SLA
     sla_deadline = models.DateTimeField(null=True, blank=True, db_index=True)
     sla_breached = models.BooleanField(default=False, db_index=True)
+    sla_paused_at = models.DateTimeField(null=True, blank=True)
 
     # Category (3-level hierarchy)
     category = models.ForeignKey(
@@ -111,19 +120,30 @@ class Ticket(models.Model):
         return self.attachments.filter(is_inline=False)
 
     @property
+    def sla_is_paused(self):
+        return bool(self.sla_paused_at) and self.status in self.SLA_PAUSED_STATUSES
+
+    @property
     def is_overdue(self):
+        if self.sla_is_paused:
+            return False
         if self.sla_deadline and self.status not in self.TERMINAL_STATUSES:
             return timezone.now() > self.sla_deadline
         return False
 
     @property
     def sla_percent_elapsed(self):
-        """Business hours consumed as a percentage of the 9-hour SLA target.
-        Frozen at the suspension timestamp when SLA is paused."""
+        """Business hours consumed as a percentage of the SLA target.
+        Frozen while ticket is in a paused status or globally suspended."""
         if not self.sla_deadline or not self.created_at:
             return 0
         from tickets.sla import business_hours_elapsed, get_effective_now, get_sla_hours
-        elapsed = business_hours_elapsed(self.created_at, get_effective_now())
+        # While paused: freeze the clock at the moment pausing began
+        if self.sla_is_paused:
+            effective_now = self.sla_paused_at
+        else:
+            effective_now = get_effective_now()
+        elapsed = business_hours_elapsed(self.created_at, effective_now)
         sla_hours = get_sla_hours()
         if sla_hours <= 0:
             return 100
@@ -131,9 +151,11 @@ class Ticket(models.Model):
 
     @property
     def sla_status(self):
-        """Returns 'resolved', 'ok', 'warning' (≥75 %), or 'breached' (≥100 %)."""
+        """Returns 'resolved', 'paused', 'ok', 'warning' (≥75%), or 'breached' (≥100%)."""
         if self.status in self.TERMINAL_STATUSES:
             return 'resolved'
+        if self.sla_is_paused:
+            return 'paused'
         if not self.sla_deadline:
             return 'ok'
         pct = self.sla_percent_elapsed

@@ -31,6 +31,8 @@
     <span class="badge bg-danger fs-6"><i class="bi bi-exclamation-triangle-fill me-1"></i>SLA Breached</span>
   {% elif s == 'warning' %}
     <span class="badge bg-warning text-dark fs-6"><i class="bi bi-clock me-1"></i>SLA Warning</span>
+  {% elif s == 'paused' %}
+    <span class="badge bg-secondary fs-6"><i class="bi bi-pause-fill me-1"></i>SLA Paused</span>
   {% endif %}
   {% endwith %}
 </div>
@@ -387,8 +389,8 @@
             {% if ticket.sla_deadline %}
               {{ ticket.sla_deadline|date:"d M Y H:i" }}
               <div class="progress mt-1" style="height:6px;" title="{{ ticket.sla_percent_elapsed }}% elapsed">
-                <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% else %}bg-success{% endif %}"
-                     style="width:{{ ticket.sla_percent_elapsed|default:0 }}%"></div>
+                <div class="progress-bar {% if ticket.sla_status == 'breached' %}bg-danger{% elif ticket.sla_status == 'warning' %}bg-warning{% elif ticket.sla_status == 'paused' %}bg-secondary{% else %}bg-success{% endif %}"
+                     style="width:{{ ticket.sla_percent_elapsed|default:0 }}%;{% if ticket.sla_status == 'paused' %}opacity:0.5;{% endif %}"></div>
               </div>
             {% else %}—{% endif %}
           </div>
