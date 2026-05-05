@@ -165,19 +165,24 @@
 </button>
 {% endif %}
 
-<!-- iOS "Add to Home Screen" hint banner -->
-<div id="ios-install-banner"
+<!-- PWA install banner (iOS + Android) -->
+<div id="pwa-banner"
      style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9998;
             background:#8205B4;color:#fff;padding:12px 16px;
             font-family:'Segoe UI',Arial,sans-serif;font-size:14px;
             box-shadow:0 -2px 12px rgba(0,0,0,0.3);align-items:center;gap:12px;">
   <img src="{% static 'img/pwa-icon-192.png' %}" width="36" height="36"
        style="border-radius:8px;flex-shrink:0;" alt="">
-  <span style="flex:1;">Install <strong>Kdesk</strong> — tap
-    <strong><i class="bi bi-box-arrow-up"></i> Share</strong>
-    then <strong>"Add to Home Screen"</strong></span>
-  <button onclick="document.getElementById('ios-install-banner').style.display='none';localStorage.setItem('kdeskIOSBannerDismissed','1');"
-          style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0;line-height:1;">
+  <span id="pwa-banner-text" style="flex:1;"></span>
+  <button id="pwa-install-btn"
+          style="display:none;background:#fff;color:#8205B4;border:none;
+                 border-radius:6px;padding:6px 14px;font-weight:600;
+                 font-size:13px;cursor:pointer;white-space:nowrap;">
+    Install
+  </button>
+  <button id="pwa-dismiss-btn"
+          style="background:none;border:none;color:#fff;font-size:20px;
+                 cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;">
     &times;
   </button>
 </div>
@@ -210,18 +215,56 @@
 </script>
 {% block extra_js %}{% endblock %}
 <script>
-// Service worker registration (enables Android install prompt)
+// Service worker registration (required for Android install prompt)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js', { scope: '/portal/' });
 }
-// iOS install hint banner
+
+// PWA install banner — re-shows every 7 days after dismissal
 (function () {
+  var REDISPLAY_DAYS = 7;
+  var STORAGE_KEY    = 'kdeskBannerDismissedAt';
+
+  var isStandalone = window.navigator.standalone === true ||
+                     window.matchMedia('(display-mode: standalone)').matches;
+  if (isStandalone) return;  // already installed — never show
+
+  var last = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+  var daysSince = (Date.now() - last) / 86400000;
+  if (daysSince < REDISPLAY_DAYS) return;  // too soon
+
+  var banner      = document.getElementById('pwa-banner');
+  var bannerText  = document.getElementById('pwa-banner-text');
+  var installBtn  = document.getElementById('pwa-install-btn');
+  var dismissBtn  = document.getElementById('pwa-dismiss-btn');
+  if (!banner) return;
+
+  function dismiss() {
+    localStorage.setItem(STORAGE_KEY, Date.now().toString());
+    banner.style.display = 'none';
+  }
+  dismissBtn.addEventListener('click', dismiss);
+
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  var isStandalone = window.navigator.standalone === true;
-  var dismissed = localStorage.getItem('kdeskIOSBannerDismissed');
-  if (isIOS && !isStandalone && !dismissed) {
-    var banner = document.getElementById('ios-install-banner');
-    if (banner) banner.style.display = 'flex';
+
+  if (isIOS) {
+    // iOS: guide user manually
+    bannerText.innerHTML = 'Add <strong>Kdesk</strong> to your home screen — tap '
+      + '<strong>&#x2B06; Share</strong> then <strong>"Add to Home Screen"</strong>';
+    banner.style.display = 'flex';
+  } else {
+    // Android/Chrome: intercept the browser prompt, show our banner
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      var deferred = e;
+      bannerText.innerHTML = 'Add <strong>Kdesk</strong> to your home screen for quick access';
+      installBtn.style.display = 'inline-block';
+      banner.style.display = 'flex';
+      installBtn.addEventListener('click', function () {
+        deferred.prompt();
+        deferred.userChoice.then(function () { dismiss(); });
+      });
+    });
   }
 })();
 </script>
