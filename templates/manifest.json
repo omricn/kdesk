@@ -1,0 +1,25 @@
+{
+  "name": "Kdesk",
+  "short_name": "Kdesk",
+  "description": "Kramer IT Support Portal",
+  "start_url": "/portal/",
+  "scope": "/portal/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#8205B4",
+  "background_color": "#8205B4",
+  "icons": [
+    {
+      "src": "/static/img/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
