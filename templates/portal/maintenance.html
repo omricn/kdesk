@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Back Soon — Kdesk</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',Arial,sans-serif; }
+    .brand-title { font-weight:700; font-size:1.2rem; color:#e0e0e0; letter-spacing:.02em; }
+    .card-maint  { background:#23233a; border:1px solid #2e2e4a; border-radius:16px; }
+    .countdown-box {
+      background:#2e2e4a; border-radius:10px; padding:10px 18px;
+      font-size:2rem; font-weight:700; font-variant-numeric:tabular-nums;
+      color:#69FFC3; letter-spacing:.05em; font-family:monospace;
+    }
+    .label { font-size:.7rem; color:#888; text-transform:uppercase; letter-spacing:.08em; }
+  </style>
+</head>
+<body class="d-flex align-items-center justify-content-center min-vh-100 p-3">
+
+<div style="max-width:480px;width:100%;">
+
+  <!-- Brand -->
+  <div class="d-flex align-items-center gap-2 justify-content-center mb-4">
+    <i class="bi bi-headset fs-4" style="color:#69FFC3;"></i>
+    <span class="brand-title">Kdesk</span>
+  </div>
+
+  <div class="card-maint p-4 p-md-5 text-center">
+    <div class="mb-3">
+      <i class="bi bi-tools fs-1" style="color:#8205B4;"></i>
+    </div>
+    <h4 class="fw-bold mb-2">We'll be right back</h4>
+    <p class="text-muted mb-4">
+      The IT support portal is undergoing maintenance and will be available again at
+      <strong style="color:#e0e0e0;">{{ reopen_at|date:"H:i" }} (Israel time)</strong>
+      on <strong style="color:#e0e0e0;">{{ reopen_at|date:"d M Y" }}</strong>.
+    </p>
+
+    <!-- Countdown -->
+    <div class="d-flex justify-content-center gap-3 mb-4">
+      <div class="text-center">
+        <div class="countdown-box" id="cd-h">--</div>
+        <div class="label mt-1">Hours</div>
+      </div>
+      <div class="countdown-box d-flex align-items-center pb-4" style="background:none;color:#555;padding:0;">:</div>
+      <div class="text-center">
+        <div class="countdown-box" id="cd-m">--</div>
+        <div class="label mt-1">Minutes</div>
+      </div>
+      <div class="countdown-box d-flex align-items-center pb-4" style="background:none;color:#555;padding:0;">:</div>
+      <div class="text-center">
+        <div class="countdown-box" id="cd-s">--</div>
+        <div class="label mt-1">Seconds</div>
+      </div>
+    </div>
+
+    <p class="text-muted small mb-0">
+      <i class="bi bi-envelope me-1"></i>
+      For urgent issues contact
+      <a href="mailto:servicedesk@kramerav.com" style="color:#69FFC3;">servicedesk@kramerav.com</a>
+    </p>
+  </div>
+
+</div>
+
+<script>
+var target = new Date('{{ reopen_at|date:"c" }}').getTime();
+function tick() {
+  var diff = target - Date.now();
+  if (diff <= 0) { location.reload(); return; }
+  var h = Math.floor(diff / 3600000);
+  var m = Math.floor((diff % 3600000) / 60000);
+  var s = Math.floor((diff % 60000) / 1000);
+  document.getElementById('cd-h').textContent = String(h).padStart(2,'0');
+  document.getElementById('cd-m').textContent = String(m).padStart(2,'0');
+  document.getElementById('cd-s').textContent = String(s).padStart(2,'0');
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
