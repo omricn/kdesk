@@ -339,18 +339,21 @@ def send_requester_closed(ticket_pk: int):
     name = _esc(ticket.requester_name or ticket.requester_email)
     closed = ticket.resolved_at.strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
     solution_row = _row('Resolution', ticket.solution) if ticket.solution else ''
+    portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     body = _email_html(
         header_title='Your ticket has been closed',
         header_subtitle=f'Ticket #{ticket.pk:04d}',
         greeting=(f'Hi <strong>{name}</strong>,<br><br>'
                   f'Your support ticket has been resolved and closed. '
-                  f'If you need further assistance, please don\'t hesitate to reach out.'),
+                  f'We\'d love to hear how we did — please take a moment to rate your experience.'),
         body_rows=(
             _row('Ticket #', f'#{ticket.pk:04d}') +
             _row('Subject', ticket.title) +
             _row('Closed', closed) +
             solution_row
         ),
+        cta_url=portal_url,
+        cta_label='⭐ Rate Your Experience',
     )
     _send_notification_email(
         to=ticket.requester_email,

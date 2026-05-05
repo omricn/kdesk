@@ -321,6 +321,17 @@ def ticket_detail(request, pk):
                     # Stamp resolved_at when closed
                     if updated.status in Ticket.TERMINAL_STATUSES and not updated.resolved_at:
                         updated.resolved_at = timezone.now()
+                    # SLA pause/unpause on status change
+                    if updated.status != old_status:
+                        now = timezone.now()
+                        entering_pause = updated.status in Ticket.SLA_PAUSED_STATUSES
+                        leaving_pause = old_status in Ticket.SLA_PAUSED_STATUSES
+                        if entering_pause and not ticket.sla_paused_at:
+                            updated.sla_paused_at = now
+                        elif leaving_pause and ticket.sla_paused_at and updated.sla_deadline:
+                            # Shift deadline forward by however long we were paused
+                            updated.sla_deadline += (now - ticket.sla_paused_at)
+                            updated.sla_paused_at = None
                     # Apply category fields before the single save
                     def _to_int(v):
                         try: return int(v) if v else None
@@ -1087,13 +1098,58 @@ def email_preview(request):
             'html': _email_html(
                 header_title='Your ticket has been closed',
                 header_subtitle='Ticket #0042',
-                greeting='Hi <strong>David Levi</strong>,<br><br>Your support ticket has been resolved and closed. If you need further assistance, please don\'t hesitate to reach out.',
+                greeting='Hi <strong>David Levi</strong>,<br><br>Your support ticket has been resolved and closed. We\'d love to hear how we did — please take a moment to rate your experience.',
                 body_rows=(
                     _row('Ticket #', '#0042') +
                     _row('Subject', 'Outlook not syncing emails') +
                     _row('Closed', '17 Apr 2026 11:20') +
                     _row('Resolution', 'Reconfigured Exchange profile and cleared local cache. Emails are now syncing correctly.')
                 ),
+                cta_url='https://kdesk.kramerav.com/portal/tickets/42/',
+                cta_label='⭐ Rate Your Experience',
+            ),
+        },
+        {
+            'label': 'Requester — New Reply from Admin',
+            'html': _email_html(
+                header_title='New reply on your ticket',
+                header_subtitle='Ticket #0042 — Outlook not syncing emails',
+                greeting='Hi <strong>David Levi</strong>,<br><br><strong>Omri Cohen</strong> from the IT team has posted a reply on your support ticket.',
+                body_rows=(
+                    _row('Ticket #', '#0042') +
+                    _row('Subject', 'Outlook not syncing emails') +
+                    _row('Reply', 'We have checked your mailbox settings. Please try removing and re-adding your account in Outlook and let us know if the issue persists.')
+                ),
+            ),
+        },
+        {
+            'label': 'Admin — Ticket Closed by Requester (self-close)',
+            'html': _email_html(
+                header_title='Ticket Closed by Requester',
+                header_subtitle='#0042 — Outlook not syncing emails',
+                greeting='Hi <strong>Omri Cohen</strong>,<br><br><strong>David Levi</strong> has self-closed their ticket, indicating they resolved the issue on their own. No further action is needed.',
+                body_rows=(
+                    _row('Ticket', '#0042 — Outlook not syncing emails') +
+                    _row('Requester', 'David Levi (dlevi@kramerav.com)') +
+                    _row('Closed by', 'David Levi')
+                ),
+                cta_url=f'{site}/tickets/42/',
+                cta_label='View Ticket',
+            ),
+        },
+        {
+            'label': 'Admin — @Mention in Internal Note',
+            'html': _email_html(
+                header_title='You were mentioned in an internal note',
+                header_subtitle='#0042 — Outlook not syncing emails',
+                greeting='Hi <strong>Shahar Dekner</strong>,<br><br><strong>Omri Cohen</strong> mentioned you in an internal note on ticket <strong>#0042</strong>.',
+                body_rows=(
+                    _row('Ticket', '#0042 — Outlook not syncing emails') +
+                    _row('Requester', 'David Levi (dlevi@kramerav.com)') +
+                    _row('Note', '@Shahar can you check if the Exchange connector is misconfigured on this user\'s account?')
+                ),
+                cta_url=f'{site}/tickets/42/',
+                cta_label='View Ticket',
             ),
         },
         {
