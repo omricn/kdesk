@@ -257,6 +257,7 @@ def ticket_list(request):
         'sort_by':   sort_by,
         'sort_dir':  sort_dir,
         'sort_urls': {k: _sort_url(k) for k in _SORT_MAP},
+        'max_ticket_pk': Ticket.objects.order_by('-pk').values_list('pk', flat=True).first() or 0,
     }
     return render(request, 'tickets/list.html', context)
 
@@ -1027,6 +1028,21 @@ def download_attachment(request, pk):
     if not inline:
         response['Content-Disposition'] = f'attachment; filename="{att.filename}"'
     return response
+
+
+# ── New-ticket poll ──────────────────────────────────────────────────────────
+
+@admin_required
+def ticket_poll_new(request):
+    """Lightweight poll: returns count of tickets created after after_id."""
+    try:
+        after_id = int(request.GET.get('after_id', 0) or 0)
+    except (ValueError, TypeError):
+        after_id = 0
+    qs = Ticket.objects.filter(pk__gt=after_id)
+    count = qs.count()
+    latest_pk = qs.order_by('-pk').values_list('pk', flat=True).first() or after_id
+    return JsonResponse({'count': count, 'latest_pk': latest_pk})
 
 
 # ── Edit comment ─────────────────────────────────────────────────────────────

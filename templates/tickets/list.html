@@ -3,7 +3,43 @@
 
 {% block title %}Tickets{% endblock %}
 
+{% block extra_css %}
+<style>
+@keyframes new-ticket-banner-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.82; }
+}
+@keyframes new-ticket-row-flash {
+  0%   { background-color: rgba(105, 255, 195, 0.55); }
+  100% { background-color: transparent; }
+}
+#new-tickets-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1090;
+  background: var(--kramer-purple); color: #fff;
+  padding: 10px 20px; text-align: center;
+  font-size: 14px; font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+  animation: new-ticket-banner-pulse 1.4s ease-in-out infinite;
+}
+.new-ticket-row td { animation: new-ticket-row-flash 4s ease-out forwards; }
+</style>
+{% endblock %}
+
 {% block content %}
+
+<!-- New-ticket notification banner (hidden until poll detects arrivals) -->
+<div id="new-tickets-banner" style="display:none;">
+  <i class="bi bi-bell-fill me-2"></i>
+  <span id="new-tickets-banner-text"></span>
+  <button onclick="refreshWithFlash()" class="btn btn-sm ms-3"
+          style="background:#fff;color:var(--kramer-purple);font-weight:600;">
+    Refresh now
+  </button>
+  <button onclick="dismissBanner()" class="btn btn-sm btn-link ms-1" style="color:rgba(255,255,255,0.7);">
+    Dismiss
+  </button>
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0"><i class="bi bi-ticket-detailed me-2"></i>Tickets</h4>
   <a href="{% url 'ticket_create' %}" class="btn btn-primary btn-sm">
@@ -182,7 +218,7 @@
           </thead>
           <tbody>
             {% for t in tickets %}
-            <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+            <tr class="{{ t|sla_row_class }}" data-pk="{{ t.pk }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td onclick="event.stopPropagation();"><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
               <td>
                 <a href="{% url 'ticket_detail' t.pk %}" class="fw-semibold text-decoration-none">
@@ -465,6 +501,59 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
   document.getElementById('bulk-form').submit();
 });
 </script>
+<!-- ── New-ticket polling ─────────────────────────────────────────────────── -->
+<script>
+(function () {
+  var afterId  = {{ max_ticket_pk }};
+  var newTotal = 0;
+  var banner   = document.getElementById('new-tickets-banner');
+  var bannerText = document.getElementById('new-tickets-banner-text');
+  var originalTitle = document.title;
+  var dismissed = false;
+
+  function poll() {
+    if (dismissed) return;
+    fetch('{% url "ticket_poll_new" %}?after_id=' + afterId, {credentials: 'same-origin'})
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.count) return;
+        newTotal += data.count;
+        afterId   = data.latest_pk;
+        bannerText.textContent = newTotal === 1
+          ? '1 new ticket arrived'
+          : newTotal + ' new tickets arrived';
+        banner.style.display = 'block';
+        document.title = '(' + newTotal + ' new) ' + originalTitle;
+      })
+      .catch(function () {});
+  }
+
+  window.refreshWithFlash = function () {
+    sessionStorage.setItem('kdesk-flash-after', afterId - newTotal);
+    location.reload();
+  };
+
+  window.dismissBanner = function () {
+    dismissed = true;
+    banner.style.display = 'none';
+    document.title = originalTitle;
+  };
+
+  // Flash rows that arrived after the last known ID (set by refreshWithFlash)
+  var flashAfter = parseInt(sessionStorage.getItem('kdesk-flash-after') || '0');
+  if (flashAfter) {
+    sessionStorage.removeItem('kdesk-flash-after');
+    document.querySelectorAll('#tickets-table tbody tr[data-pk]').forEach(function (row) {
+      if (parseInt(row.dataset.pk) > flashAfter) {
+        row.classList.add('new-ticket-row');
+      }
+    });
+  }
+
+  setInterval(poll, 30000);
+})();
+</script>
+
 {% if request.GET.confetti %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script>
