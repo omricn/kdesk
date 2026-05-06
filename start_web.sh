@@ -52,6 +52,8 @@ sync_admins()
 echo "[Startup] User sync complete."
 echo "[Startup] Setting subcategory assignees..."
 python manage.py fix_subcategory_assignees
+echo "[Startup] Fixing inline image URLs..."
+python manage.py fix_inline_images
 echo "[Startup] Registering periodic tasks..."
 python manage.py shell -c "from tasks.scheduled import register_periodic_tasks; register_periodic_tasks()"
 echo "[Startup] Done."

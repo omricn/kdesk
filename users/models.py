@@ -39,6 +39,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     notify_on_update = models.BooleanField(default=True)
     notify_on_sla_breach = models.BooleanField(default=True)
 
+    ticket_list_filter = models.TextField(blank=True, default='')
+
     last_sync = models.DateTimeField(null=True, blank=True)
     date_joined = models.DateTimeField(auto_now_add=True)
 

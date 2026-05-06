@@ -102,7 +102,7 @@
       <div class="col-2 d-flex gap-1">
         <input type="hidden" name="_f" value="1">
         <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i class="bi bi-funnel"></i> Filter</button>
-        <a href="{% url 'ticket_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+        <a href="{% url 'ticket_list' %}?_clear=1" class="btn btn-sm btn-outline-secondary">Clear</a>
       </div>
     </div>
   </div>
@@ -155,25 +155,24 @@
   <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table align-middle mb-0 small">
+        <table id="tickets-table" class="table align-middle mb-0 small resizable-table">
           <thead class="table-light">
             <tr>
               <th style="width:36px;"><input type="checkbox" id="select-all" class="form-check-input"></th>
-              <th style="width:70px"><a href="{{ sort_urls.id }}" class="sort-hdr {% if sort_by == 'id' %}sort-active{% endif %}">#{% if sort_by == 'id' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th style="width:60px"><a href="{{ sort_urls.id }}" class="sort-hdr {% if sort_by == 'id' %}sort-active{% endif %}">#{% if sort_by == 'id' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
               <th>Subject</th>
-              <th><a href="{{ sort_urls.requester }}" class="sort-hdr {% if sort_by == 'requester' %}sort-active{% endif %}">Requester{% if sort_by == 'requester' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
-              <th><a href="{{ sort_urls.status }}" class="sort-hdr {% if sort_by == 'status' %}sort-active{% endif %}">Status{% if sort_by == 'status' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
-              <th><a href="{{ sort_urls.assignee }}" class="sort-hdr {% if sort_by == 'assignee' %}sort-active{% endif %}">Assignee{% if sort_by == 'assignee' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
-              <th>Category</th>
-              <th><a href="{{ sort_urls.sla }}" class="sort-hdr {% if sort_by == 'sla' %}sort-active{% endif %}">SLA{% if sort_by == 'sla' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
-              <th><a href="{{ sort_urls.created }}" class="sort-hdr {% if sort_by == 'created' %}sort-active{% endif %}">Created{% if sort_by == 'created' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th style="width:140px"><a href="{{ sort_urls.requester }}" class="sort-hdr {% if sort_by == 'requester' %}sort-active{% endif %}">Requester{% if sort_by == 'requester' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th style="width:110px"><a href="{{ sort_urls.status }}" class="sort-hdr {% if sort_by == 'status' %}sort-active{% endif %}">Status{% if sort_by == 'status' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th style="width:120px"><a href="{{ sort_urls.assignee }}" class="sort-hdr {% if sort_by == 'assignee' %}sort-active{% endif %}">Assignee{% if sort_by == 'assignee' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th style="width:130px">Category</th>
+              <th style="width:100px"><a href="{{ sort_urls.sla }}" class="sort-hdr {% if sort_by == 'sla' %}sort-active{% endif %}">SLA{% if sort_by == 'sla' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
+              <th style="width:100px"><a href="{{ sort_urls.created }}" class="sort-hdr {% if sort_by == 'created' %}sort-active{% endif %}">Created{% if sort_by == 'created' %}<i class="bi bi-arrow-{% if sort_dir == 'asc' %}up{% else %}down{% endif %}-short ms-1"></i>{% endif %}</a></th>
             </tr>
             <tr class="col-filter-row">
               <th></th>
               <th><input type="text" name="col_id" form="filter-form" class="form-control form-control-sm" placeholder="#" value="{{ current_filters.col_id }}"></th>
               <th><input type="text" name="col_subject" form="filter-form" class="form-control form-control-sm" placeholder="Filter subject…" value="{{ current_filters.col_subject }}"></th>
               <th><input type="text" name="col_requester" form="filter-form" class="form-control form-control-sm" placeholder="Filter requester…" value="{{ current_filters.col_requester }}"></th>
-              <th></th>
               <th></th>
               <th></th>
               <th></th>
@@ -190,11 +189,11 @@
                   #{{ t.pk|stringformat:"04d" }}
                 </a>
               </td>
-              <td class="text-truncate" style="max-width:220px;">
+              <td class="text-truncate">
                 <a href="{% url 'ticket_detail' t.pk %}" class="text-dark text-decoration-none" dir="auto">{{ t.title }}</a>
                 {% if t.source == 'email' %}<i class="bi bi-envelope text-muted ms-1" title="Created from email"></i>{% endif %}
               </td>
-              <td class="text-truncate" style="max-width:140px;" title="{{ t.requester_email }}">
+              <td class="text-truncate" title="{{ t.requester_email }}">
                 {{ t.requester_name|default:t.requester_email }}
               </td>
               <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
@@ -288,6 +287,12 @@
 
 {% block extra_js %}
 <span id="auto-refresh-enabled" hidden></span>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var t = document.getElementById('tickets-table');
+  if (t) initResizableCols(t, 'kdesk-col-widths-tickets');
+});
+</script>
 <script>
 // ── Category modal ────────────────────────────────────────────────────────────
 const CAT_DATA = {{ categories_json|safe }};

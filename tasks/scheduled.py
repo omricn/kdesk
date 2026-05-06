@@ -305,6 +305,7 @@ def send_requester_created(ticket_pk: int):
         return
     name = _esc(ticket.requester_name or ticket.requester_email)
     submitted = ticket.created_at.strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'
+    portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     body = _email_html(
         header_title='We received your request',
         header_subtitle=f'Ticket #{ticket.pk:04d}',
@@ -316,6 +317,8 @@ def send_requester_created(ticket_pk: int):
             _row('Subject', ticket.title) +
             _row('Submitted', submitted)
         ),
+        cta_url=portal_url,
+        cta_label='View Your Ticket',
     )
     _send_notification_email(
         to=ticket.requester_email,

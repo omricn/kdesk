@@ -260,7 +260,7 @@ def _create_ticket_from_message(msg, client, mailbox):
                             is_inline=att_is_inline,
                         )
                     if att_content_id and att_is_inline:
-                        cid_map[att_content_id] = ta.file.url
+                        cid_map[att_content_id] = f'/attachments/{ta.pk}/download/?inline=1'
                 finally:
                     os.unlink(tmp_path)
         except Exception as exc:

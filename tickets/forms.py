@@ -38,7 +38,7 @@ class CommentForm(forms.ModelForm):
         model = TicketComment
         fields = ['body']
         widgets = {
-            'body': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'Write a comment...'}),
+            'body': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'Write a comment...', 'dir': 'auto'}),
         }
 
 
@@ -54,11 +54,12 @@ class PortalTicketForm(forms.ModelForm):
         model = Ticket
         fields = ['title', 'description']
         widgets = {
-            'description': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Describe the issue in as much detail as possible.'}),
+            'description': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Describe the issue in as much detail as possible.', 'dir': 'auto'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['title'].widget.attrs['placeholder'] = 'Brief summary of your issue'
+        self.fields['title'].widget.attrs['dir'] = 'auto'
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-control')

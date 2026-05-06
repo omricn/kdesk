@@ -12,7 +12,7 @@
     <span class="text-muted" style="font-size:var(--fs-body)">Ticket #{{ ticket.pk|stringformat:"04d" }}</span>
   </div>
   <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
-    <h4 class="mb-0">{{ ticket.title }}</h4>
+    <h4 class="mb-0" dir="auto">{{ ticket.title }}</h4>
     <div>
       {% if ticket.status == 'closed' %}
         <span class="badge bg-success fs-6">Closed</span>
@@ -45,9 +45,9 @@
       <div class="card-body">
         {% if ticket.description %}
           {% if ticket.description_is_html %}
-            <div class="ticket-description-html">{{ ticket.description|safe }}</div>
+            <div class="ticket-description-html" dir="auto">{{ ticket.description|safe }}</div>
           {% else %}
-            <div style="white-space:pre-wrap;">{{ ticket.description }}</div>
+            <div style="white-space:pre-wrap;" dir="auto">{{ ticket.description }}</div>
           {% endif %}
         {% else %}
           <span class="text-muted">No description provided.</span>
@@ -61,7 +61,7 @@
       <div class="card-header fw-semibold d-flex align-items-center gap-2">
         <i class="bi bi-check-circle-fill" style="color:var(--kramer-mint);"></i>Resolution
       </div>
-      <div class="card-body" style="white-space:pre-wrap;">{{ ticket.solution }}</div>
+      <div class="card-body" style="white-space:pre-wrap;" dir="auto">{{ ticket.solution }}</div>
     </div>
     {% endif %}
 
@@ -77,9 +77,12 @@
               <span class="fw-semibold" style="font-size:var(--fs-body)">
                 {{ comment.author.display_name|default:comment.author.email }}
               </span>
-              <span class="text-muted" style="font-size:var(--fs-body)">{{ comment.created_at|date:"d M Y, H:i" }}</span>
+              <div class="d-flex align-items-center gap-2">
+                {% if comment.updated_at %}<span class="text-muted fst-italic" style="font-size:var(--fs-body)">(edited)</span>{% endif %}
+                <span class="text-muted" style="font-size:var(--fs-body)">{{ comment.created_at|date:"d M Y, H:i" }}</span>
+              </div>
             </div>
-            <div style="white-space:pre-wrap;">{{ comment.body }}</div>
+            <div style="white-space:pre-wrap;" dir="auto">{{ comment.body }}</div>
           </div>
         {% empty %}
           <div class="p-3 text-muted" style="font-size:var(--fs-body)">No messages yet.</div>

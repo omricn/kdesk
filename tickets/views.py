@@ -140,13 +140,27 @@ def ticket_list(request):
     assignee_list = request.GET.getlist('assignee')
     sla_list = request.GET.getlist('sla')
 
-    # Default to the current admin's tickets on a fresh visit (no explicit filter submission).
-    # _f=1 is sent by the filter form on every submission, so its absence means a clean URL.
     is_explicit_filter = bool(request.GET.get('_f'))
+    is_clear = bool(request.GET.get('_clear'))
     has_any_filter = bool(statuses or assignee_list or sla_list or
                           request.GET.get('q') or request.GET.get('col_id') or
                           request.GET.get('col_subject') or request.GET.get('col_requester'))
-    if not is_explicit_filter and not has_any_filter:
+
+    if is_clear:
+        request.user.ticket_list_filter = ''
+        request.user.save(update_fields=['ticket_list_filter'])
+        assignee_list = ['me']
+    elif is_explicit_filter:
+        params = request.GET.copy()
+        params.pop('page', None)
+        request.user.ticket_list_filter = params.urlencode()
+        request.user.save(update_fields=['ticket_list_filter'])
+    elif not has_any_filter:
+        saved = request.user.ticket_list_filter
+        if saved:
+            from django.http import HttpResponseRedirect
+            confetti = '&confetti=1' if request.GET.get('confetti') == '1' else ''
+            return HttpResponseRedirect(f'{request.path}?{saved}{confetti}')
         assignee_list = ['me']
     search = request.GET.get('q', '')
     col_id = request.GET.get('col_id', '').strip()
@@ -682,6 +696,9 @@ def ticket_categorize(request, pk):
             old_value=str(old_assignee) if old_assignee else '',
             new_value=str(ticket.assignee) if ticket.assignee else '',
         )
+        if ticket.assignee and ticket.assignee.notify_on_assign:
+            from tasks.scheduled import send_ticket_notification
+            send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
     return JsonResponse({
         'ok': True,
         'label': new_cat_str,
@@ -1002,7 +1019,39 @@ def download_attachment(request, pk):
     is_requester = request.user.email.lower() == (ticket.requester_email or '').lower()
     if not (is_admin or is_requester):
         return HttpResponseForbidden()
-    return FileResponse(att.file.open('rb'), as_attachment=True, filename=att.filename)
+    inline = request.GET.get('inline') == '1'
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(att.filename)
+    content_type = content_type or 'application/octet-stream'
+    response = FileResponse(att.file.open('rb'), content_type=content_type)
+    if not inline:
+        response['Content-Disposition'] = f'attachment; filename="{att.filename}"'
+    return response
+
+
+# ── Edit comment ─────────────────────────────────────────────────────────────
+
+@admin_required
+@require_POST
+def edit_comment(request, pk):
+    from .models import TicketComment
+    comment = get_object_or_404(TicketComment, pk=pk)
+    new_body = request.POST.get('body', '').strip()
+    if not new_body:
+        return JsonResponse({'ok': False, 'error': 'Cannot be empty.'})
+    old_body = comment.body
+    comment.body = new_body
+    comment.updated_at = timezone.now()
+    comment.save(update_fields=['body', 'updated_at'])
+    label = 'Internal note edited' if comment.is_internal else 'Comment edited'
+    TicketHistory.objects.create(
+        ticket=comment.ticket,
+        changed_by=request.user,
+        field=label,
+        old_value=old_body[:1000],
+        new_value=new_body[:1000],
+    )
+    return JsonResponse({'ok': True, 'body': new_body})
 
 
 # ── Email preview (superuser only) ───────────────────────────────────────────
@@ -1589,14 +1638,19 @@ def import_sysaid(request):
         from users.models import User as UserModel
 
         STATUS_MAP = {
-            'work in progress': Ticket.STATUS_IN_PROGRESS,
-            'pending user reply': Ticket.STATUS_PENDING_USER,
-            'hold': Ticket.STATUS_HOLD,
-            'closed': Ticket.STATUS_CLOSED,
-            'new': Ticket.STATUS_NEW,
-            'in progress': Ticket.STATUS_IN_PROGRESS,
-            'pending vendor': Ticket.STATUS_PENDING_VENDOR,
-            'user responded': Ticket.STATUS_USER_RESPONDED,
+            'work in progress':         Ticket.STATUS_IN_PROGRESS,
+            'in progress':              Ticket.STATUS_IN_PROGRESS,
+            'programmer':               Ticket.STATUS_IN_PROGRESS,
+            'specification':            Ticket.STATUS_IN_PROGRESS,
+            'move to task list':        Ticket.STATUS_IN_PROGRESS,
+            'pending user reply':       Ticket.STATUS_PENDING_USER,
+            'pending for vendor action':Ticket.STATUS_PENDING_VENDOR,
+            'pending vendor':           Ticket.STATUS_PENDING_VENDOR,
+            'pending manager approval': Ticket.STATUS_PENDING_MANAGER,
+            'hold':                     Ticket.STATUS_HOLD,
+            'user responded':           Ticket.STATUS_USER_RESPONDED,
+            'new':                      Ticket.STATUS_NEW,
+            'closed':                   Ticket.STATUS_CLOSED,
         }
 
         il_tz = ZoneInfo('Asia/Jerusalem')
@@ -1613,10 +1667,15 @@ def import_sysaid(request):
             return None
 
         # ── Pre-load all lookups — one query each instead of one per row ──────
+        from tickets.models import TicketItem
         categories  = {c.name.lower(): c for c in TicketCategory.objects.all()}
         subcats     = {
             (sc.category_id, sc.name.lower()): sc
             for sc in TicketSubCategory.objects.select_related('category').all()
+        }
+        items       = {
+            (it.subcategory_id, it.name.lower()): it
+            for it in TicketItem.objects.all()
         }
         admins      = {
             u.display_name.lower(): u
@@ -1626,14 +1685,18 @@ def import_sysaid(request):
 
         # ── Parse CSV (pure Python, no DB) ────────────────────────────────────
         csv_file = request.FILES['csv_file']
-        decoded  = csv_file.read().decode('utf-8-sig', errors='replace')
+        raw_bytes = csv_file.read()
+        try:
+            decoded = raw_bytes.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            decoded = raw_bytes.decode('windows-1255', errors='replace')
         reader   = csv.DictReader(io.StringIO(decoded))
 
         pending      = []
         skipped_rows = []
 
         for row in reader:
-            sysaid_id = row.get('#', '').strip()
+            sysaid_id = row.get('Ticket number', '').strip()
             title     = (row.get('Title') or '').strip()
             if not title:
                 skipped_rows.append({'id': sysaid_id or '?', 'reason': 'No title'})
@@ -1643,79 +1706,116 @@ def import_sysaid(request):
             if '\\' in raw_user:
                 raw_user = raw_user.split('\\', 1)[1]
             requester_email = f'{raw_user}@kramerav.com' if raw_user else f'unknown-{sysaid_id}@import.local'
+            requester_name  = (row.get('Submitter') or '').strip()
 
-            raw_status = (row.get('Status') or '').strip().lower()
+            raw_status = (row.get('Status') or '').strip().lower().strip()
             status     = STATUS_MAP.get(raw_status, Ticket.STATUS_NEW)
             created_at = parse_dt(row.get('Request time'))
+            request_time_str = (row.get('Request time') or '').strip()
 
-            process_manager = (row.get('Process manager') or '').strip()
-            assignee        = admins.get(process_manager.lower()) if process_manager else None
+            assignee_name = (row.get('Assignee') or '').strip()
+            assignee      = admins.get(assignee_name.lower()) if assignee_name else None
 
-            cat_name  = (row.get('Category') or '').strip()
-            sub_name  = (row.get('Sub-Category') or '').strip()
-            category  = categories.get(cat_name.lower()) if cat_name else None
-            subcat    = subcats.get((category.pk, sub_name.lower())) if category and sub_name else None
+            cat_name   = (row.get('Category') or '').strip()
+            sub_name   = (row.get('Sub-Category') or '').strip()
+            third_name = (row.get('Third Level Category') or '').strip()
+            category   = categories.get(cat_name.lower()) if cat_name else None
+            subcat     = subcats.get((category.pk, sub_name.lower())) if category and sub_name else None
+            item       = items.get((subcat.pk, third_name.lower())) if subcat and third_name else None
+
+            # Title includes original ticket number and request time
+            full_title = f'[SysAid #{sysaid_id} | {request_time_str}] {title}' if sysaid_id else title
+
+            # Description prefixed with SysAid origin block
+            raw_desc = (row.get('Description') or '').strip()
+            origin_line = f'[Imported from SysAid — Ticket #{sysaid_id}, submitted {request_time_str} by {requester_name}]'
+            full_desc = f'{origin_line}\n\n{raw_desc}' if raw_desc else origin_line
 
             sla_ref      = created_at if created_at else timezone.now()
             sla_deadline = add_business_hours(sla_ref, sla_hours)
 
             pending.append({
                 'sysaid_id':           sysaid_id,
-                'title':               title,
-                'description':         (row.get('Description') or '').strip(),
+                'title':               full_title,
+                'description':         full_desc,
                 'status':              status,
                 'requester_email':     requester_email,
-                'requester_name':      (row.get('Request user') or '').strip(),
-                'requester_department':(row.get('Department') or '').strip(),
+                'requester_name':      requester_name,
+                'requester_department': '',
                 'assignee':            assignee,
                 'category':            category,
                 'subcategory':         subcat,
+                'ticket_item':         item,
                 'sla_deadline':        sla_deadline,
                 'created_at':          created_at,
             })
 
-        # ── Insert everything in one transaction ──────────────────────────────
+        # ── Build index of existing SysAid tickets for update-vs-create ─────
+        existing = {}
+        for t in Ticket.objects.filter(title__startswith='[SysAid #'):
+            try:
+                sid = t.title.split('[SysAid #')[1].split(' |')[0].strip()
+                if sid:
+                    existing[sid] = t
+            except IndexError:
+                pass
+
+        # ── Upsert everything in one transaction ──────────────────────────────
         created_rows = []
+        updated_rows = []
         with transaction.atomic():
             for r in pending:
-                ticket = Ticket(
-                    title=r['title'],
-                    description=r['description'],
-                    description_is_html=False,
-                    status=r['status'],
-                    source=Ticket.SOURCE_MANUAL,
-                    requester_email=r['requester_email'],
-                    requester_name=r['requester_name'],
-                    requester_department=r['requester_department'],
-                    assignee=r['assignee'],
-                    category=r['category'],
-                    subcategory=r['subcategory'],
-                    sla_deadline=r['sla_deadline'],
-                )
-                if r['status'] in Ticket.TERMINAL_STATUSES:
-                    ticket.resolved_at = timezone.now()
-                ticket.save()
+                existing_ticket = existing.get(r['sysaid_id']) if r['sysaid_id'] else None
 
-                if r['created_at']:
-                    Ticket.objects.filter(pk=ticket.pk).update(created_at=r['created_at'])
-
-                if r['sysaid_id']:
-                    TicketComment.objects.create(
-                        ticket=ticket,
-                        author=request.user,
-                        body=f'Imported from SysAid — original ticket #{r["sysaid_id"]}',
-                        is_internal=True,
+                if existing_ticket:
+                    # Update title, description, category fields only — preserve status/assignee changes
+                    existing_ticket.title              = r['title']
+                    existing_ticket.description        = r['description']
+                    existing_ticket.description_is_html = False
+                    existing_ticket.category           = r['category']
+                    existing_ticket.subcategory        = r['subcategory']
+                    existing_ticket.ticket_item        = r['ticket_item']
+                    existing_ticket.save(update_fields=[
+                        'title', 'description', 'description_is_html',
+                        'category', 'subcategory', 'ticket_item',
+                    ])
+                    updated_rows.append({
+                        'sysaid_id': r['sysaid_id'],
+                        'pk':        existing_ticket.pk,
+                        'title':     r['title'],
+                    })
+                else:
+                    ticket = Ticket(
+                        title=r['title'],
+                        description=r['description'],
+                        description_is_html=False,
+                        status=r['status'],
+                        source=Ticket.SOURCE_MANUAL,
+                        requester_email=r['requester_email'],
+                        requester_name=r['requester_name'],
+                        requester_department=r['requester_department'],
+                        assignee=r['assignee'],
+                        category=r['category'],
+                        subcategory=r['subcategory'],
+                        ticket_item=r['ticket_item'],
+                        sla_deadline=r['sla_deadline'],
                     )
+                    if r['status'] in Ticket.TERMINAL_STATUSES:
+                        ticket.resolved_at = timezone.now()
+                    ticket.save()
 
-                created_rows.append({
-                    'sysaid_id': r['sysaid_id'],
-                    'pk':        ticket.pk,
-                    'title':     r['title'],
-                    'requester': r['requester_email'],
-                    'assignee':  str(r['assignee']) if r['assignee'] else '—',
-                    'status':    ticket.get_status_display(),
-                })
+                    if r['created_at']:
+                        Ticket.objects.filter(pk=ticket.pk).update(created_at=r['created_at'])
 
-        results = {'created': created_rows, 'skipped': skipped_rows}
+                    created_rows.append({
+                        'sysaid_id': r['sysaid_id'],
+                        'pk':        ticket.pk,
+                        'title':     r['title'],
+                        'requester': r['requester_email'],
+                        'assignee':  str(r['assignee']) if r['assignee'] else '—',
+                        'status':    ticket.get_status_display(),
+                    })
+
+        results = {'created': created_rows, 'skipped': skipped_rows, 'updated': updated_rows}
 
     return render(request, 'tickets/import_sysaid.html', {'results': results})

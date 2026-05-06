@@ -15,7 +15,7 @@
     <div class="card border-0 shadow-sm text-center h-100" style="background-color:var(--kramer-surface2);">
       <div class="card-body py-2 d-flex flex-column align-items-center justify-content-center">
         <div class="fs-2 fw-bold text-primary">{{ open_count }}</div>
-        <div class="text-muted small">Open{% if stats_are_global %} <span class="badge bg-secondary" style="font-size:0.6rem;">All</span>{% endif %}</div>
+        <div class="text-muted small">New{% if stats_are_global %} <span class="badge bg-secondary" style="font-size:0.6rem;">All</span>{% endif %}</div>
       </div>
     </div>
   </div>
@@ -66,20 +66,20 @@
       </div>
       <div class="card-body p-0">
         {% if my_tickets %}
-        <table class="table table-hover mb-0 small">
+        <table id="my-tickets-table" class="table table-hover mb-0 small resizable-table">
           <thead class="table-light">
             <tr>
-              <th>#</th>
+              <th style="width:60px">#</th>
               <th>Title</th>
-              <th>Status</th>
-              <th>SLA</th>
+              <th style="width:110px">Status</th>
+              <th style="width:110px">SLA</th>
             </tr>
           </thead>
           <tbody>
             {% for t in my_tickets %}
             <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td>#{{ t.pk|stringformat:"04d" }}</td>
-              <td class="text-truncate" style="max-width:160px;">{{ t.title }}</td>
+              <td class="text-truncate" dir="auto">{{ t.title }}</td>
               <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
               <td>
                 {% if t.sla_deadline %}
@@ -109,20 +109,20 @@
       </div>
       <div class="card-body p-0">
         {% if recent_tickets %}
-        <table class="table table-hover mb-0 small">
+        <table id="recent-tickets-table" class="table table-hover mb-0 small resizable-table">
           <thead class="table-light">
             <tr>
-              <th>#</th>
+              <th style="width:60px">#</th>
               <th>Title</th>
-              <th>Status</th>
-              <th>Assignee</th>
+              <th style="width:110px">Status</th>
+              <th style="width:120px">Assignee</th>
             </tr>
           </thead>
           <tbody>
             {% for t in recent_tickets %}
             <tr class="{{ t|sla_row_class }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td>#{{ t.pk|stringformat:"04d" }}</td>
-              <td class="text-truncate" style="max-width:160px;">{{ t.title }}</td>
+              <td class="text-truncate" dir="auto">{{ t.title }}</td>
               <td><span class="badge {{ t.status|status_badge }}">{{ t.get_status_display }}</span></td>
               <td>{{ t.assignee|default:"—" }}</td>
             </tr>
@@ -141,6 +141,14 @@
 
 {% block extra_js %}
 <span id="auto-refresh-enabled" hidden></span>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var t1 = document.getElementById('my-tickets-table');
+  var t2 = document.getElementById('recent-tickets-table');
+  if (t1) initResizableCols(t1, 'kdesk-col-widths-dashboard-mine');
+  if (t2) initResizableCols(t2, 'kdesk-col-widths-dashboard-recent');
+});
+</script>
 <script>
 (function () {
   var fullName = "{{ request.user.display_name|default:request.user.email|escapejs }}";

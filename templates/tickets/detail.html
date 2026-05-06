@@ -9,7 +9,7 @@
   <div class="d-flex align-items-center justify-content-between gap-3">
     <div class="text-truncate small text-muted">
       <span class="fw-semibold" style="color:var(--kramer-neutral);">#{{ ticket.pk|stringformat:"04d" }}</span>
-      <span class="ms-2">{{ ticket.title|truncatechars:80 }}</span>
+      <span class="ms-2" dir="auto">{{ ticket.title|truncatechars:80 }}</span>
     </div>
     <div class="d-flex gap-2 flex-shrink-0">
       <a href="{% url 'ticket_list' %}" class="btn btn-sm btn-outline-secondary">Cancel</a>
@@ -115,12 +115,23 @@
         <div class="tab-pane fade show active" id="tab-comments" role="tabpanel">
           <div class="border-bottom">
             {% for comment in public_comments %}
-            <div class="p-3 border-bottom">
-              <div class="d-flex justify-content-between mb-1">
+            <div class="p-3 border-bottom" id="comment-{{ comment.pk }}">
+              <div class="d-flex justify-content-between align-items-center mb-1">
                 <span class="fw-semibold small">{{ comment.author|default:"System" }}</span>
-                <span class="text-muted small">{{ comment.created_at|date:"d M Y H:i" }}</span>
+                <div class="d-flex align-items-center gap-2">
+                  {% if comment.updated_at %}<span class="text-muted small fst-italic edited-indicator">(edited)</span>{% endif %}
+                  <span class="text-muted small">{{ comment.created_at|date:"d M Y H:i" }}</span>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-muted edit-comment-btn" data-pk="{{ comment.pk }}" title="Edit comment"><i class="bi bi-pencil"></i></button>
+                </div>
               </div>
-              <div style="white-space:pre-wrap;" dir="auto">{{ comment.body }}</div>
+              <div class="comment-body" style="white-space:pre-wrap;" dir="auto">{{ comment.body }}</div>
+              <div class="comment-edit-form d-none mt-2">
+                <textarea class="form-control form-control-sm comment-edit-ta" rows="3" dir="auto">{{ comment.body }}</textarea>
+                <div class="mt-1 d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-primary save-comment-edit" data-pk="{{ comment.pk }}">Save</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary cancel-comment-edit">Cancel</button>
+                </div>
+              </div>
             </div>
             {% empty %}
             <div class="text-center text-muted py-3 small">No messages yet.</div>
@@ -186,13 +197,24 @@
       {% if internal_notes %}
       <div class="border-bottom" style="border-color:rgba(245,158,11,0.2)!important;">
         {% for note in internal_notes %}
-        <div class="p-3 {% if not forloop.last %}border-bottom{% endif %}"
+        <div class="p-3 {% if not forloop.last %}border-bottom{% endif %}" id="comment-{{ note.pk }}"
              style="background:rgba(245,158,11,0.04);{% if not forloop.last %}border-color:rgba(245,158,11,0.15)!important;{% endif %}">
-          <div class="d-flex justify-content-between mb-1">
+          <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="fw-semibold small">{{ note.author|default:"System" }}</span>
-            <span class="text-muted small">{{ note.created_at|date:"d M Y H:i" }}</span>
+            <div class="d-flex align-items-center gap-2">
+              {% if note.updated_at %}<span class="text-muted small fst-italic edited-indicator">(edited)</span>{% endif %}
+              <span class="text-muted small">{{ note.created_at|date:"d M Y H:i" }}</span>
+              <button type="button" class="btn btn-link btn-sm p-0 edit-comment-btn" style="color:#f59e0b;" data-pk="{{ note.pk }}" title="Edit note"><i class="bi bi-pencil"></i></button>
+            </div>
           </div>
-          <div style="white-space:pre-wrap;" dir="auto">{{ note.body }}</div>
+          <div class="comment-body" style="white-space:pre-wrap;" dir="auto">{{ note.body }}</div>
+          <div class="comment-edit-form d-none mt-2">
+            <textarea class="form-control form-control-sm comment-edit-ta" rows="3" dir="auto" style="border-color:#f59e0b;">{{ note.body }}</textarea>
+            <div class="mt-1 d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-warning text-dark save-comment-edit" data-pk="{{ note.pk }}">Save</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary cancel-comment-edit">Cancel</button>
+            </div>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -450,9 +472,9 @@
           This ticket has been resolved. Would you like to save it to the Knowledge Base so others can find the solution?
         </p>
         <div class="rounded p-3" style="background:var(--kramer-surface);border:1px solid var(--kramer-border);font-size:13px;">
-          <div class="fw-semibold mb-1 text-truncate" style="color:var(--kramer-neutral);">{{ ticket.title }}</div>
+          <div class="fw-semibold mb-1 text-truncate" style="color:var(--kramer-neutral);" dir="auto">{{ ticket.title }}</div>
           {% if ticket.solution %}
-          <div class="text-muted" style="white-space:pre-wrap;max-height:64px;overflow:hidden;line-height:1.4;">{{ ticket.solution|truncatechars:150 }}</div>
+          <div class="text-muted" style="white-space:pre-wrap;max-height:64px;overflow:hidden;line-height:1.4;" dir="auto">{{ ticket.solution|truncatechars:150 }}</div>
           {% endif %}
         </div>
       </div>
@@ -1020,6 +1042,59 @@ if (INIT_CAT) {
   window.addEventListener('resize', positionDropdown);
 })();
 
+// ── Edit comment ─────────────────────────────────────────────────────────────
+(function() {
+  function commentContainer(pk) { return document.getElementById('comment-' + pk); }
+
+  document.querySelectorAll('.edit-comment-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var c = commentContainer(this.dataset.pk);
+      c.querySelector('.comment-body').classList.add('d-none');
+      c.querySelector('.comment-edit-form').classList.remove('d-none');
+      c.querySelector('.comment-edit-ta').focus();
+    });
+  });
+
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.cancel-comment-edit')) {
+      var c = e.target.closest('[id^="comment-"]');
+      c.querySelector('.comment-body').classList.remove('d-none');
+      c.querySelector('.comment-edit-form').classList.add('d-none');
+    }
+    if (e.target.closest('.save-comment-edit')) {
+      var btn = e.target.closest('.save-comment-edit');
+      var pk = btn.dataset.pk;
+      var c = commentContainer(pk);
+      var body = c.querySelector('.comment-edit-ta').value.trim();
+      if (!body) return;
+      var original = c.querySelector('.comment-body').textContent.trim();
+      if (original.length > 20 && body.length < original.length * 0.3) {
+        if (!confirm('The edited text is much shorter than the original. Save anyway?')) return;
+      }
+      btn.disabled = true;
+      var fd = new FormData();
+      fd.append('body', body);
+      fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+      fetch('{% url "edit_comment" 0 %}'.replace('/0/', '/' + pk + '/'), {method: 'POST', body: fd})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          if (data.ok) {
+            c.querySelector('.comment-body').textContent = data.body;
+            c.querySelector('.comment-body').classList.remove('d-none');
+            c.querySelector('.comment-edit-form').classList.add('d-none');
+            if (!c.querySelector('.edited-indicator')) {
+              var span = document.createElement('span');
+              span.className = 'text-muted small fst-italic edited-indicator';
+              span.textContent = '(edited)';
+              c.querySelector('.d-flex.align-items-center.gap-2').prepend(span);
+            }
+          }
+        })
+        .catch(function() { btn.disabled = false; });
+    }
+  });
+})();
 
 </script>
 {% endblock %}

@@ -214,6 +214,7 @@ class TicketComment(models.Model):
     body = models.TextField()
     is_internal = models.BooleanField(default=False, help_text='Internal note — not sent to requester')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['created_at']
