@@ -153,12 +153,20 @@ def ticket_list(request):
     elif is_explicit_filter:
         params = request.GET.copy()
         params.pop('page', None)
+        params.pop('confetti', None)
         request.user.ticket_list_filter = params.urlencode()
         request.user.save(update_fields=['ticket_list_filter'])
     elif not has_any_filter:
         saved = request.user.ticket_list_filter
         if saved:
             from django.http import HttpResponseRedirect
+            from django.http import QueryDict
+            saved_params = QueryDict(saved, mutable=True)
+            if 'confetti' in saved_params:
+                saved_params.pop('confetti')
+                saved = saved_params.urlencode()
+                request.user.ticket_list_filter = saved
+                request.user.save(update_fields=['ticket_list_filter'])
             confetti = '&confetti=1' if request.GET.get('confetti') == '1' else ''
             return HttpResponseRedirect(f'{request.path}?{saved}{confetti}')
         assignee_list = ['me']

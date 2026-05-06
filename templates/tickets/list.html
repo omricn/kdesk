@@ -297,7 +297,7 @@
 </div>
 
 {% block extra_js %}
-<span id="auto-refresh-enabled" hidden></span>
+{% if not request.GET.confetti %}<span id="auto-refresh-enabled" hidden></span>{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var t = document.getElementById('tickets-table');
@@ -483,10 +483,21 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
 
   function flashScreen() {
     var el = document.createElement('div');
-    el.style.cssText = 'position:fixed;inset:0;z-index:9999;pointer-events:none;' +
-      'background:rgba(130,5,180,0.45);animation:new-ticket-screen-flash 1.8s ease-out forwards;';
+    el.style.position = 'fixed';
+    el.style.inset = '0';
+    el.style.zIndex = '9999';
+    el.style.pointerEvents = 'none';
+    el.style.background = 'rgba(130,5,180,0.45)';
     document.body.appendChild(el);
-    el.addEventListener('animationend', function() { el.remove(); });
+    var start = null;
+    function step(ts) {
+      if (!start) start = ts;
+      var progress = (ts - start) / 1800;
+      if (progress >= 1) { el.remove(); return; }
+      el.style.opacity = (1 - progress) * 0.55;
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
 
   function poll() {
@@ -500,7 +511,11 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
       .catch(function() {});
   }
 
-  setInterval(poll, 30000);
+  setInterval(poll, 10000);
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') poll();
+  });
 })();
 </script>
 
