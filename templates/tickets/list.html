@@ -5,40 +5,15 @@
 
 {% block extra_css %}
 <style>
-@keyframes new-ticket-banner-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.82; }
+@keyframes new-ticket-screen-flash {
+  0%   { opacity: 0.55; }
+  100% { opacity: 0; }
 }
-@keyframes new-ticket-row-flash {
-  0%   { background-color: rgba(105, 255, 195, 0.55); }
-  100% { background-color: transparent; }
-}
-#new-tickets-banner {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 1090;
-  background: var(--kramer-purple); color: #fff;
-  padding: 10px 20px; text-align: center;
-  font-size: 14px; font-weight: 600;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.35);
-  animation: new-ticket-banner-pulse 1.4s ease-in-out infinite;
-}
-.new-ticket-row td { animation: new-ticket-row-flash 4s ease-out forwards; }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- New-ticket notification banner (hidden until poll detects arrivals) -->
-<div id="new-tickets-banner" style="display:none;">
-  <i class="bi bi-bell-fill me-2"></i>
-  <span id="new-tickets-banner-text"></span>
-  <button onclick="refreshWithFlash()" class="btn btn-sm ms-3"
-          style="background:#fff;color:var(--kramer-purple);font-weight:600;">
-    Refresh now
-  </button>
-  <button onclick="dismissBanner()" class="btn btn-sm btn-link ms-1" style="color:rgba(255,255,255,0.7);">
-    Dismiss
-  </button>
-</div>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0"><i class="bi bi-ticket-detailed me-2"></i>Tickets</h4>
@@ -504,50 +479,25 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
 <!-- ── New-ticket polling ─────────────────────────────────────────────────── -->
 <script>
 (function () {
-  var afterId  = {{ max_ticket_pk }};
-  var newTotal = 0;
-  var banner   = document.getElementById('new-tickets-banner');
-  var bannerText = document.getElementById('new-tickets-banner-text');
-  var originalTitle = document.title;
-  var dismissed = false;
+  var afterId = {{ max_ticket_pk }};
+
+  function flashScreen() {
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;z-index:9999;pointer-events:none;' +
+      'background:rgba(130,5,180,0.45);animation:new-ticket-screen-flash 1.8s ease-out forwards;';
+    document.body.appendChild(el);
+    el.addEventListener('animationend', function() { el.remove(); });
+  }
 
   function poll() {
-    if (dismissed) return;
     fetch('{% url "ticket_poll_new" %}?after_id=' + afterId, {credentials: 'same-origin'})
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(data) {
         if (!data || !data.count) return;
-        newTotal += data.count;
-        afterId   = data.latest_pk;
-        bannerText.textContent = newTotal === 1
-          ? '1 new ticket arrived'
-          : newTotal + ' new tickets arrived';
-        banner.style.display = 'block';
-        document.title = '(' + newTotal + ' new) ' + originalTitle;
+        afterId = data.latest_pk;
+        flashScreen();
       })
-      .catch(function () {});
-  }
-
-  window.refreshWithFlash = function () {
-    sessionStorage.setItem('kdesk-flash-after', afterId - newTotal);
-    location.reload();
-  };
-
-  window.dismissBanner = function () {
-    dismissed = true;
-    banner.style.display = 'none';
-    document.title = originalTitle;
-  };
-
-  // Flash rows that arrived after the last known ID (set by refreshWithFlash)
-  var flashAfter = parseInt(sessionStorage.getItem('kdesk-flash-after') || '0');
-  if (flashAfter) {
-    sessionStorage.removeItem('kdesk-flash-after');
-    document.querySelectorAll('#tickets-table tbody tr[data-pk]').forEach(function (row) {
-      if (parseInt(row.dataset.pk) > flashAfter) {
-        row.classList.add('new-ticket-row');
-      }
-    });
+      .catch(function() {});
   }
 
   setInterval(poll, 30000);
