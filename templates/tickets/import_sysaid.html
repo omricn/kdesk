@@ -37,8 +37,9 @@
 
   {% else %}
 
-  <div class="alert {% if results.created %}alert-success{% else %}alert-warning{% endif %} mb-4">
-    <strong>{{ results.created|length }}</strong> ticket{{ results.created|length|pluralize }} imported.
+  <div class="alert {% if results.created or results.updated %}alert-success{% else %}alert-warning{% endif %} mb-4">
+    {% if results.created %}<strong>{{ results.created|length }}</strong> ticket{{ results.created|length|pluralize }} imported.{% endif %}
+    {% if results.updated %}<strong>{{ results.updated|length }}</strong> ticket{{ results.updated|length|pluralize }} updated (Hebrew fix applied).{% endif %}
     {% if results.skipped %}<strong>{{ results.skipped|length }}</strong> row{{ results.skipped|length|pluralize }} skipped.{% endif %}
   </div>
 

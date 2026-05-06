@@ -26,7 +26,7 @@
     <div class="card-body py-3 px-3">
       <div class="d-flex justify-content-between align-items-start gap-2">
         <div style="min-width:0;">
-          <div class="fw-semibold" style="line-height:1.3;">{{ ticket.title }}</div>
+          <div class="fw-semibold" style="line-height:1.3;" dir="auto">{{ ticket.title }}</div>
           <div class="text-muted mt-1" style="font-size:var(--fs-body)">
             #{{ ticket.pk|stringformat:"04d" }} &middot; {{ ticket.created_at|date:"d M Y" }}
           </div>
@@ -69,7 +69,7 @@
           {% for ticket in tickets %}
           <tr style="cursor:pointer;" onclick="location.href='{% url 'portal_ticket_detail' ticket.pk %}'">
             <td class="text-muted">#{{ ticket.pk|stringformat:"04d" }}</td>
-            <td>{{ ticket.title }}</td>
+            <td dir="auto">{{ ticket.title }}</td>
             <td>
               {% if ticket.status == 'closed' %}
                 <span class="badge bg-success">Closed</span>
