@@ -174,7 +174,28 @@ def _handle_ticket_reply(msg, reply_match):
 
     subject = msg.get('subject', f'Re: [Ticket #{ticket_pk:04d}]').strip()
 
-    # Log the inbound email in the correspondence record
+    # If the sender is an admin, post their reply as an internal note
+    from users.models import User
+    try:
+        sender_admin = User.objects.get(email__iexact=sender_email, is_admin=True)
+    except User.DoesNotExist:
+        sender_admin = None
+
+    if sender_admin:
+        from tickets.models import TicketComment
+        TicketComment.objects.create(
+            ticket=ticket,
+            author=sender_admin,
+            body=body_content,
+            is_internal=True,
+        )
+        if ticket.status != Ticket.STATUS_USER_RESPONDED:
+            ticket.status = Ticket.STATUS_USER_RESPONDED
+            ticket.save(update_fields=['status'])
+        logger.info(f'[EmailPoller] Admin reply from {sender_email} added as internal note to ticket #{ticket_pk}')
+        return ticket
+
+    # Regular end-user reply — log in correspondence record
     TicketEmail.objects.create(
         ticket=ticket,
         direction=TicketEmail.DIRECTION_RECEIVED,
@@ -184,7 +205,6 @@ def _handle_ticket_reply(msg, reply_match):
         to_email='',  # The mailbox — not stored separately
     )
 
-    # Update ticket status to user_responded (reopens closed tickets too)
     if ticket.status != Ticket.STATUS_USER_RESPONDED:
         ticket.status = Ticket.STATUS_USER_RESPONDED
         ticket.save(update_fields=['status'])

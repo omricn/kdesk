@@ -702,7 +702,7 @@ def notify_mention(ticket_pk: int, note_pk: int, mentioned_user_pk: int, author_
     )
     _send_notification_email(
         to=mentioned.email,
-        subject=f'[Kdesk] You were mentioned — #{ticket.pk:04d}: {ticket.title}',
+        subject=f'[Ticket #{ticket.pk:04d}] You were mentioned — {ticket.title}',
         body=body,
     )
     logger.info(f'[Mention] Notified {mentioned.email} about mention in ticket #{ticket_pk}.')
