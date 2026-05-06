@@ -266,6 +266,7 @@ def ticket_list(request):
         'sort_dir':  sort_dir,
         'sort_urls': {k: _sort_url(k) for k in _SORT_MAP},
         'max_ticket_pk': Ticket.objects.order_by('-pk').values_list('pk', flat=True).first() or 0,
+        'sound_choices': request.user.NOTIFICATION_SOUND_CHOICES,
     }
     return render(request, 'tickets/list.html', context)
 
@@ -930,6 +931,7 @@ def settings_view(request):
         'categories': categories,
         'admins': admins_qs,
         'admins_json': admins_json,
+        'sound_choices': request.user.NOTIFICATION_SOUND_CHOICES,
     }
     return render(request, 'settings.html', context)
 
@@ -1042,15 +1044,65 @@ def download_attachment(request, pk):
 
 @admin_required
 def ticket_poll_new(request):
-    """Lightweight poll: returns count of tickets created after after_id."""
     try:
         after_id = int(request.GET.get('after_id', 0) or 0)
     except (ValueError, TypeError):
         after_id = 0
     qs = Ticket.objects.filter(pk__gt=after_id)
+
+    statuses = request.GET.getlist('status')
+    assignee_list = request.GET.getlist('assignee')
+    sla_list = request.GET.getlist('sla')
+
+    if 'active' in statuses:
+        qs = qs.exclude(status__in=Ticket.TERMINAL_STATUSES)
+    elif statuses:
+        qs = qs.filter(status__in=statuses)
+
+    if assignee_list:
+        q = Q()
+        if 'me' in assignee_list:
+            q |= Q(assignee=request.user)
+        if 'unassigned' in assignee_list:
+            q |= Q(assignee__isnull=True)
+        admin_ids = [a for a in assignee_list if a not in ('me', 'unassigned') and a.isdigit()]
+        if admin_ids:
+            q |= Q(assignee_id__in=admin_ids)
+        qs = qs.filter(q)
+
+    if 'breached' in sla_list:
+        qs = qs.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES)
+
     count = qs.count()
     latest_pk = qs.order_by('-pk').values_list('pk', flat=True).first() or after_id
-    return JsonResponse({'count': count, 'latest_pk': latest_pk})
+    return JsonResponse({
+        'count': count,
+        'latest_pk': latest_pk,
+        'sound': request.user.notification_sound,
+    })
+
+
+# ── Save notification sound preference ───────────────────────────────────────
+
+@admin_required
+@require_POST
+def save_notification_sound(request):
+    from users.models import User
+    sound = request.POST.get('sound', '')
+    valid = [c[0] for c in User.NOTIFICATION_SOUND_CHOICES]
+    if sound not in valid:
+        return JsonResponse({'ok': False, 'error': 'Invalid sound.'})
+    target_pk = request.POST.get('user_pk')
+    if target_pk and request.user.is_superuser:
+        try:
+            target = User.objects.get(pk=int(target_pk))
+        except (User.DoesNotExist, ValueError):
+            return JsonResponse({'ok': False, 'error': 'User not found.'})
+    else:
+        target = request.user
+    target.notification_sound = sound
+    target.save(update_fields=['notification_sound'])
+    return JsonResponse({'ok': True})
 
 
 # ── Edit comment ─────────────────────────────────────────────────────────────

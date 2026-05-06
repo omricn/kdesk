@@ -39,6 +39,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     notify_on_update = models.BooleanField(default=True)
     notify_on_sla_breach = models.BooleanField(default=True)
 
+    NOTIFICATION_SOUND_CHOICES = [
+        ('silent',  'Silent'),
+        ('ding',    'Ding'),
+        ('chime',   'Chime'),
+        ('double',  'Double beep'),
+        ('tritone', 'Tri-tone'),
+    ]
+    notification_sound = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_SOUND_CHOICES,
+        default='ding',
+    )
+
     ticket_list_filter = models.TextField(blank=True, default='')
 
     last_sync = models.DateTimeField(null=True, blank=True)

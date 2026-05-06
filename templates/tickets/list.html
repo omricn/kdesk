@@ -17,9 +17,37 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0"><i class="bi bi-ticket-detailed me-2"></i>Tickets</h4>
-  <a href="{% url 'ticket_create' %}" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-lg me-1"></i>New Ticket
-  </a>
+  <div class="d-flex align-items-center gap-2">
+    <!-- Notification sound picker -->
+    <div class="dropdown" id="sound-picker-wrap">
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
+              aria-expanded="false" title="Notification sound">
+        <i class="bi bi-bell" id="sound-icon"></i>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end p-2" style="min-width:220px;" id="sound-dropdown">
+        <p class="small text-muted px-1 mb-2">New ticket sound</p>
+        {% for val, label in sound_choices %}
+        <div class="d-flex align-items-center justify-content-between px-1 py-1">
+          <div class="form-check mb-0">
+            <input class="form-check-input sound-radio" type="radio" name="notif_sound"
+                   id="snd-{{ val }}" value="{{ val }}"
+                   {% if request.user.notification_sound == val %}checked{% endif %}>
+            <label class="form-check-label" for="snd-{{ val }}">{{ label }}</label>
+          </div>
+          {% if val != 'silent' %}
+          <button type="button" class="btn btn-sm btn-link p-0 text-muted preview-sound-btn"
+                  data-sound="{{ val }}" title="Preview">
+            <i class="bi bi-play-circle"></i>
+          </button>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <a href="{% url 'ticket_create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Ticket
+    </a>
+  </div>
 </div>
 
 <!-- Filters -->
@@ -476,46 +504,117 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
   document.getElementById('bulk-form').submit();
 });
 </script>
-<!-- ── New-ticket polling ─────────────────────────────────────────────────── -->
+<!-- ── New-ticket polling + notification sound ────────────────────────────── -->
 <script>
 (function () {
-  var afterId = {{ max_ticket_pk }};
+  /* ── Audio context (unlocked on first user gesture) ── */
+  var _actx = null;
+  function getAudioCtx() {
+    if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_actx.state === 'suspended') _actx.resume();
+    return _actx;
+  }
+  document.addEventListener('click', function() { getAudioCtx(); }, { once: true, passive: true });
 
+  function playSound(type) {
+    if (!type || type === 'silent') return;
+    try {
+      var ctx = getAudioCtx();
+      var now = ctx.currentTime;
+      function tone(freq, start, dur, vol, wave) {
+        var osc = ctx.createOscillator();
+        var g   = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.type = wave || 'sine';
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime(0, now + start);
+        g.gain.linearRampToValueAtTime(vol, now + start + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+        osc.start(now + start);
+        osc.stop(now + start + dur + 0.05);
+      }
+      if (type === 'ding')    { tone(880, 0, 1.0, 0.4); }
+      if (type === 'chime')   { tone(523, 0, 0.7, 0.35); tone(784, 0.22, 0.7, 0.35); }
+      if (type === 'double')  { tone(880, 0, 0.12, 0.3); tone(880, 0.22, 0.12, 0.3); }
+      if (type === 'tritone') { tone(523, 0, 0.35, 0.3); tone(659, 0.18, 0.35, 0.3); tone(784, 0.36, 0.45, 0.3); }
+    } catch(e) {}
+  }
+
+  /* ── Screen flash ── */
   function flashScreen() {
     var el = document.createElement('div');
-    el.style.position = 'fixed';
-    el.style.inset = '0';
-    el.style.zIndex = '9999';
-    el.style.pointerEvents = 'none';
-    el.style.background = 'rgba(130,5,180,0.45)';
+    el.style.cssText = 'position:fixed;inset:0;z-index:9999;pointer-events:none;background:rgba(130,5,180,0.45);';
     document.body.appendChild(el);
     var start = null;
     function step(ts) {
       if (!start) start = ts;
-      var progress = (ts - start) / 1800;
-      if (progress >= 1) { el.remove(); return; }
-      el.style.opacity = (1 - progress) * 0.55;
+      var p = (ts - start) / 1800;
+      if (p >= 1) { el.remove(); return; }
+      el.style.opacity = (1 - p) * 0.55;
       requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
 
+  /* ── Poll ── */
+  var afterId = {{ max_ticket_pk }};
+  var pollBase = '{% url "ticket_poll_new" %}';
+
+  function buildPollUrl() {
+    var params = new URLSearchParams(window.location.search);
+    params.delete('confetti'); params.delete('page');
+    var qs = params.toString();
+    return pollBase + '?after_id=' + afterId + (qs ? '&' + qs : '');
+  }
+
   function poll() {
-    fetch('{% url "ticket_poll_new" %}?after_id=' + afterId, {credentials: 'same-origin'})
+    fetch(buildPollUrl(), {credentials: 'same-origin'})
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(data) {
         if (!data || !data.count) return;
         afterId = data.latest_pk;
         flashScreen();
+        playSound(data.sound);
       })
       .catch(function() {});
   }
 
   setInterval(poll, 10000);
-
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') poll();
   });
+
+  /* ── Sound picker UI ── */
+  var saveUrl = '{% url "save_notification_sound" %}';
+  var csrfToken = '{{ csrf_token }}';
+
+  document.querySelectorAll('.sound-radio').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      var sound = this.value;
+      updateSoundIcon(sound);
+      fetch(saveUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: 'sound=' + encodeURIComponent(sound)
+      }).catch(function() {});
+      if (sound !== 'silent') playSound(sound);
+    });
+  });
+
+  document.querySelectorAll('.preview-sound-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      playSound(this.dataset.sound);
+    });
+  });
+
+  function updateSoundIcon(sound) {
+    var icon = document.getElementById('sound-icon');
+    if (!icon) return;
+    icon.className = sound === 'silent' ? 'bi bi-bell-slash' : 'bi bi-bell';
+  }
+  updateSoundIcon('{{ request.user.notification_sound }}');
 })();
 </script>
 

@@ -13,6 +13,7 @@ urlpatterns = [
     path('attachments/<int:pk>/download/', views.download_attachment, name='download_attachment'),
     path('comments/<int:pk>/edit/', views.edit_comment, name='edit_comment'),
     path('tickets/poll-new/', views.ticket_poll_new, name='ticket_poll_new'),
+    path('tickets/notification-sound/', views.save_notification_sound, name='save_notification_sound'),
     path('tickets/lookup-user/', views.lookup_user_by_email, name='lookup_user_by_email'),
     path('tickets/user-search/', views.user_search, name='user_search'),
     path('reports/', views.reports, name='reports'),
