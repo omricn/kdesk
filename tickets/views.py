@@ -952,9 +952,18 @@ def ticket_send_email(request, pk):
     sender_name = request.user.display_name or request.user.email
 
     from django.utils.html import escape as _esc
+    portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     html_body = f"""
     <p>{_esc(body).replace(chr(10), '<br>')}</p>
     <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+    <p style="margin:0 0 12px;">
+      <a href="{portal_url}"
+         style="display:inline-block;padding:10px 22px;background:#8205B4;color:#ffffff;
+                text-decoration:none;border-radius:6px;font-weight:600;font-size:13px;
+                font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+        Reply to {_esc(sender_name)} on the Kdesk portal
+      </a>
+    </p>
     <p style="color:#888;font-size:12px;">
       {_esc(sender_name)} · IT Support Team<br>
       Ticket reference: <strong>#{ticket.pk:04d}</strong>

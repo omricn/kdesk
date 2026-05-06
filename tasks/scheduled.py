@@ -379,6 +379,7 @@ def send_requester_comment(ticket_pk: int, comment_pk: int):
         return
     name = _esc(ticket.requester_name or ticket.requester_email)
     author_name = _esc(comment.author.display_name or comment.author.email if comment.author else 'IT Support')
+    portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     body = _email_html(
         header_title='New reply on your ticket',
         header_subtitle=f'Ticket #{ticket.pk:04d} — {ticket.title}',
@@ -391,6 +392,8 @@ def send_requester_comment(ticket_pk: int, comment_pk: int):
             _row('Subject', ticket.title) +
             _row('Reply', comment.body[:300] + ('…' if len(comment.body) > 300 else ''))
         ),
+        cta_url=portal_url,
+        cta_label=f'Reply to {author_name} on the Kdesk portal',
     )
     _send_notification_email(
         to=ticket.requester_email,
