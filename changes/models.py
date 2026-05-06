@@ -68,6 +68,11 @@ class Change(models.Model):
     )
     notes = models.TextField(blank=True)
     manager_remarks = models.TextField(blank=True)
+    tickets = models.ManyToManyField(
+        'tickets.Ticket',
+        blank=True,
+        related_name='linked_changes',
+    )
 
     reminded_start = models.BooleanField(default=False)
     reminded_done = models.BooleanField(default=False)

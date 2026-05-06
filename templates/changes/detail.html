@@ -122,6 +122,32 @@
       </div>
     </div>
 
+    <!-- Linked Tickets -->
+    <div class="card mb-3" id="linked-tickets-card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-ticket me-1"></i>Linked Tickets</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#ticketSearchModal">
+          <i class="bi bi-link-45deg me-1"></i>Link a Ticket
+        </button>
+      </div>
+      <div class="card-body py-2">
+        <div id="linked-tickets-list">
+          {% for ticket in linked_tickets %}
+          <div class="d-flex align-items-center gap-2 py-1 linked-ticket-row" data-pk="{{ ticket.pk }}" style="font-size:14px;">
+            <i class="bi bi-ticket text-muted flex-shrink-0"></i>
+            <a href="{% url 'ticket_detail' ticket.pk %}">#{{ ticket.pk|stringformat:"04d" }} — {{ ticket.title }}</a>
+            <span class="badge bg-secondary ms-1 flex-shrink-0" style="font-size:11px;">{{ ticket.get_status_display }}</span>
+            <button type="button" class="btn btn-link btn-sm text-danger p-0 ms-auto flex-shrink-0 unlink-btn" data-pk="{{ ticket.pk }}" title="Unlink">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </div>
+          {% empty %}
+          <p class="text-muted small mb-0" id="no-tickets-msg">No linked tickets.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
     <!-- Notes -->
     <div class="card">
       <div class="card-header"><i class="bi bi-sticky me-1"></i>Notes</div>
@@ -277,6 +303,25 @@
 
 </div>
 
+<!-- Ticket Search Modal -->
+<div class="modal fade" id="ticketSearchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-search me-2"></i>Link a Ticket</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" class="form-control mb-3" id="ticket-search-input"
+               placeholder="Search by ticket #, title, or requester name…" autocomplete="off">
+        <div id="ticket-search-results">
+          <p class="text-muted small">Type to search, or leave blank to see recent tickets.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Request Changes Modal -->
 {% if is_manager %}
 <div class="modal fade" id="requestChangesModal" tabindex="-1" aria-labelledby="requestChangesModalLabel" aria-hidden="true">
@@ -312,4 +357,122 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var SEARCH_URL = '{% url "change_ticket_search" change.pk %}';
+  var LINK_URL   = '{% url "change_link_ticket" change.pk %}';
+  var UNLINK_URL = '{% url "change_unlink_ticket" change.pk %}';
+  var CSRF       = '{{ csrf_token }}';
+
+  var searchInput = document.getElementById('ticket-search-input');
+  var resultsDiv  = document.getElementById('ticket-search-results');
+  var listDiv     = document.getElementById('linked-tickets-list');
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function pad(n) { return String(n).padStart(4, '0'); }
+
+  var searchTimer;
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(doSearch, 250);
+  });
+
+  function doSearch() {
+    var q = searchInput.value.trim();
+    fetch(SEARCH_URL + '?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.results.length) {
+          resultsDiv.innerHTML = '<p class="text-muted small">No tickets found.</p>';
+          return;
+        }
+        var html = '<table class="table table-sm table-hover mb-0"><tbody>';
+        data.results.forEach(function (t) {
+          html += '<tr>'
+            + '<td style="width:60px;font-family:monospace;white-space:nowrap;">#' + pad(t.pk) + '</td>'
+            + '<td>' + esc(t.title) + '</td>'
+            + '<td style="width:140px;font-size:13px;" class="text-muted">' + esc(t.requester) + '</td>'
+            + '<td style="width:120px;"><span class="badge bg-secondary" style="font-size:11px;">' + esc(t.status) + '</span></td>'
+            + '<td style="width:70px;" class="text-end">';
+          if (t.linked) {
+            html += '<span class="text-success" style="font-size:13px;"><i class="bi bi-check2-circle"></i> Linked</span>';
+          } else {
+            html += '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 link-btn"'
+              + ' data-pk="' + t.pk + '" data-title="' + esc(t.title) + '" data-status="' + esc(t.status) + '">Link</button>';
+          }
+          html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+        resultsDiv.innerHTML = html;
+
+        resultsDiv.querySelectorAll('.link-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            linkTicket(parseInt(btn.dataset.pk), btn.dataset.title, btn.dataset.status);
+          });
+        });
+      });
+  }
+
+  function linkTicket(pk, title, status) {
+    fetch(LINK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ ticket_pk: pk }),
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (!data.ok) return;
+      var noMsg = document.getElementById('no-tickets-msg');
+      if (noMsg) noMsg.remove();
+      var row = document.createElement('div');
+      row.className = 'd-flex align-items-center gap-2 py-1 linked-ticket-row';
+      row.dataset.pk = pk;
+      row.style.fontSize = '14px';
+      row.innerHTML = '<i class="bi bi-ticket text-muted flex-shrink-0"></i>'
+        + '<a href="/tickets/' + pk + '/">#' + pad(pk) + ' — ' + esc(title) + '</a>'
+        + '<span class="badge bg-secondary ms-1 flex-shrink-0" style="font-size:11px;">' + esc(status) + '</span>'
+        + '<button type="button" class="btn btn-link btn-sm text-danger p-0 ms-auto flex-shrink-0 unlink-btn"'
+        + ' data-pk="' + pk + '" title="Unlink"><i class="bi bi-x-circle"></i></button>';
+      listDiv.appendChild(row);
+      row.querySelector('.unlink-btn').addEventListener('click', function () {
+        unlinkTicket(pk, row);
+      });
+      doSearch();
+    });
+  }
+
+  function unlinkTicket(pk, row) {
+    fetch(UNLINK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ ticket_pk: pk }),
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (!data.ok) return;
+      row.remove();
+      if (!listDiv.querySelector('.linked-ticket-row')) {
+        var msg = document.createElement('p');
+        msg.className = 'text-muted small mb-0';
+        msg.id = 'no-tickets-msg';
+        msg.textContent = 'No linked tickets.';
+        listDiv.appendChild(msg);
+      }
+      doSearch();
+    });
+  }
+
+  listDiv.querySelectorAll('.unlink-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      unlinkTicket(parseInt(btn.dataset.pk), btn.closest('.linked-ticket-row'));
+    });
+  });
+
+  document.getElementById('ticketSearchModal').addEventListener('shown.bs.modal', function () {
+    searchInput.focus();
+    doSearch();
+  });
+})();
+</script>
 {% endblock %}

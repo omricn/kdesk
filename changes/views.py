@@ -88,6 +88,7 @@ def change_detail(request, pk):
         'is_manager': is_manager,
         'can_cancel': can_cancel,
         'attachments': change.attachments.all(),
+        'linked_tickets': change.tickets.order_by('-pk'),
     })
 
 
@@ -127,6 +128,7 @@ def change_edit(request, pk):
     return render(request, 'changes/form.html', {
         'form': form, 'action': 'Edit', 'change': change,
         'attachments': change.attachments.all(),
+        'linked_tickets': change.tickets.order_by('-pk'),
     })
 
 
@@ -246,3 +248,62 @@ def change_download_attachment(request, pk):
     from django.http import FileResponse
     att = get_object_or_404(ChangeAttachment, pk=pk)
     return FileResponse(att.file.open('rb'), as_attachment=True, filename=att.filename)
+
+
+@admin_required
+def change_ticket_search(request, pk):
+    from django.db.models import Q
+    from tickets.models import Ticket
+    change = get_object_or_404(Change, pk=pk)
+    q = request.GET.get('q', '').strip()
+    qs = Ticket.objects.all().order_by('-pk')
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q) |
+            Q(requester_name__icontains=q) |
+            Q(requester_email__icontains=q) |
+            Q(pk__icontains=q)
+        )
+    linked_pks = set(change.tickets.values_list('pk', flat=True))
+    results = []
+    for t in qs[:25]:
+        results.append({
+            'pk': t.pk,
+            'title': t.title,
+            'requester': t.requester_name or t.requester_email or '—',
+            'status': t.get_status_display(),
+            'linked': t.pk in linked_pks,
+        })
+    return JsonResponse({'results': results})
+
+
+@admin_required
+@require_POST
+def change_link_ticket(request, pk):
+    from tickets.models import Ticket
+    change = get_object_or_404(Change, pk=pk)
+    try:
+        data = json.loads(request.body)
+        ticket_pk = int(data['ticket_pk'])
+    except (KeyError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid request'}, status=400)
+    ticket = get_object_or_404(Ticket, pk=ticket_pk)
+    change.tickets.add(ticket)
+    return JsonResponse({
+        'ok': True, 'pk': ticket.pk,
+        'title': ticket.title,
+        'status': ticket.get_status_display(),
+    })
+
+
+@admin_required
+@require_POST
+def change_unlink_ticket(request, pk):
+    change = get_object_or_404(Change, pk=pk)
+    try:
+        data = json.loads(request.body)
+        ticket_pk = int(data['ticket_pk'])
+    except (KeyError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid request'}, status=400)
+    change.tickets.remove(ticket_pk)
+    return JsonResponse({'ok': True})
