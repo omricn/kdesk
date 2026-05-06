@@ -23,6 +23,7 @@ urlpatterns = [
     path('settings/import-sysaid/', views.import_sysaid, name='import_sysaid'),
     path('settings/categories/api/', views.categories_api, name='categories_api'),
     # ── Employee portal ───────────────────────────────────────────────────────
+    path('portal/teams-sso/', views.portal_teams_sso, name='portal_teams_sso'),
     path('portal/', views.portal_dashboard, name='portal_dashboard'),
     path('portal/new/', views.portal_ticket_create, name='portal_ticket_create'),
     path('portal/tickets/<int:pk>/', views.portal_ticket_detail, name='portal_ticket_detail'),

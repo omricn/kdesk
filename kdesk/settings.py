@@ -44,6 +44,7 @@ MIDDLEWARE = [
     'tickets.middleware.PortalMaintenanceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'kdesk.teams_middleware.TeamsEmbedMiddleware',
 ]
 
 ROOT_URLCONF = 'kdesk.urls'

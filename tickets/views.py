@@ -1559,6 +1559,77 @@ def categories_api(request):
 
 # ── Employee Portal ───────────────────────────────────────────────────────────
 
+@csrf_exempt
+def portal_teams_sso(request):
+    """
+    Exchange a Teams SSO token for a Kdesk session via MSAL On-Behalf-Of flow.
+    Called by the Teams JS SDK after getAuthToken() succeeds.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    import json as _json
+    try:
+        body = _json.loads(request.body)
+        teams_token = body.get('token', '').strip()
+    except Exception:
+        teams_token = ''
+    if not teams_token:
+        return JsonResponse({'ok': False, 'error': 'No token provided.'}, status=400)
+
+    from users.views import _msal_app
+    import requests as _req
+
+    app = _msal_app()
+    result = app.acquire_token_on_behalf_of(
+        user_assertion=teams_token,
+        scopes=['https://graph.microsoft.com/User.Read'],
+    )
+    if 'error' in result:
+        return JsonResponse({
+            'ok': False,
+            'error': 'OBO exchange failed — check Azure "Expose an API" setup.',
+            'detail': result.get('error_description', ''),
+        }, status=401)
+
+    graph_token = result['access_token']
+    me = _req.get(
+        'https://graph.microsoft.com/v1.0/me',
+        headers={'Authorization': f'Bearer {graph_token}'},
+        timeout=10,
+    )
+    if not me.ok:
+        return JsonResponse({'ok': False, 'error': 'Graph /me failed.'}, status=401)
+
+    info = me.json()
+    email = (info.get('userPrincipalName') or info.get('mail') or '').lower().strip()
+    if not email:
+        return JsonResponse({'ok': False, 'error': 'Could not resolve email.'}, status=400)
+
+    from users.models import User
+    from django.contrib.auth import login as _login
+    from django.utils import timezone
+
+    user, created = User.objects.get_or_create(
+        email=email,
+        defaults={
+            'display_name': info.get('displayName', ''),
+            'is_active': True,
+        },
+    )
+    if not user.is_active:
+        return JsonResponse({'ok': False, 'error': 'Account is inactive.'}, status=403)
+
+    if not created and user.display_name != info.get('displayName', user.display_name):
+        user.display_name = info.get('displayName', user.display_name)
+        user.save(update_fields=['display_name'])
+
+    user.last_sync = timezone.now()
+    user.save(update_fields=['last_sync'])
+
+    _login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+    return JsonResponse({'ok': True})
+
+
 @portal_required
 def portal_dashboard(request):
     qs = (

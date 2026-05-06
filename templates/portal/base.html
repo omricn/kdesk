@@ -30,6 +30,17 @@
     }
   </style>
   {% block extra_css %}{% endblock %}
+  <style>
+    /* ── Teams context overrides ─────────────────────────────────────── */
+    body.teams-context #sidebar,
+    body.teams-context .d-lg-none.sticky-top,
+    body.teams-context #mobileSidebar,
+    body.teams-context #theme-toggle,
+    body.teams-context #pwa-banner { display: none !important; }
+    body.teams-context #wrapper { height: 100vh; }
+    body.teams-context #page-content { width: 100%; }
+    body.teams-context #teams-tab-nav { display: flex !important; }
+  </style>
 </head>
 <body>
 
@@ -64,7 +75,7 @@
         <i class="bi bi-headset" style="color:var(--kramer-mint);"></i>
         <span class="brand-title">Kdesk</span>
       </div>
-      <button type="button" class="btn-close btn-close-white"></button>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body p-3">
       <ul class="nav nav-pills flex-column">
@@ -187,7 +198,24 @@
   </button>
 </div>
 
+<!-- Teams compact nav (hidden unless teams-context body class is set) -->
+<nav id="teams-tab-nav" style="display:none;"
+     class="d-flex align-items-center gap-3 px-3 py-2 sticky-top"
+     style="background:var(--kramer-surface);border-bottom:1px solid var(--kramer-border);z-index:1030;">
+  <a href="{% url 'portal_dashboard' %}"
+     class="btn btn-sm {% if request.resolver_match.url_name == 'portal_dashboard' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    <i class="bi bi-ticket-detailed me-1"></i>My Tickets
+  </a>
+  <a href="{% url 'portal_ticket_create' %}"
+     class="btn btn-sm {% if request.resolver_match.url_name == 'portal_ticket_create' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    <i class="bi bi-plus-circle me-1"></i>Submit Ticket
+  </a>
+  <span class="ms-auto small text-muted">{{ user.display_name|default:user.email|truncatechars:28 }}</span>
+</nav>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Microsoft Teams JS SDK -->
+<script src="https://res.cdn.office.net/teams-js/2.22.0/js/MicrosoftTeams.min.js"></script>
 <script>
 (function () {
   var html = document.documentElement;
@@ -215,16 +243,96 @@
 </script>
 {% block extra_js %}{% endblock %}
 <script>
+/* ── Microsoft Teams integration ─────────────────────────────────────────── */
+(function () {
+  var inTeams = false;
+
+  function activateTeamsMode() {
+    document.body.classList.add('teams-context');
+    // Match Teams theme
+    microsoftTeams.app.getContext().then(function (ctx) {
+      var theme = (ctx.app && ctx.app.theme) || ctx.theme || 'dark';
+      if (theme === 'default') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    }).catch(function () {});
+    // Theme change events
+    microsoftTeams.app.registerOnThemeChangeHandler(function (theme) {
+      if (theme === 'default') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    });
+  }
+
+  function showTeamsLoginButton() {
+    // Fallback: show a "Sign in" button inside the page
+    var btn = document.createElement('div');
+    btn.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;' +
+      'justify-content:center;background:var(--kramer-bg,#1a1a2e);z-index:9999;';
+    btn.innerHTML = '<div style="text-align:center;padding:32px;">' +
+      '<p style="color:#ccc;margin-bottom:16px;">Sign in to access Kdesk IT Support</p>' +
+      '<a href="/login/" style="display:inline-block;padding:12px 28px;' +
+      'background:#8205B4;color:#fff;text-decoration:none;border-radius:6px;' +
+      'font-weight:600;font-family:Segoe UI,sans-serif;">Sign in with Microsoft</a></div>';
+    document.body.appendChild(btn);
+  }
+
+  {% if not request.user.is_authenticated %}
+  // Not logged in — try Teams silent SSO first
+  function tryTeamsSSO() {
+    microsoftTeams.authentication.getAuthToken().then(function (token) {
+      fetch('{% url "portal_teams_sso" %}', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token: token}),
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          console.warn('[Kdesk Teams SSO]', data.error);
+          showTeamsLoginButton();
+        }
+      })
+      .catch(showTeamsLoginButton);
+    }).catch(function () {
+      showTeamsLoginButton();
+    });
+  }
+  {% endif %}
+
+  // Detect Teams: SDK sets window.parent !== window inside an iframe
+  if (window.self !== window.top || window.name === 'embedded-page-container' ||
+      window.name === 'extension-tab-frame') {
+    try {
+      microsoftTeams.app.initialize().then(function () {
+        inTeams = true;
+        activateTeamsMode();
+        {% if not request.user.is_authenticated %}
+        tryTeamsSSO();
+        {% endif %}
+      }).catch(function () {});
+    } catch (e) {}
+  }
+})();
+</script>
+<script>
 // Service worker registration (required for Android install prompt)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { scope: '/portal/' });
+  navigator.serviceWorker.register('/sw.js', { scope: '/' });
 }
 
 // PWA install banner — re-shows every 7 days after dismissal
 (function () {
   var REDISPLAY_DAYS = 7;
   var STORAGE_KEY    = 'kdeskBannerDismissedAt';
-
+  var isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent) ||
+                 (navigator.maxTouchPoints > 1 && /macintosh/i.test(navigator.userAgent));
+  if (!isMobile) return;
   var isStandalone = window.navigator.standalone === true ||
                      window.matchMedia('(display-mode: standalone)').matches;
   if (isStandalone) return;  // already installed — never show
@@ -237,29 +345,33 @@ if ('serviceWorker' in navigator) {
   var bannerText  = document.getElementById('pwa-banner-text');
   var installBtn  = document.getElementById('pwa-install-btn');
   var dismissBtn  = document.getElementById('pwa-dismiss-btn');
+  var toggle      = document.getElementById('theme-toggle');
   if (!banner) return;
 
+  function showBanner() {
+    banner.style.display = 'flex';
+    if (toggle) toggle.style.bottom = (banner.offsetHeight + 12) + 'px';
+  }
   function dismiss() {
     localStorage.setItem(STORAGE_KEY, Date.now().toString());
     banner.style.display = 'none';
+    if (toggle) toggle.style.bottom = '20px';
   }
   dismissBtn.addEventListener('click', dismiss);
 
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
   if (isIOS) {
-    // iOS: guide user manually
     bannerText.innerHTML = 'Add <strong>Kdesk</strong> to your home screen — tap '
       + '<strong>&#x2B06; Share</strong> then <strong>"Add to Home Screen"</strong>';
-    banner.style.display = 'flex';
+    showBanner();
   } else {
-    // Android/Chrome: intercept the browser prompt, show our banner
     window.addEventListener('beforeinstallprompt', function (e) {
       e.preventDefault();
       var deferred = e;
       bannerText.innerHTML = 'Add <strong>Kdesk</strong> to your home screen for quick access';
       installBtn.style.display = 'inline-block';
-      banner.style.display = 'flex';
+      showBanner();
       installBtn.addEventListener('click', function () {
         deferred.prompt();
         deferred.userChoice.then(function () { dismiss(); });
