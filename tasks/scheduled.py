@@ -360,7 +360,7 @@ def send_requester_closed(ticket_pk: int):
     )
     _send_notification_email(
         to=ticket.requester_email,
-        subject=f'[Ticket #{ticket.pk:04d}] Your ticket has been closed',
+        subject=f'[Ticket #{ticket.pk:04d}] Your ticket has been closed — {ticket.title}',
         body=body,
     )
     logger.info(f'[Requester] Close notification sent for ticket #{ticket_pk}.')
