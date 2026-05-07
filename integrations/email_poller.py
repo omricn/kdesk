@@ -254,9 +254,12 @@ def _create_ticket_from_message(msg, client, mailbox):
     _set_default_category(ticket)
     ticket.save()
 
-    # Download attachments; track inline CID → URL mapping for image resolution
+    # Download attachments; track inline CID → URL mapping for image resolution.
+    # NOTE: Graph sets hasAttachments=False for inline-only images (e.g. signature logos),
+    # so we also enter this block when cid: references exist in the HTML body.
     cid_map = {}
-    if msg.get('hasAttachments'):
+    has_inline_refs = is_html and 'cid:' in body_content
+    if msg.get('hasAttachments') or has_inline_refs:
         try:
             attachments = client.get_message_attachments(mailbox, msg['id'])
             for att in attachments:
