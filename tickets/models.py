@@ -22,10 +22,10 @@ class Ticket(models.Model):
         (STATUS_PENDING_VENDOR, 'Pending Vendor'),
         (STATUS_HOLD, 'Hold'),
         (STATUS_PENDING_MANAGER, 'Pending Manager Approval'),
-        (STATUS_CLOSED, 'Closed'),
         (STATUS_USER_RESPONDED, 'User Responded'),
         (STATUS_REQUIRES_SPEC, 'Requires Specification'),
         (STATUS_DEVELOPER, 'Developer'),
+        (STATUS_CLOSED, 'Closed'),
     ]
 
     # Statuses considered "terminal" (SLA stops, ticket is done)
