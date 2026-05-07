@@ -73,9 +73,17 @@
   function hasRTL(s) { return /[֐-׿؀-ۿ]/.test(s); }
   document.querySelectorAll('textarea').forEach(function (ta) {
     function sync() { ta.dir = hasRTL(ta.value) ? 'rtl' : 'ltr'; }
-    // keydown fires BEFORE the character is inserted, so setting dir here
-    // ensures Enter creates a new line with the correct cursor side.
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter') sync(); });
+    // Chrome positions the cursor before keydown changes take effect.
+    // keyup fires after cursor placement; toggling dir via rAF forces Chrome
+    // to recalculate cursor position on the new empty line.
+    ta.addEventListener('keyup', function (e) {
+      if (e.key === 'Enter' && hasRTL(ta.value)) {
+        var p = ta.selectionStart;
+        ta.dir = 'ltr';
+        requestAnimationFrame(function () { ta.dir = 'rtl'; ta.setSelectionRange(p, p); });
+      }
+    });
     ta.addEventListener('input', sync);
     sync();
   });

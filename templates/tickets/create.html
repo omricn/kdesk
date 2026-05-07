@@ -79,6 +79,13 @@
   document.querySelectorAll('textarea').forEach(function (ta) {
     function sync() { ta.dir = hasRTL(ta.value) ? 'rtl' : 'ltr'; }
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter') sync(); });
+    ta.addEventListener('keyup', function (e) {
+      if (e.key === 'Enter' && hasRTL(ta.value)) {
+        var p = ta.selectionStart;
+        ta.dir = 'ltr';
+        requestAnimationFrame(function () { ta.dir = 'rtl'; ta.setSelectionRange(p, p); });
+      }
+    });
     ta.addEventListener('input', sync);
     sync();
   });
