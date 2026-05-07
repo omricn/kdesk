@@ -9,6 +9,7 @@ urlpatterns = [
     path('tickets/bulk/', views.ticket_bulk_action, name='ticket_bulk_action'),
     path('tickets/<int:pk>/', views.ticket_detail, name='ticket_detail'),
     path('tickets/<int:pk>/categorize/', views.ticket_categorize, name='ticket_categorize'),
+    path('tickets/<int:pk>/set-requester/', views.ticket_set_requester, name='ticket_set_requester'),
     path('tickets/<int:pk>/send-email/', views.ticket_send_email, name='ticket_send_email'),
     path('attachments/<int:pk>/download/', views.download_attachment, name='download_attachment'),
     path('comments/<int:pk>/edit/', views.edit_comment, name='edit_comment'),

@@ -55,14 +55,30 @@
             <span class="badge {{ ticket.status|status_badge }}">{{ ticket.get_status_display }}</span>
           </div>
         </div>
-        <div class="text-muted small mb-3">
-          <i class="bi bi-person me-1"></i>{{ ticket.requester_name|default:ticket.requester_email }}
+        <div class="text-muted small mb-1">
+          <i class="bi bi-person me-1"></i><span id="req-name">{{ ticket.requester_name|default:ticket.requester_email }}</span>
           &nbsp;·&nbsp;
-          <i class="bi bi-envelope me-1"></i>{{ ticket.requester_email }}
-          {% if ticket.requester_department %}&nbsp;·&nbsp;<i class="bi bi-building me-1"></i>{{ ticket.requester_department }}{% endif %}
+          <i class="bi bi-envelope me-1"></i><span id="req-email">{{ ticket.requester_email }}</span>
+          <span id="req-dept-wrap">{% if ticket.requester_department %}&nbsp;·&nbsp;<i class="bi bi-building me-1"></i><span id="req-dept">{{ ticket.requester_department }}</span>{% endif %}</span>
+          &nbsp;·&nbsp;
+          <button type="button" id="requester-edit-btn" class="btn btn-link btn-sm p-0 text-muted" title="Change requester" style="font-size:11px;vertical-align:baseline;line-height:1;">
+            <i class="bi bi-pencil"></i>
+          </button>
           &nbsp;·&nbsp;
           <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
           {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
+        </div>
+        <div id="requester-edit-panel" class="mb-2" style="display:none;">
+          <div style="max-width:340px;">
+            <div class="input-group input-group-sm">
+              <input type="text" id="req-search" class="form-control form-control-sm"
+                     placeholder="Search by name or email…" autocomplete="off">
+              <button type="button" id="req-cancel-btn" class="btn btn-outline-secondary btn-sm" title="Cancel">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+            <div id="req-results" class="list-group shadow-sm mt-1" style="font-size:13px;"></div>
+          </div>
         </div>
         <div style="position:relative;">
           <div id="desc-display" class="description-body border rounded p-3" style="word-break:break-word;overflow-x:auto;" dir="auto">
@@ -759,6 +775,91 @@ if (INIT_CAT) {
         });
       });
     }
+  }
+})();
+
+// ── Change requester ─────────────────────────────────────────────────────────
+(function () {
+  var editBtn   = document.getElementById('requester-edit-btn');
+  var panel     = document.getElementById('requester-edit-panel');
+  var searchIn  = document.getElementById('req-search');
+  var cancelBtn = document.getElementById('req-cancel-btn');
+  var resultsEl = document.getElementById('req-results');
+  var SEARCH_URL = '{% url "user_search" %}';
+  var SET_URL    = '{% url "ticket_set_requester" ticket.pk %}';
+  var CSRF       = '{{ csrf_token }}';
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function hide() {
+    panel.style.display = 'none';
+    searchIn.value = '';
+    resultsEl.innerHTML = '';
+  }
+
+  editBtn.addEventListener('click', function () {
+    panel.style.display = '';
+    searchIn.focus();
+  });
+
+  cancelBtn.addEventListener('click', hide);
+
+  var timer;
+  searchIn.addEventListener('input', function () {
+    clearTimeout(timer);
+    var q = searchIn.value.trim();
+    if (q.length < 2) { resultsEl.innerHTML = ''; return; }
+    timer = setTimeout(function () {
+      fetch(SEARCH_URL + '?q=' + encodeURIComponent(q))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          resultsEl.innerHTML = '';
+          if (!data.users.length) {
+            var row = document.createElement('div');
+            row.className = 'list-group-item text-muted';
+            row.style.fontSize = '12px';
+            row.textContent = 'No users found — press Enter to use this email as-is';
+            resultsEl.appendChild(row);
+            return;
+          }
+          data.users.forEach(function (u) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action py-1 px-2';
+            btn.innerHTML = '<strong>' + esc(u.name) + '</strong> <span class="text-muted ms-1">' + esc(u.email) + '</span>';
+            btn.addEventListener('click', function () { setRequester(u.email, u.name); });
+            resultsEl.appendChild(btn);
+          });
+        });
+    }, 200);
+  });
+
+  searchIn.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var q = searchIn.value.trim();
+      if (q) setRequester(q, '');
+    }
+    if (e.key === 'Escape') hide();
+  });
+
+  function setRequester(email, name) {
+    fetch(SET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ email: email, name: name }),
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (!data.ok) return;
+      document.getElementById('req-name').textContent  = data.name || data.email;
+      document.getElementById('req-email').textContent = data.email;
+      var deptWrap = document.getElementById('req-dept-wrap');
+      deptWrap.innerHTML = data.department
+        ? '&nbsp;&middot;&nbsp;<i class="bi bi-building me-1"></i>' + esc(data.department)
+        : '';
+      hide();
+    });
   }
 })();
 

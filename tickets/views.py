@@ -590,6 +590,46 @@ def user_search(request):
 
 @admin_required
 @require_POST
+def ticket_set_requester(request, pk):
+    ticket = get_object_or_404(Ticket, pk=pk)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    new_email = data.get('email', '').strip().lower()
+    if not new_email:
+        return JsonResponse({'ok': False, 'error': 'Email required'}, status=400)
+
+    old_display = ticket.requester_name or ticket.requester_email or '—'
+
+    # If the email matches a known user, pull their display name and department
+    user = User.objects.filter(email__iexact=new_email).first()
+    if user:
+        new_name = user.display_name or user.email
+        new_dept = getattr(user, 'department', '') or ''
+    else:
+        new_name = data.get('name', '').strip()
+        new_dept = ''
+
+    ticket.requester_email = new_email
+    ticket.requester_name = new_name
+    ticket.requester_department = new_dept
+    ticket.save(update_fields=['requester_email', 'requester_name', 'requester_department'])
+
+    TicketHistory.objects.create(
+        ticket=ticket,
+        changed_by=request.user,
+        field='Requester',
+        old_value=old_display,
+        new_value=new_name or new_email,
+    )
+
+    return JsonResponse({'ok': True, 'email': new_email, 'name': new_name, 'department': new_dept})
+
+
+@admin_required
+@require_POST
 def ticket_bulk_action(request):
     ticket_ids = [tid for tid in request.POST.getlist('ticket_ids') if str(tid).isdigit()]
     action = request.POST.get('action')
