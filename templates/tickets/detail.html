@@ -64,6 +64,13 @@
           <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
           {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
         </div>
+        {% if ticket.source == 'email' and ticket.email_from %}
+        <div class="text-muted small mb-1" style="font-size:11px;line-height:1.6;">
+          <span class="me-3"><span class="fw-semibold">From:</span> {{ ticket.email_from }}</span>
+          {% if ticket.email_to %}<span class="me-3"><span class="fw-semibold">To:</span> {{ ticket.email_to }}</span>{% endif %}
+          {% if ticket.email_cc %}<span><span class="fw-semibold">CC:</span> {{ ticket.email_cc }}</span>{% endif %}
+        </div>
+        {% endif %}
         <div id="requester-edit-panel" class="mb-2" style="display:none;">
           <div style="max-width:340px;">
             <div class="input-group input-group-sm">

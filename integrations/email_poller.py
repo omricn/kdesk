@@ -228,6 +228,22 @@ def _create_ticket_from_message(msg, client, mailbox):
     requester_email = sender.get('address', 'unknown@unknown.com')
     requester_name = sender.get('name', '')
 
+    def _fmt_recipients(recipients):
+        parts = []
+        for r in recipients:
+            addr = r.get('emailAddress', {})
+            email = addr.get('address', '')
+            name  = addr.get('name', '')
+            if name and name.lower() != email.lower():
+                parts.append(f'{name} <{email}>')
+            elif email:
+                parts.append(email)
+        return ', '.join(parts)
+
+    email_from = (f'{requester_name} <{requester_email}>' if requester_name and requester_name.lower() != requester_email.lower() else requester_email)
+    email_to   = _fmt_recipients(msg.get('toRecipients', []))
+    email_cc   = _fmt_recipients(msg.get('ccRecipients', []))
+
     if _is_autoreply(msg):
         logger.info('[EmailPoller] Discarded auto-reply new-ticket attempt from %s', requester_email)
         return None
@@ -258,6 +274,9 @@ def _create_ticket_from_message(msg, client, mailbox):
         requester_department=requester_department,
         source=Ticket.SOURCE_EMAIL,
         email_message_id=msg.get('internetMessageId', msg['id']),
+        email_from=email_from,
+        email_to=email_to,
+        email_cc=email_cc,
     )
     _set_default_category(ticket)
     ticket.save()
