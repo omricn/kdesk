@@ -279,8 +279,13 @@ def _create_ticket_from_message(msg, client, mailbox):
                             content_id=att_content_id,
                             is_inline=att_is_inline,
                         )
-                    if att_content_id and att_is_inline:
-                        cid_map[att_content_id] = f'/attachments/{ta.pk}/download/?inline=1'
+                    # Map any attachment that has a contentId, regardless of the isInline
+                    # flag — Graph sometimes returns isInline=False for embedded images.
+                    # Normalize by stripping angle brackets (some clients wrap contentId in <>).
+                    if att_content_id:
+                        cid_key = att_content_id.strip('<>').strip()
+                        if cid_key:
+                            cid_map[cid_key] = f'/attachments/{ta.pk}/download/?inline=1'
                 finally:
                     os.unlink(tmp_path)
         except Exception as exc:
