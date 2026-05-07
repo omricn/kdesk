@@ -311,6 +311,16 @@
         <textarea name="solution" id="id_solution" form="update-form"
                   class="form-control" rows="5" dir="auto"
                   placeholder="Describe how the ticket was resolved…">{{ ticket.solution }}</textarea>
+        <div id="sol-img-list" class="d-flex flex-wrap gap-2 mt-2">
+          {% for att in ticket.attachments.all %}{% if att.is_solution_image %}
+          <div class="sol-img-wrap" style="position:relative;display:inline-block;" data-pk="{{ att.pk }}">
+            <img src="{% url 'download_attachment' att.pk %}?inline=1" style="max-width:120px;max-height:80px;border-radius:4px;border:1px solid var(--kramer-border);object-fit:cover;display:block;">
+            <button type="button" class="sol-img-remove" data-pk="{{ att.pk }}" style="position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;border:none;background:#dc3545;color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;">&times;</button>
+          </div>
+          {% endif %}{% endfor %}
+        </div>
+        <input type="hidden" name="solution_image_pks" id="sol-img-pks" form="update-form" value="">
+        <div class="text-muted mt-2" style="font-size:11px;"><i class="bi bi-clipboard-image me-1"></i>Paste a screenshot (Ctrl+V) to attach an image to the solution</div>
       </div>
     </div>
 
@@ -693,10 +703,12 @@ if (INIT_CAT) {
 
   function syncRequired() {
     const closing = statusSel && statusSel.value === 'closed';
-    if (solutionTA) solutionTA.required = closing;
+    const solImgPks = document.getElementById('sol-img-pks');
+    const hasContent = (solutionTA && solutionTA.value.trim()) || (solImgPks && solImgPks.value.trim());
+    if (solutionTA) solutionTA.required = closing && !hasContent;
     if (badge) badge.classList.toggle('d-none', !closing);
     if (card) card.style.borderColor = closing ? 'var(--kramer-pink)' : '';
-    if (closing && solutionTA && !solutionTA.value.trim()) {
+    if (closing && !hasContent) {
       solutionTA.placeholder = 'Required — describe how the ticket was resolved…';
     } else if (solutionTA) {
       solutionTA.placeholder = 'Describe how the ticket was resolved…';
@@ -1222,6 +1234,75 @@ if (INIT_CAT) {
         })
         .catch(function() { btn.disabled = false; });
     }
+  });
+})();
+
+// ── Solution image paste ──
+(function () {
+  var ta      = document.getElementById('id_solution');
+  var imgList = document.getElementById('sol-img-list');
+  var imgPks  = document.getElementById('sol-img-pks');
+  if (!ta || !imgList || !imgPks) return;
+
+  // Seed hidden input from server-rendered thumbnails
+  var initial = [];
+  imgList.querySelectorAll('.sol-img-wrap[data-pk]').forEach(function (el) { initial.push(el.dataset.pk); });
+  imgPks.value = initial.join(',');
+
+  // Wire up server-rendered remove buttons
+  imgList.querySelectorAll('.sol-img-remove').forEach(wireRemove);
+
+  function getPks() { return imgPks.value ? imgPks.value.split(',').filter(Boolean) : []; }
+
+  function wireRemove(btn) {
+    btn.addEventListener('click', function () {
+      var pk = String(btn.dataset.pk);
+      imgPks.value = getPks().filter(function (p) { return p !== pk; }).join(',');
+      btn.closest('.sol-img-wrap').remove();
+    });
+  }
+
+  function addPreview(url, pk) {
+    pk = String(pk);
+    if (getPks().includes(pk)) return;
+    imgPks.value = getPks().concat(pk).join(',');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'sol-img-wrap';
+    wrap.dataset.pk = pk;
+    wrap.style.cssText = 'position:relative;display:inline-block;';
+
+    var img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'max-width:120px;max-height:80px;border-radius:4px;border:1px solid var(--kramer-border);object-fit:cover;display:block;';
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sol-img-remove';
+    btn.dataset.pk = pk;
+    btn.innerHTML = '&times;';
+    btn.style.cssText = 'position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;border:none;background:#dc3545;color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;';
+    wireRemove(btn);
+
+    wrap.appendChild(img); wrap.appendChild(btn);
+    imgList.appendChild(wrap);
+  }
+
+  ta.addEventListener('paste', function (e) {
+    if (!e.clipboardData) return;
+    var imgItem = Array.from(e.clipboardData.items).find(function (i) {
+      return i.kind === 'file' && i.type.startsWith('image/');
+    });
+    if (!imgItem) return;
+    e.preventDefault();
+    var blob = imgItem.getAsFile();
+    var ext  = imgItem.type.split('/')[1] || 'png';
+    var fd   = new FormData();
+    fd.append('image', new File([blob], 'screenshot-' + Date.now() + '.' + ext, { type: imgItem.type }));
+    fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    fetch('{% url "solution_image_upload" ticket.pk %}', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.pk) addPreview(d.url, d.pk); });
   });
 })();
 

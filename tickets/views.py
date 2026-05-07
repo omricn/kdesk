@@ -328,8 +328,9 @@ def ticket_detail(request, pk):
             update_form = TicketUpdateForm(request.POST, instance=ticket)
             if update_form.is_valid():
                 solution = request.POST.get('solution', '').strip()
+                sol_img_pks_raw = request.POST.get('solution_image_pks', '').strip()
                 closing = update_form.cleaned_data.get('status') in Ticket.TERMINAL_STATUSES
-                if closing and not solution:
+                if closing and not solution and not sol_img_pks_raw:
                     update_form.add_error(None, 'A solution description is required when closing a ticket.')
                 else:
                     was_closed = old_status in Ticket.TERMINAL_STATUSES
@@ -368,6 +369,12 @@ def ticket_detail(request, pk):
                         updated.subcategory_id = sub_id
                         updated.ticket_item_id = item_id
                     updated.save()
+                    # Sync solution image attachments
+                    updated.attachments.update(is_solution_image=False)
+                    if sol_img_pks_raw:
+                        sol_pks = [int(p) for p in sol_img_pks_raw.split(',') if p.strip().isdigit()]
+                        if sol_pks:
+                            updated.attachments.filter(pk__in=sol_pks).update(is_solution_image=True)
                     # Record history
                     status_labels = dict(Ticket.STATUS_CHOICES)
                     history_entries = []
@@ -1088,6 +1095,24 @@ def delete_attachment(request, pk):
     att.file.delete(save=False)
     att.delete()
     return JsonResponse({'ok': True})
+
+
+@admin_required
+@require_POST
+def solution_image_upload(request, pk):
+    ticket = get_object_or_404(Ticket, pk=pk)
+    f = request.FILES.get('image')
+    if not f:
+        return JsonResponse({'error': 'No file'}, status=400)
+    att = TicketAttachment.objects.create(
+        ticket=ticket,
+        filename=f.name,
+        file=f,
+        file_size=f.size,
+        is_inline=True,
+        uploaded_by=request.user,
+    )
+    return JsonResponse({'url': f'/attachments/{att.pk}/download/?inline=1', 'pk': att.pk})
 
 
 # ── New-ticket poll ──────────────────────────────────────────────────────────

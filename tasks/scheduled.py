@@ -339,9 +339,30 @@ def send_requester_closed(ticket_pk: int):
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
         return
+    import base64, mimetypes
     name = _esc(ticket.requester_name or ticket.requester_email)
     closed = ticket.resolved_at.strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
     solution_row = _row('Resolution', ticket.solution) if ticket.solution else ''
+    # Embed solution images inline as base64 so they render without auth
+    sol_imgs = ticket.attachments.filter(is_solution_image=True)
+    if sol_imgs.exists():
+        imgs_html = ''
+        for att in sol_imgs:
+            try:
+                mime = mimetypes.guess_type(att.filename)[0] or 'image/png'
+                with att.file.open('rb') as fh:
+                    b64 = base64.b64encode(fh.read()).decode()
+                imgs_html += (
+                    f'<img src="data:{mime};base64,{b64}" alt="Solution screenshot" '
+                    f'style="max-width:100%;height:auto;border-radius:6px;margin-top:8px;display:block;">'
+                )
+            except Exception:
+                pass
+        if imgs_html:
+            solution_row += (
+                '<tr><td colspan="2" style="padding:4px 16px 12px;">'
+                + imgs_html + '</td></tr>'
+            )
     from users.models import User as _User
     _requester = _User.objects.filter(email__iexact=ticket.requester_email, is_admin=True).first()
     if _requester:
