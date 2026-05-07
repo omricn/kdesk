@@ -363,12 +363,7 @@ def send_requester_closed(ticket_pk: int):
                 '<tr><td colspan="2" style="padding:4px 16px 12px;">'
                 + imgs_html + '</td></tr>'
             )
-    from users.models import User as _User
-    _requester = _User.objects.filter(email__iexact=ticket.requester_email, is_admin=True).first()
-    if _requester:
-        ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
-    else:
-        ticket_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
+    ticket_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     body = _email_html(
         header_title='Your ticket has been closed',
         header_subtitle=f'Ticket #{ticket.pk:04d}',
