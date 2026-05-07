@@ -56,14 +56,10 @@
           </div>
         </div>
         <div class="text-muted small mb-1">
-          <i class="bi bi-person me-1"></i><span id="req-name">{{ ticket.requester_name|default:ticket.requester_email }}</span>
+          <i class="bi bi-person me-1"></i><span id="req-name">{{ ticket.requester_name|default:ticket.requester_email }}</span><button type="button" id="requester-edit-btn" class="btn btn-link btn-sm p-0 ms-1" title="Change requester" style="font-size:11px;vertical-align:baseline;line-height:1;color:#69FFC3;"><i class="bi bi-pencil-fill"></i></button>
           &nbsp;·&nbsp;
           <i class="bi bi-envelope me-1"></i><span id="req-email">{{ ticket.requester_email }}</span>
           <span id="req-dept-wrap">{% if ticket.requester_department %}&nbsp;·&nbsp;<i class="bi bi-building me-1"></i><span id="req-dept">{{ ticket.requester_department }}</span>{% endif %}</span>
-          &nbsp;·&nbsp;
-          <button type="button" id="requester-edit-btn" class="btn btn-link btn-sm p-0 text-muted" title="Change requester" style="font-size:11px;vertical-align:baseline;line-height:1;">
-            <i class="bi bi-pencil"></i>
-          </button>
           &nbsp;·&nbsp;
           <i class="bi bi-clock me-1"></i>{{ ticket.created_at|date:"d M Y H:i" }}
           {% if ticket.source == 'email' %}&nbsp;·&nbsp;<i class="bi bi-envelope-fill text-secondary" title="Created from email"></i> via email{% endif %}
