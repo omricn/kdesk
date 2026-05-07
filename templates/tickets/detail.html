@@ -252,21 +252,27 @@
       <div class="card-body">
         {% if my_attachments %}
         <p class="small text-muted mb-1 fw-semibold">Sent by me</p>
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-3" id="att-mine">
           {% for att in my_attachments %}
-          <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
-          </a>
+          <span class="d-inline-flex align-items-center gap-1 att-item" data-att-id="{{ att.pk }}">
+            <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
+            </a>
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 att-delete-btn" title="Delete attachment" style="line-height:1;" data-url="{% url 'delete_attachment' att.pk %}"><i class="bi bi-trash3"></i></button>
+          </span>
           {% endfor %}
         </div>
         {% endif %}
         {% if user_attachments %}
         <p class="small text-muted mb-1 fw-semibold">From user</p>
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-3" id="att-user">
           {% for att in user_attachments %}
-          <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
-          </a>
+          <span class="d-inline-flex align-items-center gap-1 att-item" data-att-id="{{ att.pk }}">
+            <a href="{% url 'download_attachment' att.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-file-earmark me-1"></i>{{ att.filename }}
+            </a>
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 att-delete-btn" title="Delete attachment" style="line-height:1;" data-url="{% url 'delete_attachment' att.pk %}"><i class="bi bi-trash3"></i></button>
+          </span>
           {% endfor %}
         </div>
         {% endif %}
@@ -1032,6 +1038,25 @@ if (INIT_CAT) {
 </script>
 {% endif %}
 <script>
+// ── Delete attachment ──
+(function () {
+  document.querySelectorAll('.att-delete-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (!confirm('Delete this attachment? This cannot be undone.')) return;
+      const url = btn.dataset.url;
+      const item = btn.closest('.att-item');
+      fetch(url, {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) item.remove();
+      });
+    });
+  });
+})();
+
 // Email attachment — button in email card, badge shown in Add Attachment card
 (function () {
   const btn   = document.getElementById('email-attachment-btn');

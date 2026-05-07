@@ -1088,6 +1088,17 @@ def download_attachment(request, pk):
     return response
 
 
+# ── Attachment delete ────────────────────────────────────────────────────────
+
+@admin_required
+@require_POST
+def delete_attachment(request, pk):
+    att = get_object_or_404(TicketAttachment, pk=pk)
+    att.file.delete(save=False)
+    att.delete()
+    return JsonResponse({'ok': True})
+
+
 # ── New-ticket poll ──────────────────────────────────────────────────────────
 
 @admin_required

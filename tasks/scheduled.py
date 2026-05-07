@@ -342,7 +342,12 @@ def send_requester_closed(ticket_pk: int):
     name = _esc(ticket.requester_name or ticket.requester_email)
     closed = ticket.resolved_at.strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
     solution_row = _row('Resolution', ticket.solution) if ticket.solution else ''
-    portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
+    from users.models import User as _User
+    _requester = _User.objects.filter(email__iexact=ticket.requester_email, is_admin=True).first()
+    if _requester:
+        ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
+    else:
+        ticket_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     body = _email_html(
         header_title='Your ticket has been closed',
         header_subtitle=f'Ticket #{ticket.pk:04d}',
@@ -355,12 +360,12 @@ def send_requester_closed(ticket_pk: int):
             _row('Closed', closed) +
             solution_row
         ),
-        cta_url=portal_url,
+        cta_url=ticket_url,
         cta_label='⭐ Rate Your Experience',
     )
     _send_notification_email(
         to=ticket.requester_email,
-        subject=f'[Ticket #{ticket.pk:04d}] Your ticket has been closed — {ticket.title}',
+        subject=f'[Ticket #{ticket.pk:04d}] Ticket Closed — {ticket.title}',
         body=body,
     )
     logger.info(f'[Requester] Close notification sent for ticket #{ticket_pk}.')
