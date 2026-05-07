@@ -75,9 +75,10 @@
 <script>
 // ── RTL detection for textareas ──
 (function () {
-  var RTL_RE = /[֐-׿؀-ۿ]/;
+  function hasRTL(s) { return /[֐-׿؀-ۿ]/.test(s); }
   document.querySelectorAll('textarea').forEach(function (ta) {
-    function sync() { ta.dir = RTL_RE.test(ta.value) ? 'rtl' : 'ltr'; }
+    function sync() { ta.dir = hasRTL(ta.value) ? 'rtl' : 'ltr'; }
+    ta.addEventListener('keydown', function (e) { if (e.key === 'Enter') sync(); });
     ta.addEventListener('input', sync);
     sync();
   });
