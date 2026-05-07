@@ -253,7 +253,7 @@
                   {% endwith %}
                 {% else %}—{% endif %}
               </td>
-              <td class="text-nowrap">{{ t.created_at|date:"d M Y" }}</td>
+              <td class="text-nowrap">{{ t.created_at|date:"d M Y" }}<br><span class="text-muted" style="font-size:11px;">{{ t.created_at|date:"H:i" }}</span></td>
             </tr>
             {% empty %}
             <tr>
