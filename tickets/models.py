@@ -12,6 +12,8 @@ class Ticket(models.Model):
     STATUS_PENDING_MANAGER = 'pending_manager'
     STATUS_CLOSED = 'closed'
     STATUS_USER_RESPONDED = 'user_responded'
+    STATUS_REQUIRES_SPEC = 'requires_spec'
+    STATUS_DEVELOPER = 'developer'
 
     STATUS_CHOICES = [
         (STATUS_NEW, 'New'),
@@ -22,6 +24,8 @@ class Ticket(models.Model):
         (STATUS_PENDING_MANAGER, 'Pending Manager Approval'),
         (STATUS_CLOSED, 'Closed'),
         (STATUS_USER_RESPONDED, 'User Responded'),
+        (STATUS_REQUIRES_SPEC, 'Requires Specification'),
+        (STATUS_DEVELOPER, 'Developer'),
     ]
 
     # Statuses considered "terminal" (SLA stops, ticket is done)
@@ -33,6 +37,8 @@ class Ticket(models.Model):
         STATUS_PENDING_VENDOR,
         STATUS_HOLD,
         STATUS_PENDING_MANAGER,
+        STATUS_REQUIRES_SPEC,
+        STATUS_DEVELOPER,
     ]
 
     SOURCE_EMAIL = 'email'
