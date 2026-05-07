@@ -14,7 +14,7 @@
 
     <div class="card">
       <div class="card-body p-3 p-md-4">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="create-form">
           {% csrf_token %}
 
           <div class="mb-3">
@@ -37,11 +37,19 @@
             {% endif %}
           </div>
 
+          <!-- Attachments -->
           <div class="mb-4">
             <label class="form-label fw-semibold">
-              Attachment <span class="text-muted fw-normal">(optional)</span>
+              Attachments <span class="text-muted fw-normal">(optional)</span>
             </label>
-            <input type="file" name="attachment" class="form-control">
+            <input type="file" id="att-input" name="attachments" multiple class="d-none">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <button type="button" id="att-pick-btn" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-paperclip me-1"></i>Choose files
+              </button>
+              <span class="text-muted small">or paste a screenshot (Ctrl+V)</span>
+            </div>
+            <div id="att-list" class="mt-2 d-flex flex-wrap gap-2"></div>
           </div>
 
           <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
@@ -56,4 +64,73 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── RTL detection for textareas ──
+(function () {
+  var RTL_RE = /[֐-׿؀-ۿ]/;
+  document.querySelectorAll('textarea').forEach(function (ta) {
+    function sync() { ta.dir = RTL_RE.test(ta.value) ? 'rtl' : 'ltr'; }
+    ta.addEventListener('input', sync);
+    sync();
+  });
+})();
+
+// ── Multi-file attachment widget ──
+(function () {
+  var fileMap = new Map();
+  var fileCounter = 0;
+  var input = document.getElementById('att-input');
+  var list  = document.getElementById('att-list');
+  var form  = document.getElementById('create-form');
+
+  document.getElementById('att-pick-btn').addEventListener('click', function () {
+    input.click();
+  });
+
+  input.addEventListener('change', function () {
+    Array.from(input.files).forEach(addFile);
+    input.value = '';
+  });
+
+  document.addEventListener('paste', function (e) {
+    if (!e.clipboardData) return;
+    Array.from(e.clipboardData.items).forEach(function (item) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        var blob = item.getAsFile();
+        var ext  = item.type.split('/')[1] || 'png';
+        addFile(new File([blob], 'screenshot-' + Date.now() + '.' + ext, { type: item.type }));
+      }
+    });
+  });
+
+  function addFile(file) {
+    var id    = ++fileCounter;
+    fileMap.set(id, file);
+    var badge = document.createElement('span');
+    badge.className = 'd-inline-flex align-items-center gap-1 border rounded px-2 py-1 small';
+    badge.style.cssText = 'background:var(--kramer-surface2);max-width:240px;';
+    badge.innerHTML = '<i class="bi bi-paperclip text-muted flex-shrink-0"></i>' +
+      '<span class="text-truncate" style="max-width:170px;">' + escHtml(file.name) + '</span>' +
+      '<button type="button" class="btn-close ms-1 flex-shrink-0" style="font-size:9px;" aria-label="Remove"></button>';
+    badge.querySelector('.btn-close').addEventListener('click', function () {
+      fileMap.delete(id);
+      badge.remove();
+    });
+    list.appendChild(badge);
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  form.addEventListener('submit', function () {
+    var dt = new DataTransfer();
+    fileMap.forEach(function (f) { dt.items.add(f); });
+    input.files = dt.files;
+  });
+})();
+</script>
 {% endblock %}

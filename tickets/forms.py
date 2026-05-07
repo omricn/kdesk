@@ -7,7 +7,8 @@ class TicketForm(forms.ModelForm):
         model = Ticket
         fields = ['title', 'description', 'assignee', 'requester_email', 'requester_name']
         widgets = {
-            'description': forms.Textarea(attrs={'rows': 5}),
+            'description': forms.Textarea(attrs={'rows': 5, 'dir': 'auto'}),
+            'title': forms.TextInput(attrs={'dir': 'auto'}),
         }
 
     def __init__(self, *args, **kwargs):

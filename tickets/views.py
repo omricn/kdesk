@@ -523,9 +523,8 @@ def ticket_create(request):
                     pass
             _set_default_category(ticket)
             ticket.save()
-            uploaded_file = request.FILES.get('attachment')
-            if uploaded_file:
-                from kdesk.upload_utils import allowed_upload
+            from kdesk.upload_utils import allowed_upload
+            for uploaded_file in request.FILES.getlist('attachments'):
                 err = allowed_upload(uploaded_file.name)
                 if err:
                     messages.error(request, err)
@@ -1707,9 +1706,8 @@ def portal_ticket_create(request):
             ticket.requester_department = request.user.department or ''
             _set_default_category(ticket)
             ticket.save()
-            uploaded_file = request.FILES.get('attachment')
-            if uploaded_file:
-                from kdesk.upload_utils import allowed_upload
+            from kdesk.upload_utils import allowed_upload
+            for uploaded_file in request.FILES.getlist('attachments'):
                 err = allowed_upload(uploaded_file.name)
                 if err:
                     messages.error(request, err)
