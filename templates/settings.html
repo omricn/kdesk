@@ -214,7 +214,7 @@
     <div id="cat-tree">
       {% for cat in categories %}
       <div class="cat-row border-bottom" data-cat-id="{{ cat.pk }}">
-        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#f8f9fa;">
+        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:var(--kramer-surface2);">
           <button class="btn btn-link p-0 text-muted" onclick="catToggle(this,'catbody-{{ cat.pk }}')" title="Expand">
             <i class="bi bi-chevron-right" style="font-size:.75rem;transition:transform .15s;"></i>
           </button>
@@ -256,14 +256,14 @@
                 </div>
               </div>
               {% endfor %}
-              <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:4.5rem!important;background:#f8f9ff;">
+              <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:4.5rem!important;background:var(--kramer-surface2);">
                 <input type="text" class="form-control form-control-sm" placeholder="New item…" style="max-width:200px;" id="new-item-{{ sub.pk }}" onkeydown="if(event.key==='Enter')doAddItem({{ sub.pk }},this)">
                 <button class="btn btn-sm btn-outline-secondary" onclick="doAddItem({{ sub.pk }},document.getElementById('new-item-{{ sub.pk }}'))"><i class="bi bi-plus me-1"></i>Add</button>
               </div>
             </div>
           </div>
           {% endfor %}
-          <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:2.5rem!important;background:#f0f4ff;">
+          <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:2.5rem!important;background:var(--kramer-surface2);">
             <input type="text" class="form-control form-control-sm" placeholder="New sub-category…" style="max-width:200px;" id="new-sub-{{ cat.pk }}" onkeydown="if(event.key==='Enter')doAddSub({{ cat.pk }},this)">
             <button class="btn btn-sm btn-outline-secondary" onclick="doAddSub({{ cat.pk }},document.getElementById('new-sub-{{ cat.pk }}'))"><i class="bi bi-plus me-1"></i>Add</button>
           </div>
@@ -271,7 +271,7 @@
       </div>
       {% endfor %}
     </div>
-    <div class="d-flex align-items-center gap-2 p-3 border-top" style="background:#f8f9fa;">
+    <div class="d-flex align-items-center gap-2 p-3 border-top" style="background:var(--kramer-surface2);">
       <i class="bi bi-folder-plus text-muted"></i>
       <input type="text" id="new-cat-name" class="form-control form-control-sm" placeholder="New category…" style="max-width:200px;" onkeydown="if(event.key==='Enter')doAddCat()">
       <button class="btn btn-sm btn-outline-primary" onclick="doAddCat()"><i class="bi bi-plus me-1"></i>Add Category</button>
@@ -387,7 +387,7 @@ function _subHtml(id, name) {
       </div>
     </div>
     <div id="subbody-${id}" class="d-none">
-      <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:4.5rem!important;background:#f8f9ff;">
+      <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:4.5rem!important;background:var(--kramer-surface2);">
         <input type="text" class="form-control form-control-sm" placeholder="New item…" style="max-width:200px;" id="new-item-${id}" onkeydown="if(event.key==='Enter')doAddItem(${id},this)">
         <button class="btn btn-sm btn-outline-secondary" onclick="doAddItem(${id},document.getElementById('new-item-${id}'))"><i class="bi bi-plus me-1"></i>Add</button>
       </div>
@@ -397,7 +397,7 @@ function _subHtml(id, name) {
 
 function _catHtml(id, name) {
   return `<div class="cat-row border-bottom" data-cat-id="${id}">
-    <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#f8f9fa;">
+    <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:var(--kramer-surface2);">
       <button class="btn btn-link p-0 text-muted" onclick="catToggle(this,'catbody-${id}')" title="Expand">
         <i class="bi bi-chevron-right" style="font-size:.75rem;transition:transform .15s;"></i>
       </button>
@@ -409,7 +409,7 @@ function _catHtml(id, name) {
       </div>
     </div>
     <div id="catbody-${id}" class="d-none">
-      <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:2.5rem!important;background:#f0f4ff;">
+      <div class="add-bar d-flex align-items-center gap-2 px-3 py-2 border-top" style="padding-left:2.5rem!important;background:var(--kramer-surface2);">
         <input type="text" class="form-control form-control-sm" placeholder="New sub-category…" style="max-width:200px;" id="new-sub-${id}" onkeydown="if(event.key==='Enter')doAddSub(${id},this)">
         <button class="btn btn-sm btn-outline-secondary" onclick="doAddSub(${id},document.getElementById('new-sub-${id}'))"><i class="bi bi-plus me-1"></i>Add</button>
       </div>
