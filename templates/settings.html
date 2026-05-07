@@ -279,30 +279,6 @@
   </div>
 </div>
 
-<!-- Admin Notification Sounds -->
-<div class="card border-0 shadow-sm">
-  <div class="card-header bg-white fw-semibold">Admin Notification Sounds</div>
-  <div class="card-body p-0">
-    <table class="table table-sm mb-0">
-      <thead class="table-light"><tr><th>Admin</th><th>New-ticket sound</th></tr></thead>
-      <tbody>
-        {% for admin in admins %}
-        <tr>
-          <td class="py-2">{{ admin.display_name|default:admin.email }}</td>
-          <td class="py-2">
-            <select class="form-select form-select-sm admin-sound-sel" style="width:auto;"
-                    data-user-pk="{{ admin.pk }}">
-              {% for val, label in sound_choices %}
-              <option value="{{ val }}" {% if admin.notification_sound == val %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
 
 <!-- Info -->
 <div class="card border-0 shadow-sm">
@@ -320,19 +296,6 @@
 <script>
 const _CAT_API   = '{% url "categories_api" %}';
 const _CSRF      = '{{ csrf_token }}';
-const _SOUND_URL = '{% url "save_notification_sound" %}';
-window._ADMINS = {{ admins_json|safe }};
-
-document.querySelectorAll('.admin-sound-sel').forEach(function(sel) {
-  sel.addEventListener('change', function() {
-    fetch(_SOUND_URL, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _CSRF},
-      body: 'sound=' + encodeURIComponent(this.value) + '&user_pk=' + encodeURIComponent(this.dataset.userPk),
-    }).catch(function() {});
-  });
-});
 
 function _api(data) {
   return fetch(_CAT_API, {
