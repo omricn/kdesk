@@ -81,13 +81,21 @@ def poll_mailbox():
     for msg in messages:
         internet_msg_id = msg.get('internetMessageId', msg['id'])
 
-        # Skip already processed
-        if EmailLog.objects.filter(message_id=internet_msg_id).exists():
-            try:
-                client.move_message_to_deleted(mailbox, msg['id'])
-            except Exception as exc:
-                logger.warning(f'[EmailPoller] Could not move already-processed {msg["id"]} to deleted: {exc}')
-            continue
+        # Skip already processed — but if the linked ticket was deleted (ticket=NULL),
+        # remove the stale log entry and re-process so a new ticket is created.
+        existing_log = EmailLog.objects.filter(message_id=internet_msg_id).first()
+        if existing_log:
+            if existing_log.ticket_id is not None:
+                # Ticket still exists — genuine duplicate, skip
+                try:
+                    client.move_message_to_deleted(mailbox, msg['id'])
+                except Exception as exc:
+                    logger.warning(f'[EmailPoller] Could not move already-processed {msg["id"]} to deleted: {exc}')
+                continue
+            else:
+                # Ticket was deleted — clear the stale log so we re-process
+                existing_log.delete()
+                logger.info(f'[EmailPoller] Reprocessing {internet_msg_id} — original ticket was deleted')
 
         sender = msg.get('from', {}).get('emailAddress', {})
         sender_email = sender.get('address', '').lower()
