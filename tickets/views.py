@@ -364,17 +364,9 @@ def ticket_detail(request, pk):
                     item_id = _to_int(request.POST.get('item_id'))
                     logger.info('[ticket_detail] update pk=%s cat_id=%s sub_id=%s item_id=%s', pk, cat_id, sub_id, item_id)
                     if cat_id is not None or sub_id is not None:
-                        old_sub_id = ticket.subcategory_id
                         updated.category_id    = cat_id
                         updated.subcategory_id = sub_id
                         updated.ticket_item_id = item_id
-                        # Auto-assign when subcategory is explicitly changed
-                        if sub_id and sub_id != old_sub_id:
-                            from .models import TicketSubCategory
-                            sub_obj = TicketSubCategory.objects.filter(pk=sub_id).select_related('assignee').first()
-                            if sub_obj and sub_obj.assignee_id:
-                                updated.assignee = sub_obj.assignee
-                                logger.info('[ticket_detail] auto-assigned pk=%s to %s', pk, sub_obj.assignee)
                     updated.save()
                     # Record history
                     status_labels = dict(Ticket.STATUS_CHOICES)
