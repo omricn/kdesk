@@ -32,13 +32,11 @@ def admin_required(view_func):
 
 
 def portal_required(view_func):
-    """Requires login. Admins are redirected to the admin dashboard unless in portal preview mode."""
+    """Requires login. Admins can access the portal as end-users for their own tickets."""
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect(f'{settings.LOGIN_URL}?next={request.path}')
-        if request.user.is_admin and not request.session.get('portal_preview'):
-            return redirect('dashboard')
         return view_func(request, *args, **kwargs)
     return _wrapped
 from .models import (
