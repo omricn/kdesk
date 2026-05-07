@@ -111,12 +111,29 @@ def poll_mailbox():
         # contains a ticket reference — the original ticket is just quoted context.
         is_forward = bool(FORWARD_RE.match(subject))
         reply_match = TICKET_REPLY_RE.search(subject)
+        conversation_id = msg.get('conversationId', '')
 
         try:
             with transaction.atomic():
-                if reply_match and not is_from_servicedesk and not is_forward:
-                    # User reply to an existing ticket
-                    ticket = _handle_ticket_reply(msg, reply_match)
+                # Resolve which existing ticket this message belongs to, if any.
+                existing_ticket = None
+                if not is_from_servicedesk and not is_forward:
+                    if reply_match:
+                        # Explicit [Ticket #N] in subject (reply to a Kdesk notification)
+                        try:
+                            existing_ticket = Ticket.objects.filter(
+                                pk=int(reply_match.group(1))
+                            ).first()
+                        except (ValueError, Exception):
+                            pass
+                    elif conversation_id:
+                        # Reply to the original email thread — match by Graph conversationId
+                        existing_ticket = Ticket.objects.filter(
+                            email_conversation_id=conversation_id
+                        ).first()
+
+                if existing_ticket:
+                    ticket = _handle_ticket_reply(msg, existing_ticket)
                 else:
                     ticket = _create_ticket_from_message(msg, client, mailbox)
 
@@ -146,20 +163,13 @@ def poll_mailbox():
             logger.warning(f'[EmailPoller] Could not move {msg["id"]} to deleted: {exc}')
 
 
-def _handle_ticket_reply(msg, reply_match):
+def _handle_ticket_reply(msg, ticket):
     """
     Process an incoming email that is a reply to an existing ticket.
     Updates ticket status to 'user_responded' and logs the email in TicketEmail.
     Returns the Ticket instance.
     """
     from tickets.models import Ticket, TicketEmail
-
-    ticket_pk = int(reply_match.group(1))
-    try:
-        ticket = Ticket.objects.get(pk=ticket_pk)
-    except Ticket.DoesNotExist:
-        logger.warning(f'[EmailPoller] Reply references unknown ticket #{ticket_pk}, ignoring.')
-        return None
 
     sender = msg.get('from', {}).get('emailAddress', {})
     sender_email = sender.get('address', 'unknown@unknown.com')
@@ -169,7 +179,7 @@ def _handle_ticket_reply(msg, reply_match):
     if _is_autoreply(msg):
         logger.info(
             '[EmailPoller] Ticket #%s — ignored auto-reply from %s',
-            ticket_pk, sender_email,
+            ticket.pk, sender_email,
         )
         return ticket
 
@@ -180,7 +190,7 @@ def _handle_ticket_reply(msg, reply_match):
         body_content = _html_to_plain(body_content)
     body_content = _strip_quoted_reply(body_content)
 
-    subject = msg.get('subject', f'Re: [Ticket #{ticket_pk:04d}]').strip()
+    subject = msg.get('subject', f'Re: [Ticket #{ticket.pk:04d}]').strip()
 
     # If the sender is an admin, post their reply as an internal note
     from users.models import User
@@ -200,7 +210,7 @@ def _handle_ticket_reply(msg, reply_match):
         if ticket.status != Ticket.STATUS_USER_RESPONDED:
             ticket.status = Ticket.STATUS_USER_RESPONDED
             ticket.save(update_fields=['status'])
-        logger.info(f'[EmailPoller] Admin reply from {sender_email} added as internal note to ticket #{ticket_pk}')
+        logger.info(f'[EmailPoller] Admin reply from {sender_email} added as internal note to ticket #{ticket.pk}')
         return ticket
 
     # Regular end-user reply — log in correspondence record
@@ -216,7 +226,7 @@ def _handle_ticket_reply(msg, reply_match):
     if ticket.status != Ticket.STATUS_USER_RESPONDED:
         ticket.status = Ticket.STATUS_USER_RESPONDED
         ticket.save(update_fields=['status'])
-        logger.info(f'[EmailPoller] Ticket #{ticket_pk} marked as user_responded (reply from {sender_email})')
+        logger.info(f'[EmailPoller] Ticket #{ticket.pk} marked as user_responded (reply from {sender_email})')
 
     return ticket
 
@@ -274,6 +284,7 @@ def _create_ticket_from_message(msg, client, mailbox):
         requester_department=requester_department,
         source=Ticket.SOURCE_EMAIL,
         email_message_id=msg.get('internetMessageId', msg['id']),
+        email_conversation_id=msg.get('conversationId', ''),
         email_from=email_from,
         email_to=email_to,
         email_cc=email_cc,

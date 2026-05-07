@@ -91,7 +91,8 @@ class Ticket(models.Model):
     )
 
     # Email tracking (to avoid creating duplicate tickets)
-    email_message_id = models.CharField(max_length=500, blank=True, unique=True, null=True)
+    email_message_id      = models.CharField(max_length=500, blank=True, unique=True, null=True)
+    email_conversation_id = models.CharField(max_length=500, blank=True, db_index=True)
     email_from = models.CharField(max_length=500, blank=True)
     email_to   = models.TextField(blank=True)
     email_cc   = models.TextField(blank=True)
