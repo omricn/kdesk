@@ -179,6 +179,7 @@ def sync_admins():
         .exclude(entra_id='')
         .exclude(entra_id__in=admin_entra_ids)
         .exclude(is_superuser=True)
+        .exclude(is_admin_override=True)
     )
     demoted_count = 0
     for user in users_to_demote:
