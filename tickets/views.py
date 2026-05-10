@@ -219,11 +219,15 @@ def ticket_list(request):
         qs = qs.filter(search_q)
 
     # Deduplicate by email in case sync created two records for the same person
-    _seen = set()
+    _seen_email = set()
+    _seen_name = set()
     admins = []
-    for _u in User.objects.filter(is_admin=True, is_active=True).order_by('display_name'):
-        if _u.email.lower() not in _seen:
-            _seen.add(_u.email.lower())
+    for _u in User.objects.filter(is_admin=True, is_active=True).order_by('display_name', '-last_sync'):
+        _email = _u.email.lower()
+        _name = (_u.display_name or _email).lower()
+        if _email not in _seen_email and _name not in _seen_name:
+            _seen_email.add(_email)
+            _seen_name.add(_name)
             admins.append(_u)
 
     # Sorting
