@@ -213,7 +213,13 @@ def ticket_list(request):
             search_q |= Q(pk=int(ticket_num))
         qs = qs.filter(search_q)
 
-    admins = User.objects.filter(is_admin=True, is_active=True)
+    # Deduplicate by email in case sync created two records for the same person
+    _seen = set()
+    admins = []
+    for _u in User.objects.filter(is_admin=True, is_active=True).order_by('display_name'):
+        if _u.email.lower() not in _seen:
+            _seen.add(_u.email.lower())
+            admins.append(_u)
 
     # Sorting
     _SORT_MAP = {
