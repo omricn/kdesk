@@ -1,0 +1,36 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "a3f2d8c1-7b54-4e9a-bd6f-c0e12a3d5f87",
+  "developer": {
+    "name": "Kramer Electronics",
+    "websiteUrl": "https://kdesk.kramerav.com",
+    "privacyUrl": "https://kdesk.kramerav.com/portal/",
+    "termsOfUseUrl": "https://kdesk.kramerav.com/portal/"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Kdesk",
+    "full": "Kdesk IT Portal"
+  },
+  "description": {
+    "short": "IT helpdesk self-service portal",
+    "full": "Submit and track IT support tickets for Kramer Electronics IT helpdesk. Open a ticket, check status, and view closed ticket history — all from within Teams."
+  },
+  "accentColor": "#E31E24",
+  "staticTabs": [
+    {
+      "entityId": "kdesk-portal",
+      "name": "IT Support",
+      "contentUrl": "https://kdesk.kramerav.com/portal/",
+      "websiteUrl": "https://kdesk.kramerav.com/portal/",
+      "scopes": ["personal"]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["kdesk.kramerav.com"]
+}
