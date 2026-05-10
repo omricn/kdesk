@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kdesk – Signing in…</title>
+<style>
+  body { margin: 0; display: flex; align-items: center; justify-content: center;
+         height: 100vh; background: #fff; font-family: "Segoe UI", sans-serif; color: #444; }
+  .msg { text-align: center; }
+  .msg p { margin: 12px 0 0; font-size: 14px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid #e0e0e0;
+             border-top-color: #6264a7; border-radius: 50%;
+             animation: spin .8s linear infinite; margin: 0 auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { display: none; color: #c00; }
+</style>
+</head>
+<body>
+<div class="msg">
+  <div class="spinner" id="spinner"></div>
+  <p id="status">Signing you in…</p>
+  <p class="error" id="err"></p>
+</div>
+
+<script src="https://res.cdn.office.net/teams-js/2.22.0/js/MicrosoftTeams.min.js"></script>
+<script>
+{% load static %}
+(function () {
+  var CSRF = '{{ csrf_token }}';
+
+  function fail(msg) {
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('status').textContent = 'Sign-in failed';
+    var el = document.getElementById('err');
+    el.textContent = msg + ' — please open Kdesk in your browser to sign in first.';
+    el.style.display = 'block';
+  }
+
+  microsoftTeams.app.initialize().then(function () {
+    microsoftTeams.authentication.getAuthToken({
+      successCallback: function (token) {
+        fetch('{% url "portal_teams_sso" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({ token: token }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            window.location.replace('{% url "portal_dashboard" %}');
+          } else {
+            fail(data.error || 'SSO error');
+          }
+        })
+        .catch(function () { fail('Network error'); });
+      },
+      failureCallback: function (err) {
+        fail('Could not get Teams token (' + err + ')');
+      },
+    });
+  }).catch(function () {
+    // Not in a Teams context — redirect straight to portal (will hit normal login)
+    window.location.replace('{% url "portal_dashboard" %}');
+  });
+})();
+</script>
+</body>
+</html>

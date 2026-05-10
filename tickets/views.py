@@ -1710,6 +1710,18 @@ def portal_teams_sso(request):
     return JsonResponse({'ok': True})
 
 
+def portal_teams_entry(request):
+    """
+    No-auth Teams entry point. Teams loads this URL in the iframe; the page
+    runs the Teams JS SDK SSO flow, then redirects into /portal/ on success.
+    Must stay unauthenticated so Teams can load it without hitting the login
+    redirect (which has X-Frame-Options: DENY and no Teams SDK).
+    """
+    if request.user.is_authenticated:
+        return redirect('portal_dashboard')
+    return render(request, 'portal/teams_entry.html')
+
+
 @portal_required
 def portal_dashboard(request):
     qs = (
