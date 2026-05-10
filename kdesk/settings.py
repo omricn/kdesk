@@ -87,6 +87,9 @@ LOGOUT_REDIRECT_URL = '/login/'
 
 # ── Session ───────────────────────────────────────────────────────────────────
 SESSION_COOKIE_AGE = 43200          # 12 hours hard expiry from login
+# SameSite=None required for Teams iframe embedding (third-party cookie context)
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = 'None'
 
 # ── Security headers (production only) ───────────────────────────────────────
 if not DEBUG:
