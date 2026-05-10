@@ -1730,11 +1730,21 @@ def portal_dashboard(request):
         .order_by('-created_at')
     )
     q = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', 'all')
+
     if q:
-        qs = qs.filter(
-            Q(title__icontains=q) | Q(description__icontains=q)
-        )
-    return render(request, 'portal/dashboard.html', {'tickets': qs, 'search_q': q})
+        qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+
+    if status_filter == 'open':
+        qs = qs.exclude(status=Ticket.STATUS_CLOSED)
+    elif status_filter == 'closed':
+        qs = qs.filter(status=Ticket.STATUS_CLOSED)
+
+    return render(request, 'portal/dashboard.html', {
+        'tickets': qs,
+        'search_q': q,
+        'status_filter': status_filter,
+    })
 
 
 @portal_required
