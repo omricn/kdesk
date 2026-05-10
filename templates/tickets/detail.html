@@ -291,12 +291,7 @@
             <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Upload</button>
           </div>
         </form>
-        <!-- Badge for file selected to attach to the outgoing email -->
-        <div id="email-attachment-badge" class="d-none mt-2 d-flex align-items-center gap-2 small border-top pt-2">
-          <i class="bi bi-paperclip text-muted"></i>
-          <span class="text-muted" style="font-size:11px;">For email:</span>
-          <span id="email-attachment-name" class="text-truncate" style="max-width:130px;"></span>
-          <button type="button" class="btn-close ms-auto" id="email-attachment-clear" aria-label="Remove" style="font-size:9px;"></button>
+        <!-- (email attachment chips moved to the email compose form) -->
         </div>
       </div>
     </div>
@@ -359,6 +354,16 @@
             {% csrf_token %}
             <textarea name="email_body" id="email_body" class="form-control form-control-sm mb-2"
                       rows="4" placeholder="Type your message to {{ ticket.requester_name|default:ticket.requester_email }}…"></textarea>
+
+            <!-- To field (read-only display) -->
+            <div class="mb-1" style="font-size:12px;color:var(--bs-secondary-color);">
+              <span class="fw-semibold">To:</span> {{ ticket.requester_name|default:ticket.requester_email }} &lt;{{ ticket.requester_email }}&gt;
+            </div>
+
+            <!-- Attachment chips — shown directly under To, above CC -->
+            <div id="email-att-chips" class="d-flex flex-wrap gap-1 mb-2" style="min-height:0;"></div>
+            <input type="file" name="email_attachments" id="email-attachment-input" class="d-none" multiple>
+
             <!-- CC field -->
             <div class="mb-2">
               <div id="cc-pills" class="d-flex flex-wrap gap-1 mb-1"></div>
@@ -366,10 +371,9 @@
                      placeholder="CC… type a name or email" autocomplete="off">
               <input type="hidden" name="cc_emails" id="cc-emails-input" value="">
             </div>
-            <!-- Hidden file input — badge is shown in the Add Attachment card -->
-            <input type="file" name="email_attachment" id="email-attachment-input" class="d-none">
+
             <div class="d-flex gap-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="email-attachment-btn" title="Attach file">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="email-attachment-btn" title="Attach files">
                 <i class="bi bi-paperclip"></i>
               </button>
               <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
@@ -1076,28 +1080,53 @@ if (INIT_CAT) {
   });
 })();
 
-// Email attachment — button in email card, badge shown in Add Attachment card
+// Email attachments — multi-file with chips under the To field
 (function () {
   const btn   = document.getElementById('email-attachment-btn');
   const input = document.getElementById('email-attachment-input');
-  const badge = document.getElementById('email-attachment-badge');
-  const name  = document.getElementById('email-attachment-name');
-  const clear = document.getElementById('email-attachment-clear');
-  if (!btn) return;
+  const chips = document.getElementById('email-att-chips');
+  if (!btn || !input || !chips) return;
+
+  // We maintain our own FileList-like array since input.files is read-only
+  let selectedFiles = [];
+
+  function renderChips() {
+    chips.innerHTML = '';
+    selectedFiles.forEach((file, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'badge d-inline-flex align-items-center gap-1 text-truncate';
+      chip.style.cssText = 'background:var(--kramer-surface,#f5f5f5);color:var(--bs-body-color);border:1px solid var(--kramer-border,#dee2e6);font-weight:400;max-width:180px;font-size:11px;';
+      chip.title = file.name;
+      chip.innerHTML = `<i class="bi bi-paperclip" style="font-size:10px;flex-shrink:0;"></i>
+        <span class="text-truncate" style="max-width:140px;">${file.name}</span>
+        <button type="button" class="btn-close ms-1" style="font-size:8px;flex-shrink:0;" aria-label="Remove"></button>`;
+      chip.querySelector('.btn-close').addEventListener('click', () => {
+        selectedFiles.splice(idx, 1);
+        syncInput();
+        renderChips();
+      });
+      chips.appendChild(chip);
+    });
+    // Highlight paperclip button when files are attached
+    btn.classList.toggle('btn-outline-primary', selectedFiles.length > 0);
+    btn.classList.toggle('btn-outline-secondary', selectedFiles.length === 0);
+  }
+
+  function syncInput() {
+    // Replace the file input's files with a new DataTransfer containing our array
+    const dt = new DataTransfer();
+    selectedFiles.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+  }
+
   btn.addEventListener('click', () => input.click());
+
   input.addEventListener('change', () => {
-    if (input.files.length) {
-      name.textContent = input.files[0].name;
-      badge.classList.remove('d-none');
-      btn.classList.add('btn-outline-primary');
-      btn.classList.remove('btn-outline-secondary');
-    }
-  });
-  clear.addEventListener('click', () => {
+    Array.from(input.files).forEach(f => selectedFiles.push(f));
+    syncInput();
+    renderChips();
+    // Reset so same file can be re-added if needed
     input.value = '';
-    badge.classList.add('d-none');
-    btn.classList.remove('btn-outline-primary');
-    btn.classList.add('btn-outline-secondary');
   });
 })();
 // CC user-search with pills

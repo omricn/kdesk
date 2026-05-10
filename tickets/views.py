@@ -1028,15 +1028,17 @@ def ticket_send_email(request, pk):
     cc_raw = request.POST.get('cc_emails', '')
     cc_emails = [e.strip() for e in cc_raw.split(',') if e.strip()] if cc_raw else []
 
-    att_bytes = att_name = att_content_type = None
-    uploaded_file = request.FILES.get('email_attachment')
-    if uploaded_file:
-        if uploaded_file.size > 3 * 1024 * 1024:
-            messages.error(request, 'Email attachment exceeds the 3 MB limit.')
+    uploaded_files = request.FILES.getlist('email_attachments')
+    attachments = []
+    for f in uploaded_files:
+        if f.size > 10 * 1024 * 1024:
+            messages.error(request, f'Attachment "{f.name}" exceeds the 10 MB limit.')
             return redirect('ticket_detail', pk=pk)
-        att_name = uploaded_file.name
-        att_bytes = uploaded_file.read()
-        att_content_type = uploaded_file.content_type or 'application/octet-stream'
+        attachments.append({
+            'name': f.name,
+            'content_bytes': f.read(),
+            'content_type': f.content_type or 'application/octet-stream',
+        })
 
     try:
         from integrations.graph_client import get_client
@@ -1047,7 +1049,7 @@ def ticket_send_email(request, pk):
             subject=subject,
             body_html=html_body,
             cc_emails=cc_emails or None,
-            attachments=[{'name': att_name, 'content_bytes': att_bytes, 'content_type': att_content_type}] if att_bytes else None,
+            attachments=attachments or None,
         )
     except Exception as exc:
         messages.error(request, f'Failed to send email: {exc}')
@@ -1063,13 +1065,13 @@ def ticket_send_email(request, pk):
         sent_by=request.user,
     )
 
-    if att_bytes:
-        from django.core.files.base import ContentFile
+    from django.core.files.base import ContentFile
+    for att in attachments:
         TicketAttachment.objects.create(
             ticket=ticket,
-            filename=att_name,
-            file=ContentFile(att_bytes, name=att_name),
-            file_size=len(att_bytes),
+            filename=att['name'],
+            file=ContentFile(att['content_bytes'], name=att['name']),
+            file_size=len(att['content_bytes']),
             uploaded_by=request.user,
         )
 
