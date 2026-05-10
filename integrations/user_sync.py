@@ -12,6 +12,26 @@ from .graph_client import get_client
 logger = logging.getLogger(__name__)
 
 
+def _preferred_email(member: dict) -> str:
+    """
+    Return the best email for an Entra member dict.
+    Prefers the corporate @kramerav.com address; falls back to any non-onmicrosoft
+    address; skips *.onmicrosoft.com aliases which are internal Microsoft addresses.
+    """
+    candidates = []
+    mail = (member.get('mail') or '').lower().strip()
+    upn  = (member.get('userPrincipalName') or '').lower().strip()
+    if mail and '.onmicrosoft.com' not in mail:
+        candidates.append(mail)
+    if upn and '.onmicrosoft.com' not in upn:
+        candidates.append(upn)
+    # Prefer @kramerav.com over any other domain
+    for c in candidates:
+        if c.endswith('@kramerav.com'):
+            return c
+    return candidates[0] if candidates else ''
+
+
 def sync_users():
     """
     Pull all members of the ENTRA_USER_GROUP and upsert them into the local
@@ -33,7 +53,7 @@ def sync_users():
 
     for member in members:
         entra_id = member.get('id', '')
-        email = member.get('mail', '') or ''
+        email = _preferred_email(member)
         display_name = member.get('displayName', '') or ''
         account_enabled = member.get('accountEnabled', True)
         department = member.get('department', '') or ''
@@ -42,7 +62,6 @@ def sync_users():
             logger.debug(f'[UserSync] Skipping member {entra_id} — no email')
             continue
 
-        email = email.lower().strip()
         entra_ids_in_group.add(entra_id)
 
         user, created = User.objects.get_or_create(
@@ -100,6 +119,18 @@ def sync_users():
     if deactivated_count:
         logger.info(f'[UserSync] Deactivated and tagged {deactivated_count} users no longer in group.')
 
+    # Remove stale onmicrosoft.com duplicate accounts — these are Microsoft internal
+    # aliases that should never have been synced as separate users.
+    onmicrosoft_users = User.objects.filter(email__icontains='.onmicrosoft.com', is_superuser=False)
+    for dup in onmicrosoft_users:
+        # Only remove if a real account with the same entra_id already exists
+        if dup.entra_id and User.objects.filter(entra_id=dup.entra_id).exclude(pk=dup.pk).exists():
+            logger.info(f'[UserSync] Deactivating onmicrosoft duplicate: {dup.email}')
+            dup.is_active = False
+            dup.is_admin = False
+            dup.is_staff = False
+            dup.save(update_fields=['is_active', 'is_admin', 'is_staff'])
+
     logger.info(f'[UserSync] Sync complete. {len(members)} members processed.')
 
 
@@ -125,7 +156,7 @@ def sync_admins():
 
     for member in members:
         entra_id = member.get('id', '')
-        email = (member.get('mail', '') or '').lower().strip()
+        email = _preferred_email(member)
         display_name = member.get('displayName', '') or ''
         account_enabled = member.get('accountEnabled', True)
         department = member.get('department', '') or ''
