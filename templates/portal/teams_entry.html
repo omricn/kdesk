@@ -14,6 +14,9 @@
              animation: spin .8s linear infinite; margin: 0 auto; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error { display: none; color: #c00; }
+  .btn { display:none; margin-top:16px; padding:10px 24px; background:#6264a7;
+         color:#fff; border:none; border-radius:6px; font-size:15px;
+         font-family:inherit; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -21,6 +24,7 @@
   <div class="spinner" id="spinner"></div>
   <p id="status">Signing you in…</p>
   <p class="error" id="err"></p>
+  <button class="btn" id="go-btn" onclick="window.location.href='{% url "portal_dashboard" %}'">Open Kdesk Portal</button>
 </div>
 
 <script src="https://res.cdn.office.net/teams-js/2.22.0/js/MicrosoftTeams.min.js"></script>
@@ -48,7 +52,12 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.ok) {
-            window.location.replace('{% url "portal_dashboard" %}');
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('status').textContent = 'Signed in! Opening portal…';
+            document.getElementById('go-btn').style.display = 'inline-block';
+            setTimeout(function () {
+              window.location.replace('{% url "portal_dashboard" %}');
+            }, 800);
           } else {
             fail(data.error || 'SSO error');
           }
