@@ -77,6 +77,7 @@ class Change(models.Model):
     reminded_start = models.BooleanField(default=False)
     reminded_done = models.BooleanField(default=False)
     reminded_done_followup = models.BooleanField(default=False)
+    reminded_overdue = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

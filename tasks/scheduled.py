@@ -998,6 +998,22 @@ def check_change_reminders():
     today = now.date()
     current_time = now.time()
 
+    # ── Reminder 0: Overdue approval reminder ─────────────────────────────────
+    # Changes still in an un-actioned state (New / Pending Approval / Pending Changes)
+    # whose planned date has already passed → email submitter + IT Managers.
+    UNAPPROVED_STATUSES = [Change.STATUS_NEW, Change.STATUS_PENDING, Change.STATUS_PENDING_CHANGES]
+    overdue_candidates = Change.objects.filter(
+        status__in=UNAPPROVED_STATUSES,
+        planned_date__lt=today,
+        reminded_overdue=False,
+    ).select_related('submitted_by')
+
+    for change in overdue_candidates:
+        _send_change_reminder(change, 'overdue_approval')
+        change.reminded_overdue = True
+        change.save(update_fields=['reminded_overdue'])
+        logger.info(f'[Change] Overdue approval reminder sent for change #{change.pk}.')
+
     # ── Reminder 1: Start reminder ─────────────────────────────────────────────
     # Approved changes whose planned window has started but submitter hasn't moved them
     start_candidates = Change.objects.filter(
@@ -1053,7 +1069,7 @@ def check_change_reminders():
 
 
 def _send_change_reminder(change, reminder_type: str):
-    """Send a status-update reminder email to the change submitter."""
+    """Send a status-update reminder email to the change submitter (and IT Managers for overdue)."""
     if not change.submitted_by:
         return
 
@@ -1073,11 +1089,52 @@ def _send_change_reminder(change, reminder_type: str):
     detail_rows = (
         _row('Change', f'#{change.pk:04d} — {change.title}') +
         _row('System', change.affected_system_display) +
-        _row('Date', date_str) +
+        _row('Planned Date', date_str) +
+        _row('Status', change.get_status_display()) +
         _row('Timeframe', timeframe)
     )
 
     system_esc = _esc(change.affected_system_display)
+
+    if reminder_type == 'overdue_approval':
+        subject = f'[Kdesk] Overdue: Change #{change.pk:04d} Has Not Been Approved'
+        header_title = 'Change Request Overdue — Approval Required'
+
+        submitter_body = _email_html(
+            header_title=header_title,
+            header_subtitle=f'#{change.pk:04d} — {change.title}',
+            header_color='#BE0078',
+            greeting=(
+                f'Hi <strong>{submitter_name}</strong>,<br><br>'
+                f'Your change request for <strong>{system_esc}</strong> was planned for '
+                f'<strong>{date_str}</strong> but has not yet been approved.<br><br>'
+                f'Current status: <strong>{change.get_status_display()}</strong>. '
+                f'Please follow up with the IT Manager.'
+            ),
+            body_rows=detail_rows,
+            cta_url=change_url,
+            cta_label='View Change in Kdesk',
+        )
+        _send_notification_email(to=to_email, subject=subject, body=submitter_body)
+
+        manager_body = _email_html(
+            header_title=header_title,
+            header_subtitle=f'#{change.pk:04d} — {change.title}',
+            header_color='#BE0078',
+            greeting=(
+                f'A change request submitted by <strong>{submitter_name}</strong> for '
+                f'<strong>{system_esc}</strong> was planned for <strong>{date_str}</strong> '
+                f'but has not been approved or rejected.<br><br>'
+                f'Current status: <strong>{change.get_status_display()}</strong>. '
+                f'Please review and take action.'
+            ),
+            body_rows=detail_rows,
+            cta_url=change_url,
+            cta_label='Review Change in Kdesk',
+        )
+        for mgr_email in _get_it_manager_emails():
+            _send_notification_email(to=mgr_email, subject=subject, body=manager_body)
+        return
 
     if reminder_type == 'start':
         subject = f'[Kdesk] Reminder: Mark Change #{change.pk:04d} as In Progress'
