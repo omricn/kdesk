@@ -50,6 +50,7 @@
     var btn = document.getElementById('go-btn');
     btn.style.display = 'inline-block';
     btn.onclick = function () { window.location.href = PORTAL_URL; };
+    setTimeout(function () { window.location.href = PORTAL_URL; }, 1500);
   }
 
   function doSSO(token) {
