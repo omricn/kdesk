@@ -138,10 +138,11 @@ def ticket_list(request):
     statuses = request.GET.getlist('status')
     assignee_list = request.GET.getlist('assignee')
     sla_list = request.GET.getlist('sla')
+    category_list = request.GET.getlist('category')
 
     is_explicit_filter = bool(request.GET.get('_f'))
     is_clear = bool(request.GET.get('_clear'))
-    has_any_filter = bool(statuses or assignee_list or sla_list or
+    has_any_filter = bool(statuses or assignee_list or sla_list or category_list or
                           request.GET.get('q') or request.GET.get('col_id') or
                           request.GET.get('col_subject') or request.GET.get('col_requester'))
 
@@ -190,6 +191,10 @@ def ticket_list(request):
         qs = qs.filter(q)
     if 'breached' in sla_list:
         qs = qs.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES)
+    if category_list:
+        cat_ids = [c for c in category_list if c.isdigit()]
+        if cat_ids:
+            qs = qs.filter(category_id__in=cat_ids)
     if col_id:
         ticket_num = col_id.lstrip('#').lstrip('0') or '0'
         if ticket_num.isdigit():
@@ -252,15 +257,18 @@ def ticket_list(request):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
 
+    from tickets.models import TicketCategory
     context = {
         'tickets': page_obj,
         'page_obj': page_obj,
         'admins': admins,
+        'all_categories': TicketCategory.objects.order_by('name'),
         'status_choices': Ticket.STATUS_CHOICES,
         'current_filters': {
             'status': statuses,
             'assignee': assignee_list,
             'sla': sla_list,
+            'category': category_list,
             'q': search,
             'col_id': col_id,
             'col_subject': col_subject,

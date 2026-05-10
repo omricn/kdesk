@@ -54,7 +54,7 @@
 <form id="filter-form" method="get" class="card border-0 shadow-sm mb-3" style="overflow:visible;">
   <div class="card-body py-2">
     <div class="row g-2 align-items-end">
-      <div class="col-3">
+      <div class="col-2">
         <input type="text" name="q" class="form-control form-control-sm" placeholder="Search by #, subject, requester…" value="{{ current_filters.q }}">
       </div>
       <!-- Status multi-select -->
@@ -114,6 +114,26 @@
                 <input type="checkbox" name="assignee" value="{{ admin.pk }}" class="form-check-input flex-shrink-0 assignee-ck"
                        {% if admin.pk|stringformat:'s' in current_filters.assignee %}checked{% endif %}>
                 {{ admin }}
+              </label>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      <!-- Category multi-select -->
+      <div class="col-2">
+        <div class="dropdown w-100">
+          <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100 text-start filter-multi-btn"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+            <span id="category-btn-label">{% if current_filters.category %}{{ current_filters.category|length }} Categor{% if current_filters.category|length == 1 %}y{% else %}ies{% endif %}{% else %}All Categories{% endif %}</span>
+          </button>
+          <ul class="dropdown-menu shadow-sm p-1" style="min-width:180px;max-height:280px;overflow-y:auto;">
+            {% for cat in all_categories %}
+            <li>
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 rounded" style="cursor:pointer;">
+                <input type="checkbox" name="category" value="{{ cat.pk }}" class="form-check-input flex-shrink-0 category-ck"
+                       {% if cat.pk|stringformat:'s' in current_filters.category %}checked{% endif %}>
+                {{ cat.name }}
               </label>
             </li>
             {% endfor %}
@@ -441,6 +461,9 @@ document.querySelectorAll('.status-ck').forEach(cb => {
 });
 document.querySelectorAll('.assignee-ck').forEach(cb => {
   cb.addEventListener('change', () => updateMultiLabel('assignee-ck', 'assignee-btn-label', 'All Assignees', 'Assignee', 'Assignees'));
+});
+document.querySelectorAll('.category-ck').forEach(cb => {
+  cb.addEventListener('change', () => updateMultiLabel('category-ck', 'category-btn-label', 'All Categories', 'Category', 'Categories'));
 });
 document.querySelectorAll('.sla-ck').forEach(cb => {
   cb.addEventListener('change', function() {
