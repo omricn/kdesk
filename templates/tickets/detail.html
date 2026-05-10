@@ -1097,8 +1097,8 @@ if (INIT_CAT) {
       chip.title = file.name;
       chip.innerHTML = `<i class="bi bi-paperclip" style="font-size:10px;flex-shrink:0;"></i>
         <span class="text-truncate" style="max-width:140px;">${file.name}</span>
-        <button type="button" class="btn-close ms-1" style="font-size:8px;flex-shrink:0;" aria-label="Remove"></button>`;
-      chip.querySelector('.btn-close').addEventListener('click', () => {
+        <button type="button" class="att-chip-remove ms-1" style="background:none;border:none;padding:0 2px;line-height:1;font-size:13px;color:#888;cursor:pointer;flex-shrink:0;" aria-label="Remove">×</button>`;
+      chip.querySelector('.att-chip-remove').addEventListener('click', () => {
         selectedFiles.splice(idx, 1);
         syncInput();
         renderChips();
