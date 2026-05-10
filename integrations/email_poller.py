@@ -187,6 +187,7 @@ def _handle_ticket_reply(msg, ticket):
     content_type = msg.get('body', {}).get('contentType', '').lower()
     if content_type == 'html':
         body_content = _sanitize_html(body_content)
+        body_content = _strip_quoted_html(body_content)
         body_content = _html_to_plain(body_content)
     body_content = _strip_quoted_reply(body_content)
 
@@ -367,22 +368,55 @@ def _html_to_plain(html: str) -> str:
     return html.strip()
 
 
+def _strip_quoted_html(html: str) -> str:
+    """
+    Remove quoted reply content from HTML before plain-text conversion.
+    Handles Outlook <hr> reply dividers, <blockquote> elements, and signature divs.
+    """
+    # Outlook inserts <hr> as a visual reply divider — everything after is the original
+    hr_match = re.search(r'<hr\b[^>]*/?>|<hr\b[^>]*></hr>', html, re.IGNORECASE)
+    if hr_match:
+        html = html[:hr_match.start()]
+
+    # Strip from the first <blockquote> — everything inside is quoted context
+    bq_match = re.search(r'<blockquote\b', html, re.IGNORECASE)
+    if bq_match:
+        html = html[:bq_match.start()]
+
+    # Remove Outlook Web / Exchange signature div (id="Signature" or class="*signature*")
+    html = re.sub(
+        r'<div[^>]+(?:id|class)=["\'][^"\']*signature[^"\']*["\'][^>]*>.*',
+        '',
+        html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    return html
+
+
 def _strip_quoted_reply(text: str) -> str:
-    """Remove the quoted original message from a reply body."""
-    # Common reply separators used by Outlook, Gmail, etc.
+    """Remove the quoted original message and signature from a reply body."""
     separators = [
         r'^_{3,}$',                          # ___ divider line
         r'^-{3,}$',                          # --- divider line
-        r'^From:.*Sent:',                    # Outlook "From: ... Sent:" header
-        r'^On .+ wrote:$',                   # Gmail/Apple "On ... wrote:"
+        r'^From:\s',                         # Outlook reply header (on its own line)
+        r'^Sent:\s',                         # Outlook reply header (on its own line)
+        r'^On .+ wrote:',                    # Gmail/Apple "On ... wrote:"
         r'^\s*>',                            # Quoted lines starting with >
+        r'^--\s*$',                          # Standard email signature separator
     ]
-    pattern = re.compile('|'.join(separators), re.IGNORECASE | re.MULTILINE)
+    pattern = re.compile('|'.join(separators), re.IGNORECASE)
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if pattern.match(line.strip()):
             text = '\n'.join(lines[:i]).strip()
             break
+
+    # Truncate at 3+ consecutive blank lines — signature heuristic for plain-text emails
+    blank_run = re.search(r'\n{3,}', text)
+    if blank_run:
+        text = text[:blank_run.start()].strip()
+
     return text
 
 

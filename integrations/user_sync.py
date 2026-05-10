@@ -193,6 +193,11 @@ def sync_admins():
     if demoted_count:
         logger.info(f'[AdminSync] Removed admin rights and tagged {demoted_count} users no longer in {group_email}.')
 
+    # Re-enforce admin override: if is_admin was ever cleared on a pinned user, restore it.
+    restored_count = User.objects.filter(is_admin_override=True, is_admin=False).update(is_admin=True, is_staff=True)
+    if restored_count:
+        logger.info(f'[AdminSync] Restored is_admin for {restored_count} override-pinned users.')
+
     logger.info(f'[AdminSync] Sync complete. {len(members)} admins processed.')
 
     # Also sync IT manager role and superuser status

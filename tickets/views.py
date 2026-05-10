@@ -1096,12 +1096,18 @@ def download_attachment(request, pk):
     is_requester = request.user.email.lower() == (ticket.requester_email or '').lower()
     if not (is_admin or is_requester):
         return HttpResponseForbidden()
-    inline = request.GET.get('inline') == '1'
     import mimetypes
     content_type, _ = mimetypes.guess_type(att.filename)
     content_type = content_type or 'application/octet-stream'
+    # Serve viewable types inline so browsers open them in a new tab.
+    # Everything else (zip, docx, xlsx…) is forced to download.
+    INLINE_TYPES = {'image/', 'video/', 'audio/', 'text/', 'application/pdf'}
+    force_download = request.GET.get('dl') == '1'
+    is_inline = not force_download and any(content_type.startswith(t) for t in INLINE_TYPES)
     response = FileResponse(att.file.open('rb'), content_type=content_type)
-    if not inline:
+    if is_inline:
+        response['Content-Disposition'] = f'inline; filename="{att.filename}"'
+    else:
         response['Content-Disposition'] = f'attachment; filename="{att.filename}"'
     return response
 

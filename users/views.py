@@ -146,8 +146,13 @@ def auth_callback(request):
         if user.entra_id != user_id:
             user.entra_id = user_id
             changed = True
-        # Promote to admin if now in IT group; demotion is handled by sync_admins
+        # Promote to admin if now in IT group; demotion is handled by sync_admins.
+        # Also re-enforce override pin in case anything cleared is_admin.
         if is_it_admin and not user.is_admin:
+            user.is_admin = True
+            user.is_staff = True
+            changed = True
+        elif user.is_admin_override and not user.is_admin:
             user.is_admin = True
             user.is_staff = True
             changed = True
