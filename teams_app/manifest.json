@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
   "manifestVersion": "1.17",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "id": "a3f2d8c1-7b54-4e9a-bd6f-c0e12a3d5f87",
   "developer": {
     "name": "Kramer Electronics",
