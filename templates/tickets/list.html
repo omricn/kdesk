@@ -207,6 +207,25 @@
         </select>
         <button type="button" class="btn btn-sm btn-outline-primary" id="bulk-status-btn">Change</button>
       </div>
+
+      <!-- Merge — only shown when exactly 1 ticket is selected -->
+      <div id="merge-wrap" class="d-none d-flex gap-1 align-items-center position-relative">
+        <div class="vr"></div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="merge-btn">
+          <i class="bi bi-diagram-2 me-1"></i>Merge into…
+        </button>
+        <!-- Merge search dropdown -->
+        <div id="merge-dropdown" style="display:none;position:fixed;z-index:9999;
+             background:var(--bs-body-bg);border:1px solid var(--bs-border-color);
+             border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.18);
+             min-width:320px;max-width:420px;font-size:13px;">
+          <div class="p-2 border-bottom">
+            <input type="text" id="merge-search-input" class="form-control form-control-sm"
+                   placeholder="Search by ticket #, title or requester…" autocomplete="off">
+          </div>
+          <div id="merge-results" style="max-height:260px;overflow-y:auto;"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -486,10 +505,14 @@ function updateBulkBar() {
     bulkCount.textContent = `${n} ticket${n > 1 ? 's' : ''} selected`;
   } else {
     bulkBar.classList.add('d-none');
+    closeMergeDropdown();
   }
   const total = rowChecks().length;
   selectAll.indeterminate = n > 0 && n < total;
   selectAll.checked = total > 0 && n === total;
+  // Show merge only when exactly 1 ticket is selected
+  const mergeWrap = document.getElementById('merge-wrap');
+  if (mergeWrap) mergeWrap.classList.toggle('d-none', n !== 1);
 }
 
 selectAll.addEventListener('change', function() {
@@ -541,6 +564,93 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
   document.getElementById('bulk-new-status').value = status;
   document.getElementById('bulk-form').submit();
 });
+
+// ── Merge dropdown ────────────────────────────────────────────────────────────
+(function () {
+  const mergeBtn    = document.getElementById('merge-btn');
+  const mergeDd     = document.getElementById('merge-dropdown');
+  const mergeInput  = document.getElementById('merge-search-input');
+  const mergeResult = document.getElementById('merge-results');
+  if (!mergeBtn) return;
+
+  let debounce = null;
+
+  function positionDropdown() {
+    const r = mergeBtn.getBoundingClientRect();
+    mergeDd.style.left = r.left + 'px';
+    mergeDd.style.top  = (r.bottom + 4) + 'px';
+  }
+
+  function closeMergeDropdown() {
+    mergeDd.style.display = 'none';
+    mergeInput.value = '';
+    mergeResult.innerHTML = '';
+  }
+  window.closeMergeDropdown = closeMergeDropdown;
+
+  function renderResults(tickets) {
+    if (!tickets.length) {
+      mergeResult.innerHTML = '<div class="p-2 text-muted small">No tickets found.</div>';
+      return;
+    }
+    mergeResult.innerHTML = tickets.map(t => `
+      <div class="merge-result-item px-3 py-2" style="cursor:pointer;border-bottom:1px solid var(--bs-border-color);"
+           data-pk="${t.pk}">
+        <div class="fw-semibold small">${t.label}</div>
+        <div class="text-muted" style="font-size:11px;">${t.requester} · ${t.status}</div>
+      </div>`).join('');
+    mergeResult.querySelectorAll('.merge-result-item').forEach(function(item) {
+      item.addEventListener('mouseover', function() { this.style.background = 'var(--bs-secondary-bg)'; });
+      item.addEventListener('mouseout',  function() { this.style.background = ''; });
+      item.addEventListener('click', function() {
+        const targetPk = this.dataset.pk;
+        const targetLabel = this.querySelector('.fw-semibold').textContent;
+        const sourcePk = [...rowChecks()].find(c => c.checked).value;
+        if (!confirm(`Merge ticket #${String(sourcePk).padStart(4,'0')} into ${targetLabel}?\n\nThe duplicate ticket will be closed and its emails and attachments moved to the target.`)) return;
+        closeMergeDropdown();
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/tickets/${sourcePk}/merge/`;
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden'; csrf.name = 'csrfmiddlewaretoken';
+        csrf.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const tgt = document.createElement('input');
+        tgt.type = 'hidden'; tgt.name = 'target_pk'; tgt.value = targetPk;
+        form.appendChild(csrf); form.appendChild(tgt);
+        document.body.appendChild(form);
+        form.submit();
+      });
+    });
+  }
+
+  function fetchResults(q) {
+    const sourcePk = [...rowChecks()].find(c => c.checked)?.value || '';
+    fetch(`{% url 'ticket_merge_search' %}?q=${encodeURIComponent(q)}&exclude=${sourcePk}`)
+      .then(r => r.json())
+      .then(data => renderResults(data.tickets));
+  }
+
+  mergeBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (mergeDd.style.display === 'block') { closeMergeDropdown(); return; }
+    mergeDd.style.display = 'block';
+    positionDropdown();
+    mergeInput.focus();
+    fetchResults('');
+  });
+
+  mergeInput.addEventListener('input', function() {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => fetchResults(this.value.trim()), 200);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!mergeDd.contains(e.target) && e.target !== mergeBtn) closeMergeDropdown();
+  });
+  window.addEventListener('scroll', function() {
+    if (mergeDd.style.display === 'block') positionDropdown();
+  }, true);
+})();
 </script>
 <!-- ── New-ticket polling + notification sound ────────────────────────────── -->
 <script>

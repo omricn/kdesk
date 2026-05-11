@@ -4,6 +4,16 @@
 {% block title %}#{{ ticket.pk|stringformat:"04d" }} {{ ticket.title }}{% endblock %}
 
 {% block content %}
+{% if ticket.merged_into %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="border-left:4px solid #f0ad4e;">
+  <i class="bi bi-diagram-2-fill fs-5"></i>
+  <span>This ticket was merged into
+    <a href="{% url 'ticket_detail' ticket.merged_into.pk %}" class="fw-semibold alert-link">
+      #{{ ticket.merged_into.pk|stringformat:"04d" }} — {{ ticket.merged_into.title }}
+    </a>
+  </span>
+</div>
+{% endif %}
 <!-- Sticky action bar -->
 <div class="sticky-top py-2 mb-3" style="z-index:90;background:var(--kramer-surface);border-bottom:1px solid var(--kramer-border);">
   <div class="d-flex align-items-center justify-content-end gap-3">

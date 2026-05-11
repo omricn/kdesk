@@ -110,6 +110,13 @@ class Ticket(models.Model):
     satisfaction_rating = models.PositiveSmallIntegerField(null=True, blank=True)  # 1–5
     satisfaction_text   = models.CharField(max_length=50, blank=True)
 
+    # Merge tracking — set on the duplicate when it's merged into another ticket
+    merged_into = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='merged_tickets',
+    )
+
     class Meta:
         ordering = ['-created_at']
 

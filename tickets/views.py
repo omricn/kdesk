@@ -2094,3 +2094,110 @@ def import_sysaid(request):
         results = {'created': created_rows, 'skipped': skipped_rows, 'updated': updated_rows}
 
     return render(request, 'tickets/import_sysaid.html', {'results': results})
+
+
+# ── Ticket merge ──────────────────────────────────────────────────────────────
+
+@login_required
+def ticket_merge_search(request):
+    """Returns a JSON list of tickets matching a search query, for the merge dropdown."""
+    if not request.user.is_admin:
+        return JsonResponse({'tickets': []})
+    q = request.GET.get('q', '').strip()
+    exclude_pk = request.GET.get('exclude', '')
+    qs = Ticket.objects.filter(merged_into__isnull=True).exclude(status=Ticket.STATUS_CLOSED)
+    if exclude_pk:
+        try:
+            qs = qs.exclude(pk=int(exclude_pk))
+        except ValueError:
+            pass
+    if q:
+        from django.db.models import Q
+        number_qs = Ticket.objects.none()
+        try:
+            pk_val = int(q.lstrip('#'))
+            excl = int(exclude_pk) if exclude_pk else None
+            number_qs = Ticket.objects.filter(pk=pk_val, merged_into__isnull=True)
+            if excl:
+                number_qs = number_qs.exclude(pk=excl)
+        except ValueError:
+            pass
+        text_qs = qs.filter(
+            Q(title__icontains=q) |
+            Q(requester_name__icontains=q) |
+            Q(requester_email__icontains=q)
+        )
+        # Union: exact PK match first, then text matches
+        seen = set()
+        combined = []
+        for t in list(number_qs) + list(text_qs.order_by('-created_at')[:15]):
+            if t.pk not in seen:
+                seen.add(t.pk)
+                combined.append(t)
+            if len(combined) >= 15:
+                break
+        ticket_list = combined
+    else:
+        ticket_list = list(qs.order_by('-created_at')[:15])
+    return JsonResponse({'tickets': [
+        {
+            'pk': t.pk,
+            'label': f'#{t.pk:04d} — {t.title[:60]}',
+            'requester': t.requester_name or t.requester_email,
+            'status': t.get_status_display(),
+        }
+        for t in ticket_list
+    ]})
+
+
+@login_required
+def ticket_merge(request, pk):
+    """Merge ticket `pk` (duplicate) into the target ticket."""
+    if not request.user.is_admin:
+        messages.error(request, 'Not authorized.')
+        return redirect('ticket_list')
+    if request.method != 'POST':
+        return redirect('ticket_list')
+
+    source = get_object_or_404(Ticket, pk=pk)
+    try:
+        target = Ticket.objects.get(pk=int(request.POST.get('target_pk', '')))
+    except (Ticket.DoesNotExist, ValueError, TypeError):
+        messages.error(request, 'Target ticket not found.')
+        return redirect('ticket_list')
+
+    if source.pk == target.pk:
+        messages.error(request, 'Cannot merge a ticket into itself.')
+        return redirect('ticket_list')
+    if source.merged_into:
+        messages.error(request, f'Ticket #{source.pk:04d} is already merged.')
+        return redirect('ticket_list')
+
+    actor_name = request.user.display_name or request.user.email
+
+    # Move correspondence and attachments to the target ticket
+    source.emails.update(ticket=target)
+    source.attachments.filter(uploaded_by=None).update(ticket=target)  # inbound attachments only
+
+    # Internal note on the duplicate
+    from tickets.models import TicketComment
+    TicketComment.objects.create(
+        ticket=source,
+        author=request.user,
+        body=f'This ticket was merged into #{target.pk:04d} — "{target.title}" by {actor_name}.',
+        is_internal=True,
+    )
+    # Internal note on the target
+    TicketComment.objects.create(
+        ticket=target,
+        author=request.user,
+        body=f'Ticket #{source.pk:04d} — "{source.title}" was merged into this ticket by {actor_name}.',
+        is_internal=True,
+    )
+
+    source.merged_into = target
+    source.status = Ticket.STATUS_CLOSED
+    source.save(update_fields=['merged_into', 'status', 'updated_at'])
+
+    messages.success(request, f'Ticket #{source.pk:04d} merged into #{target.pk:04d}.')
+    return redirect('ticket_list')
