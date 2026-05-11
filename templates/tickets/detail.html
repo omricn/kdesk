@@ -1014,7 +1014,7 @@ if (INIT_CAT) {
     }
     if (e.key === 'Enter') {
       const focused = dd.querySelector('a:focus') || dd.querySelector('a');
-      if (focused) { e.preventDefault(); focused.click(); }
+      if (focused) { e.preventDefault(); insertMention(focused.dataset.name, _atIndex); }
     }
   });
 
@@ -1033,7 +1033,7 @@ if (INIT_CAT) {
     }
     if (e.key === 'Enter') {
       const focused = dd.querySelector('a:focus');
-      if (focused) { e.preventDefault(); focused.click(); }
+      if (focused) { e.preventDefault(); insertMention(focused.dataset.name, _atIndex); }
     }
     if (e.key === 'Escape') { hideDropdown(); ta.focus(); }
   });
