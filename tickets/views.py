@@ -330,6 +330,12 @@ def ticket_detail(request, pk):
                 note.author = request.user
                 note.is_internal = True
                 note.save()
+                # If a different admin from the assignee adds a note, flip to User Responded
+                # so the assignee is alerted (covers both @mention replies and general notes).
+                if (ticket.assignee and ticket.assignee != request.user
+                        and ticket.status not in Ticket.TERMINAL_STATUSES):
+                    ticket.status = Ticket.STATUS_USER_RESPONDED
+                    ticket.save(update_fields=['status', 'updated_at'])
                 # Fire mention notifications — check each admin's exact @DisplayName
                 from tasks.scheduled import notify_mention
                 for admin in User.objects.filter(is_admin=True, is_active=True).exclude(pk=request.user.pk):
