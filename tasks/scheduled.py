@@ -262,7 +262,7 @@ def _send_sla_breach_email(ticket):
     )
     _send_notification_email(
         to=ticket.assignee.email,
-        subject=f'[Kdesk] SLA Breached — #{ticket.pk:04d}: {ticket.title}',
+        subject=f'[Ticket #{ticket.pk:04d}] SLA Breached — {ticket.title}',
         body=body,
     )
 
@@ -288,7 +288,7 @@ def _send_sla_warning_email(ticket):
     )
     _send_notification_email(
         to=ticket.assignee.email,
-        subject=f'[Kdesk] SLA Warning — #{ticket.pk:04d}: {ticket.title}',
+        subject=f'[Ticket #{ticket.pk:04d}] SLA Warning — {ticket.title}',
         body=body,
     )
 
@@ -468,7 +468,7 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
         )
         _send_notification_email(
             to=ticket.assignee.email,
-            subject=f'[Kdesk] Ticket Assigned — #{ticket.pk:04d}: {ticket.title}',
+            subject=f'[Ticket #{ticket.pk:04d}] Ticket Assigned — {ticket.title}',
             body=body,
         )
 
@@ -490,7 +490,7 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
         )
         _send_notification_email(
             to=ticket.assignee.email,
-            subject=f'[Kdesk] Ticket Updated — #{ticket.pk:04d}: {ticket.title}',
+            subject=f'[Ticket #{ticket.pk:04d}] Ticket Updated — {ticket.title}',
             body=body,
         )
 
@@ -680,7 +680,7 @@ def notify_user_closed_ticket(ticket_pk: int, actor_pk: int):
     )
     _send_notification_email(
         to=ticket.assignee.email,
-        subject=f'[Kdesk] Closed by Requester — #{ticket.pk:04d}: {ticket.title}',
+        subject=f'[Ticket #{ticket.pk:04d}] Closed by Requester — {ticket.title}',
         body=body,
     )
     logger.info(f'[Portal] Self-close notification sent for ticket #{ticket_pk}.')
