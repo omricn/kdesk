@@ -2098,11 +2098,9 @@ def import_sysaid(request):
 
 # ── Ticket merge ──────────────────────────────────────────────────────────────
 
-@login_required
+@admin_required
 def ticket_merge_search(request):
     """Returns a JSON list of tickets matching a search query, for the merge dropdown."""
-    if not request.user.is_admin:
-        return JsonResponse({'tickets': []})
     q = request.GET.get('q', '').strip()
     exclude_pk = request.GET.get('exclude', '')
     qs = Ticket.objects.filter(merged_into__isnull=True).exclude(status=Ticket.STATUS_CLOSED)
@@ -2150,12 +2148,9 @@ def ticket_merge_search(request):
     ]})
 
 
-@login_required
+@admin_required
 def ticket_merge(request, pk):
     """Merge ticket `pk` (duplicate) into the target ticket."""
-    if not request.user.is_admin:
-        messages.error(request, 'Not authorized.')
-        return redirect('ticket_list')
     if request.method != 'POST':
         return redirect('ticket_list')
 
