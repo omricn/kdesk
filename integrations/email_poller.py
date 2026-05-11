@@ -134,21 +134,27 @@ def poll_mailbox():
                             email_conversation_id=conversation_id
                         ).first()
 
-                    # Fallback: RE: email whose conversationId didn't match
-                    # (ticket predates the field, or user started a new email with RE: subject).
-                    # Strip RE: prefix and match by title + requester email — only if unambiguous.
+                    # Fallback: RE: email whose conversationId didn't match.
+                    # Covers two cases:
+                    # 1. Ticket predates the email_conversation_id field (empty on the ticket)
+                    # 2. Original ticket was created from a FW: (forward) which has a different
+                    #    conversationId than the original thread — subsequent replies in the
+                    #    original thread never match the forwarded ticket's conversationId.
+                    # Match by title only (no requester constraint) to handle multi-person threads
+                    # where different participants reply. Guard: only route if exactly one open
+                    # non-merged ticket has this title — ambiguous matches fall through to new ticket.
                     if not existing_ticket and _REPLY_PREFIX_RE.match(subject):
                         bare_subject = _REPLY_PREFIX_RE.sub('', subject).strip()
                         if bare_subject:
                             candidates = Ticket.objects.filter(
                                 title__iexact=bare_subject,
-                                requester_email__iexact=sender_email,
-                            ).exclude(merged_into__isnull=False)
+                                merged_into__isnull=True,
+                            ).exclude(status=Ticket.STATUS_CLOSED)
                             if candidates.count() == 1:
                                 existing_ticket = candidates.first()
                                 logger.info(
                                     f'[EmailPoller] RE: fallback matched ticket #{existing_ticket.pk} '
-                                    f'by subject+requester for "{bare_subject}"'
+                                    f'by subject only for "{bare_subject}" (sender: {sender_email})'
                                 )
 
                 if existing_ticket:
