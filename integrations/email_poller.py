@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 TICKET_REPLY_RE = re.compile(r'\[Ticket #(\d+)\]', re.IGNORECASE)
 FORWARD_RE      = re.compile(r'^(fwd?|fw)\s*:', re.IGNORECASE)
-# Strips one or more RE:/Re:/re: prefixes from a subject
-_REPLY_PREFIX_RE = re.compile(r'^(re\s*:\s*)+', re.IGNORECASE)
+# Strips one or more RE:/FW:/Fwd: prefixes from a subject (handles stacked prefixes)
+_SUBJECT_PREFIX_RE = re.compile(r'^((re|fwd?)\s*:\s*)+', re.IGNORECASE)
 
 # Subjects that unmistakably indicate an auto-reply / OOF message
 _AUTOREPLY_SUBJECT_RE = re.compile(
@@ -111,7 +111,7 @@ def poll_mailbox():
 
         # Treat forwarded emails (Fwd:/FW:) as new tickets even if subject
         # contains a ticket reference — the original ticket is just quoted context.
-        is_forward = bool(FORWARD_RE.match(subject))
+        is_forward = bool(FORWARD_RE.match(subject))  # FW:/Fwd: → always new ticket
         reply_match = TICKET_REPLY_RE.search(subject)
         conversation_id = msg.get('conversationId', '')
 
@@ -134,28 +134,34 @@ def poll_mailbox():
                             email_conversation_id=conversation_id
                         ).first()
 
-                    # Fallback: RE: email whose conversationId didn't match.
-                    # Covers two cases:
-                    # 1. Ticket predates the email_conversation_id field (empty on the ticket)
-                    # 2. Original ticket was created from a FW: (forward) which has a different
-                    #    conversationId than the original thread — subsequent replies in the
-                    #    original thread never match the forwarded ticket's conversationId.
-                    # Match by title only (no requester constraint) to handle multi-person threads
-                    # where different participants reply. Guard: only route if exactly one open
-                    # non-merged ticket has this title — ambiguous matches fall through to new ticket.
-                    if not existing_ticket and _REPLY_PREFIX_RE.match(subject):
-                        bare_subject = _REPLY_PREFIX_RE.sub('', subject).strip()
-                        if bare_subject:
-                            candidates = Ticket.objects.filter(
-                                title__iexact=bare_subject,
-                                merged_into__isnull=True,
-                            ).exclude(status=Ticket.STATUS_CLOSED)
-                            if candidates.count() == 1:
-                                existing_ticket = candidates.first()
-                                logger.info(
-                                    f'[EmailPoller] RE: fallback matched ticket #{existing_ticket.pk} '
-                                    f'by subject only for "{bare_subject}" (sender: {sender_email})'
-                                )
+                    # Fallback: RE:/FW: email whose conversationId didn't match.
+                    # Covers:
+                    # 1. Ticket predates email_conversation_id (field is blank)
+                    # 2. Original ticket was created from a FW: — its conversationId differs
+                    #    from the original thread that everyone replies to
+                    # 3. Stacked prefixes (Re: FW: Re: …) on both stored titles and replies
+                    #
+                    # Strategy: normalize BOTH the incoming subject AND stored ticket titles
+                    # by stripping all RE:/FW: prefixes, then compare. Use Python-level
+                    # iteration (open ticket count is small) so we can normalize both sides.
+                    # Guard: only route if exactly one open non-merged ticket matches.
+                    bare_incoming = _SUBJECT_PREFIX_RE.sub('', subject).strip().lower()
+                    if not existing_ticket and bare_incoming and bare_incoming != subject.strip().lower():
+                        open_tickets = list(
+                            Ticket.objects.filter(merged_into__isnull=True)
+                            .exclude(status=Ticket.STATUS_CLOSED)
+                            .only('pk', 'title')
+                        )
+                        matches = [
+                            t for t in open_tickets
+                            if _SUBJECT_PREFIX_RE.sub('', t.title).strip().lower() == bare_incoming
+                        ]
+                        if len(matches) == 1:
+                            existing_ticket = matches[0]
+                            logger.info(
+                                f'[EmailPoller] Subject fallback matched ticket #{existing_ticket.pk} '
+                                f'by normalized subject "{bare_incoming}" (sender: {sender_email})'
+                            )
 
                 if existing_ticket:
                     ticket = _handle_ticket_reply(msg, existing_ticket)
