@@ -1012,6 +1012,10 @@ if (INIT_CAT) {
       const first = dd.querySelector('a');
       if (first) first.focus();
     }
+    if (e.key === 'Enter') {
+      const focused = dd.querySelector('a:focus') || dd.querySelector('a');
+      if (focused) { e.preventDefault(); focused.click(); }
+    }
   });
 
   dd.addEventListener('keydown', function (e) {
@@ -1026,6 +1030,10 @@ if (INIT_CAT) {
       const focused = dd.querySelector('a:focus');
       const prev = focused && focused.previousElementSibling;
       prev ? prev.focus() : ta.focus();
+    }
+    if (e.key === 'Enter') {
+      const focused = dd.querySelector('a:focus');
+      if (focused) { e.preventDefault(); focused.click(); }
     }
     if (e.key === 'Escape') { hideDropdown(); ta.focus(); }
   });

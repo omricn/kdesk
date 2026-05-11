@@ -497,6 +497,21 @@ selectAll.addEventListener('change', function() {
   updateBulkBar();
 });
 
+let lastChecked = null;
+
+document.addEventListener('click', function(e) {
+  if (!e.target.classList.contains('row-check')) return;
+  const boxes = [...rowChecks()];
+  if (e.shiftKey && lastChecked && lastChecked !== e.target) {
+    const a = boxes.indexOf(lastChecked);
+    const b = boxes.indexOf(e.target);
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    boxes.slice(lo, hi + 1).forEach(c => c.checked = e.target.checked);
+  }
+  lastChecked = e.target;
+  updateBulkBar();
+});
+
 document.addEventListener('change', function(e) {
   if (e.target.classList.contains('row-check')) updateBulkBar();
 });
