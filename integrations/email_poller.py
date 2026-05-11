@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 TICKET_REPLY_RE = re.compile(r'\[Ticket #(\d+)\]', re.IGNORECASE)
 FORWARD_RE      = re.compile(r'^(fwd?|fw)\s*:', re.IGNORECASE)
+# Strips one or more RE:/Re:/re: prefixes from a subject
+_REPLY_PREFIX_RE = re.compile(r'^(re\s*:\s*)+', re.IGNORECASE)
 
 # Subjects that unmistakably indicate an auto-reply / OOF message
 _AUTOREPLY_SUBJECT_RE = re.compile(
@@ -131,6 +133,23 @@ def poll_mailbox():
                         existing_ticket = Ticket.objects.filter(
                             email_conversation_id=conversation_id
                         ).first()
+
+                    # Fallback: RE: email whose conversationId didn't match
+                    # (ticket predates the field, or user started a new email with RE: subject).
+                    # Strip RE: prefix and match by title + requester email — only if unambiguous.
+                    if not existing_ticket and _REPLY_PREFIX_RE.match(subject):
+                        bare_subject = _REPLY_PREFIX_RE.sub('', subject).strip()
+                        if bare_subject:
+                            candidates = Ticket.objects.filter(
+                                title__iexact=bare_subject,
+                                requester_email__iexact=sender_email,
+                            ).exclude(merged_into__isnull=False)
+                            if candidates.count() == 1:
+                                existing_ticket = candidates.first()
+                                logger.info(
+                                    f'[EmailPoller] RE: fallback matched ticket #{existing_ticket.pk} '
+                                    f'by subject+requester for "{bare_subject}"'
+                                )
 
                 if existing_ticket:
                     ticket = _handle_ticket_reply(msg, existing_ticket)
