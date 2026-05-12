@@ -553,7 +553,7 @@
               <div class="d-flex align-items-center gap-2">
                 {% if email.direction == 'sent' %}
                   <span class="badge bg-primary" style="font-size:11px;"><i class="bi bi-arrow-up-right me-1"></i>Sent</span>
-                  <span class="small text-muted">To: {{ email.to_email }}</span>
+                  <span class="small text-muted">To: {{ email.to_email }}{% if email.cc_emails %} &nbsp;·&nbsp; CC: {{ email.cc_emails }}{% endif %}</span>
                 {% else %}
                   <span class="badge bg-user-responded" style="font-size:11px;"><i class="bi bi-arrow-down-left me-1"></i>Received</span>
                   <span class="small text-muted">From: {{ email.from_email }}</span>

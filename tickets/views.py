@@ -1072,6 +1072,7 @@ def ticket_send_email(request, pk):
         body=body,
         from_email=settings.SERVICEDESK_EMAIL,
         to_email=to_email,
+        cc_emails=', '.join(cc_emails) if cc_emails else '',
         sent_by=request.user,
     )
 

@@ -328,6 +328,7 @@ class TicketEmail(models.Model):
     body = models.TextField()
     from_email = models.EmailField()
     to_email = models.EmailField()
+    cc_emails = models.TextField(blank=True, default='')
     sent_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True,
