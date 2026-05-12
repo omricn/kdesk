@@ -64,7 +64,7 @@ class GraphClient:
         params = {
             '$filter': 'isRead eq false',
             '$top': top,
-            '$select': 'id,subject,from,body,receivedDateTime,hasAttachments,internetMessageId',
+            '$select': 'id,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageId,conversationId,internetMessageHeaders',
         }
         return self.get_paginated(path, params)
 

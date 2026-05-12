@@ -1107,9 +1107,10 @@ if (INIT_CAT) {
   const btn   = document.getElementById('email-attachment-btn');
   const input = document.getElementById('email-attachment-input');
   const chips = document.getElementById('email-att-chips');
+  const form  = document.getElementById('send-email-form');
   if (!btn || !input || !chips) return;
 
-  // We maintain our own FileList-like array since input.files is read-only
+  // selectedFiles is the source of truth — we never rely on input.files for submission
   let selectedFiles = [];
 
   function renderChips() {
@@ -1124,33 +1125,44 @@ if (INIT_CAT) {
         <button type="button" class="att-chip-remove ms-1" style="background:none;border:none;padding:0 2px;line-height:1;font-size:13px;color:#888;cursor:pointer;flex-shrink:0;" aria-label="Remove">×</button>`;
       chip.querySelector('.att-chip-remove').addEventListener('click', () => {
         selectedFiles.splice(idx, 1);
-        syncInput();
         renderChips();
       });
       chips.appendChild(chip);
     });
-    // Highlight paperclip button when files are attached
     btn.classList.toggle('btn-outline-primary', selectedFiles.length > 0);
     btn.classList.toggle('btn-outline-secondary', selectedFiles.length === 0);
-  }
-
-  function syncInput() {
-    // Replace the file input's files with a new DataTransfer containing our array
-    const dt = new DataTransfer();
-    selectedFiles.forEach(f => dt.items.add(f));
-    input.files = dt.files;
   }
 
   btn.addEventListener('click', () => input.click());
 
   input.addEventListener('change', () => {
     Array.from(input.files).forEach(f => selectedFiles.push(f));
-    // Clear BEFORE syncing — in Chrome/Edge, input.value='' always wipes input.files,
-    // so we must clear first and then rebuild via DataTransfer.
-    input.value = '';
-    syncInput();
+    input.value = '';  // clear native input so the same file can be re-selected
     renderChips();
   });
+
+  // Use fetch + FormData to submit the email form when files are attached.
+  // Native form submit cannot reliably carry a DataTransfer-backed input.files
+  // across all browsers, so we manage the files ourselves.
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (!selectedFiles.length) return; // no attachments — let native submit proceed
+      e.preventDefault();
+      const fd = new FormData(form); // captures CSRF, email body, CC, sidebar fields
+      fd.delete('email_attachments'); // remove the empty native file input entry
+      selectedFiles.forEach(f => fd.append('email_attachments', f));
+      const submitBtn = form.querySelector('[type="submit"]');
+      const origHtml  = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Sending…';
+      fetch(form.action, { method: 'POST', body: fd })
+        .then(r => { window.location.href = r.url; })
+        .catch(() => {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origHtml;
+        });
+    });
+  }
 })();
 // CC user-search with pills
 (function () {

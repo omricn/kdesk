@@ -233,16 +233,11 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
     content_type = msg.get('body', {}).get('contentType', '').lower()
     is_html = content_type == 'html'
 
-    if is_html:
-        body_content = _sanitize_html(body_content)
-        body_content = _strip_quoted_html(body_content)
-    else:
-        body_content = _strip_quoted_reply(body_content)
-
-    # Download attachments and resolve cid: inline image references.
+    # Download attachments and replace cid: refs on the RAW body BEFORE sanitization.
+    # nh3 may strip cid: src attributes even when 'cid' is in url_schemes; replacing
+    # them with /attachments/ paths (no URL scheme) ensures they survive the sanitizer.
     cid_map = {}
-    has_inline_refs = is_html and 'cid:' in body_content
-    if msg.get('hasAttachments') or has_inline_refs:
+    if is_html and (msg.get('hasAttachments') or 'cid:' in body_content):
         try:
             attachments = client.get_message_attachments(mailbox, msg['id'])
             for att in attachments:
@@ -277,6 +272,12 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
     if is_html and cid_map:
         for cid, url in cid_map.items():
             body_content = body_content.replace(f'cid:{cid}', url)
+
+    if is_html:
+        body_content = _sanitize_html(body_content)
+        body_content = _strip_quoted_html(body_content)
+    else:
+        body_content = _strip_quoted_reply(body_content)
 
     subject = msg.get('subject', f'Re: [Ticket #{ticket.pk:04d}]').strip()
 
