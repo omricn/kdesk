@@ -709,10 +709,7 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
   var pollBase = '{% url "ticket_poll_new" %}';
 
   function buildPollUrl() {
-    var params = new URLSearchParams(window.location.search);
-    params.delete('confetti'); params.delete('page');
-    var qs = params.toString();
-    return pollBase + '?after_id=' + afterId + (qs ? '&' + qs : '');
+    return pollBase + '?after_id=' + afterId;
   }
 
   function poll() {
@@ -727,7 +724,7 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
       .catch(function() {});
   }
 
-  setInterval(poll, 10000);
+  setInterval(poll, 5000);
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') poll();
   });
