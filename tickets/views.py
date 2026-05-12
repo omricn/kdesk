@@ -360,11 +360,13 @@ def ticket_detail(request, pk):
                 note.author = request.user
                 note.is_internal = True
                 note.save()
+                original_status = ticket.status
                 _maybe_save_sidebar(request, ticket)
                 # If a different admin from the assignee adds a note, flip to User Responded
-                # so the assignee is alerted (covers both @mention replies and general notes).
+                # so the assignee is alerted — but only if the user didn't explicitly set a status.
                 if (ticket.assignee_id and ticket.assignee_id != request.user.pk
-                        and ticket.status not in Ticket.TERMINAL_STATUSES):
+                        and ticket.status not in Ticket.TERMINAL_STATUSES
+                        and ticket.status == original_status):
                     ticket.status = Ticket.STATUS_USER_RESPONDED
                     ticket.save(update_fields=['status', 'updated_at'])
                 # Fire mention notifications — check each admin's exact @DisplayName
