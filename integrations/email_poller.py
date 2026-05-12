@@ -525,10 +525,17 @@ def _sanitize_html(html: str) -> str:
         'table': {'style', 'border', 'cellpadding', 'cellspacing'},
     }
 
-    return nh3.clean(
+    cleaned = nh3.clean(
         html,
         tags=ALLOWED_TAGS,
         attributes=ALLOWED_ATTRS,
         url_schemes={'http', 'https', 'mailto', 'cid'},
         link_rel=None,
-    ).strip()
+    )
+
+    # Strip img tags with external src (http/https) — they cause browser fetches that
+    # can freeze the ticket detail page and leak read-receipts to the sender's server.
+    # Only cid: refs (resolved to local /attachments/ URLs) and own-domain /... paths are kept.
+    cleaned = re.sub(r'<img[^>]+src=["\']https?://[^"\']*["\'][^>]*/?>', '', cleaned, flags=re.IGNORECASE)
+
+    return cleaned.strip()
