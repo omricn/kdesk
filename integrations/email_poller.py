@@ -17,6 +17,21 @@ from .graph_client import get_client
 logger = logging.getLogger(__name__)
 
 TICKET_REPLY_RE = re.compile(r'\[Ticket #(\d+)\]', re.IGNORECASE)
+
+
+def _fmt_recipients(recipients):
+    parts = []
+    for r in recipients:
+        addr = r.get('emailAddress', {})
+        email = addr.get('address', '')
+        name  = addr.get('name', '')
+        if name and name.lower() != email.lower():
+            parts.append(f'{name} <{email}>')
+        elif email:
+            parts.append(email)
+    return ', '.join(parts)
+
+
 FORWARD_RE      = re.compile(r'^(fwd?|fw)\s*:', re.IGNORECASE)
 # Strips one or more RE:/FW:/Fwd: prefixes from a subject (handles stacked prefixes)
 _SUBJECT_PREFIX_RE = re.compile(r'^((re|fwd?)\s*:\s*)+', re.IGNORECASE)
@@ -288,6 +303,8 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
         return ticket
 
     # Regular end-user reply — log in correspondence record (preserve HTML for inline images).
+    email_to = _fmt_recipients(msg.get('toRecipients', []))
+    email_cc = _fmt_recipients(msg.get('ccRecipients', []))
     TicketEmail.objects.create(
         ticket=ticket,
         direction=TicketEmail.DIRECTION_RECEIVED,
@@ -295,7 +312,8 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
         body=body_content,
         body_is_html=is_html,
         from_email=sender_email,
-        to_email='',
+        to_email=email_to,
+        cc_emails=email_cc,
     )
 
     if ticket.status != Ticket.STATUS_USER_RESPONDED:
@@ -312,18 +330,6 @@ def _create_ticket_from_message(msg, client, mailbox):
     sender = msg.get('from', {}).get('emailAddress', {})
     requester_email = sender.get('address', 'unknown@unknown.com')
     requester_name = sender.get('name', '')
-
-    def _fmt_recipients(recipients):
-        parts = []
-        for r in recipients:
-            addr = r.get('emailAddress', {})
-            email = addr.get('address', '')
-            name  = addr.get('name', '')
-            if name and name.lower() != email.lower():
-                parts.append(f'{name} <{email}>')
-            elif email:
-                parts.append(email)
-        return ', '.join(parts)
 
     email_from = (f'{requester_name} <{requester_email}>' if requester_name and requester_name.lower() != requester_email.lower() else requester_email)
     email_to   = _fmt_recipients(msg.get('toRecipients', []))

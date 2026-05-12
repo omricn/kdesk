@@ -75,6 +75,31 @@ def _set_default_category(ticket):
         pass
 
 
+def _maybe_save_sidebar(request, ticket):
+    """Save sidebar field changes (category/assignee/status) submitted alongside any action."""
+    if not any(f in request.POST for f in ('cat_id', 'assignee', 'status')):
+        return
+    def _to_int(v):
+        try: return int(v) if v else None
+        except (ValueError, TypeError): return None
+    update_fields = []
+    if 'cat_id' in request.POST:
+        ticket.category_id    = _to_int(request.POST.get('cat_id'))
+        ticket.subcategory_id = _to_int(request.POST.get('sub_id'))
+        ticket.ticket_item_id = _to_int(request.POST.get('item_id'))
+        update_fields += ['category_id', 'subcategory_id', 'ticket_item_id']
+    if 'assignee' in request.POST:
+        ticket.assignee_id = _to_int(request.POST.get('assignee')) or None
+        update_fields.append('assignee_id')
+    if 'status' in request.POST:
+        status = request.POST.get('status', '')
+        if status in {s for s, _ in Ticket.STATUS_CHOICES}:
+            ticket.status = status
+            update_fields.append('status')
+    if update_fields:
+        ticket.save(update_fields=update_fields)
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @admin_required
@@ -198,7 +223,11 @@ def ticket_list(request):
     if col_id:
         ticket_num = col_id.lstrip('#').lstrip('0') or '0'
         if ticket_num.isdigit():
-            qs = qs.filter(pk=int(ticket_num))
+            # Ticket ID search ignores all other active filters so any ticket can be
+            # found regardless of status, assignee, or category.
+            qs = Ticket.objects.select_related(
+                'assignee', 'category', 'subcategory', 'ticket_item'
+            ).filter(pk=int(ticket_num))
     if col_subject:
         qs = qs.filter(title__icontains=col_subject)
     if col_requester:
@@ -319,6 +348,7 @@ def ticket_detail(request, pk):
                 # Notify requester
                 if ticket.requester_email:
                     send_requester_comment.delay(ticket.pk, comment.pk)
+                _maybe_save_sidebar(request, ticket)
                 messages.success(request, 'Comment added.')
                 return redirect('ticket_detail', pk=pk)
 
@@ -330,9 +360,10 @@ def ticket_detail(request, pk):
                 note.author = request.user
                 note.is_internal = True
                 note.save()
+                _maybe_save_sidebar(request, ticket)
                 # If a different admin from the assignee adds a note, flip to User Responded
                 # so the assignee is alerted (covers both @mention replies and general notes).
-                if (ticket.assignee and ticket.assignee != request.user
+                if (ticket.assignee_id and ticket.assignee_id != request.user.pk
                         and ticket.status not in Ticket.TERMINAL_STATUSES):
                     ticket.status = Ticket.STATUS_USER_RESPONDED
                     ticket.save(update_fields=['status', 'updated_at'])
@@ -488,6 +519,7 @@ def ticket_detail(request, pk):
                     uploaded_by=request.user,
                 )
                 att.save()
+                _maybe_save_sidebar(request, ticket)
                 messages.success(request, f'Attachment "{file_obj.name}" uploaded.')
                 return redirect('ticket_detail', pk=pk)
 
@@ -1086,6 +1118,7 @@ def ticket_send_email(request, pk):
             uploaded_by=request.user,
         )
 
+    _maybe_save_sidebar(request, ticket)
     messages.success(request, f'Email sent to {to_email}.')
     return redirect('ticket_detail', pk=pk)
 

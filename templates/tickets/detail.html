@@ -558,7 +558,7 @@
                   <span class="small text-muted">To: {{ email.to_email }}{% if email.cc_emails %} &nbsp;·&nbsp; CC: {{ email.cc_emails }}{% endif %}</span>
                 {% else %}
                   <span class="badge bg-user-responded" style="font-size:11px;"><i class="bi bi-arrow-down-left me-1"></i>Received</span>
-                  <span class="small text-muted">From: {{ email.from_email }}</span>
+                  <span class="small text-muted">From: {{ email.from_email }}{% if email.to_email %} &nbsp;·&nbsp; To: {{ email.to_email }}{% endif %}{% if email.cc_emails %} &nbsp;·&nbsp; CC: {{ email.cc_emails }}{% endif %}</span>
                 {% endif %}
               </div>
               <span class="text-muted small text-nowrap ms-2">{{ email.timestamp|date:"d M Y H:i" }}</span>
@@ -1145,10 +1145,11 @@ if (INIT_CAT) {
 
   input.addEventListener('change', () => {
     Array.from(input.files).forEach(f => selectedFiles.push(f));
+    // Clear BEFORE syncing — in Chrome/Edge, input.value='' always wipes input.files,
+    // so we must clear first and then rebuild via DataTransfer.
+    input.value = '';
     syncInput();
     renderChips();
-    // Reset so same file can be re-added if needed
-    input.value = '';
   });
 })();
 // CC user-search with pills
@@ -1355,6 +1356,35 @@ if (INIT_CAT) {
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.pk) addPreview(d.url, d.pk); });
   });
+})();
+
+// ── Persist sidebar changes on any non-update form submit ──
+// Category/assignee/status belong to update-form via form="update-form", so they are
+// excluded from comment/note/upload/send-email submissions.  Inject their current
+// values as hidden fields so the server can save them alongside the action.
+(function () {
+  var SIDEBAR = [
+    ['cat_id',   'det-cat'],
+    ['sub_id',   'det-sub'],
+    ['item_id',  'det-item'],
+    ['assignee', 'id_assignee'],
+    ['status',   'id_status'],
+  ];
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (form.id === 'update-form') return;
+    var action = form.getAttribute('action') || '';
+    // Only inject into forms that post back to this ticket (no explicit action,
+    // or the send-email endpoint).  Skip the KB form and other external actions.
+    if (action && action.indexOf('/send-email/') === -1 && action.indexOf('/paste-attachment/') === -1) return;
+    SIDEBAR.forEach(function (pair) {
+      var el = document.getElementById(pair[1]);
+      if (!el) return;
+      var h = document.createElement('input');
+      h.type = 'hidden'; h.name = pair[0]; h.value = el.value;
+      form.appendChild(h);
+    });
+  }, true);
 })();
 
 // ── Paste screenshot to attachments ──
