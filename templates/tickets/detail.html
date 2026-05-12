@@ -295,8 +295,10 @@
           <div class="d-flex gap-2">
             <input type="file" name="file" class="form-control form-control-sm">
             <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Upload</button>
+            <button type="button" id="paste-att-btn" class="btn btn-sm btn-outline-secondary text-nowrap" title="Click then Ctrl+V to paste a screenshot"><i class="bi bi-clipboard-image"></i></button>
           </div>
         </form>
+        <div id="paste-att-hint" class="text-muted mt-1 d-none" style="font-size:11px;"><i class="bi bi-clipboard me-1"></i>Press Ctrl+V to paste screenshot…</div>
       </div>
     </div>
 
@@ -562,7 +564,11 @@
               <span class="text-muted small text-nowrap ms-2">{{ email.timestamp|date:"d M Y H:i" }}</span>
             </div>
             <div class="small fw-semibold mb-1" style="color:var(--kramer-neutral);">{{ email.subject }}</div>
+            {% if email.body_is_html %}
+            <div class="small email-html-body" dir="auto">{{ email.body|safe }}</div>
+            {% else %}
             <div class="small" style="white-space:pre-wrap;color:#bbb;" dir="auto">{{ email.body }}</div>
+            {% endif %}
             {% if email.sent_by %}
             <div class="small text-muted mt-1">by {{ email.sent_by }}</div>
             {% endif %}
@@ -582,6 +588,10 @@
 
 {% block extra_css %}
 <style>
+  .email-html-body { color: #bbb; }
+  .email-html-body img { max-width: 100%; border-radius: 4px; margin: 4px 0; }
+  .email-html-body p, .email-html-body div { margin-bottom: 4px; }
+
   /* Blurred backdrop scoped to KB prompt modal only */
   .kb-modal-open .modal-backdrop {
     backdrop-filter: blur(5px);
@@ -1344,6 +1354,73 @@ if (INIT_CAT) {
     fetch('{% url "solution_image_upload" ticket.pk %}', { method: 'POST', body: fd })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.pk) addPreview(d.url, d.pk); });
+  });
+})();
+
+// ── Paste screenshot to attachments ──
+(function () {
+  var btn  = document.getElementById('paste-att-btn');
+  var hint = document.getElementById('paste-att-hint');
+  if (!btn || !hint) return;
+
+  var armed = false;
+  var pasteHandler;
+
+  btn.addEventListener('click', function () {
+    if (armed) return;
+    armed = true;
+    btn.classList.add('active');
+    hint.classList.remove('d-none');
+
+    pasteHandler = function (e) {
+      var items = (e.clipboardData || {}).items || [];
+      var imgItem = null;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+          imgItem = items[i]; break;
+        }
+      }
+      if (!imgItem) return;
+      e.preventDefault();
+      var ext = imgItem.type.split('/')[1] || 'png';
+      var blob = imgItem.getAsFile();
+      var fd = new FormData();
+      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+      fd.append('file', new File([blob], 'screenshot-' + Date.now() + '.' + ext, { type: imgItem.type }));
+      btn.disabled = true;
+      hint.textContent = 'Uploading…';
+      fetch('{% url "ticket_paste_attachment" ticket.pk %}', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            hint.textContent = '✓ "' + d.name + '" uploaded — reloading…';
+            setTimeout(function () { location.reload(); }, 800);
+          } else {
+            hint.textContent = 'Error: ' + (d.error || 'upload failed');
+            btn.disabled = false;
+          }
+        })
+        .catch(function () {
+          hint.textContent = 'Upload failed.';
+          btn.disabled = false;
+        })
+        .finally(function () {
+          document.removeEventListener('paste', pasteHandler);
+          armed = false;
+          btn.classList.remove('active');
+        });
+    };
+    document.addEventListener('paste', pasteHandler);
+
+    // Auto-disarm after 15s if user never pastes
+    setTimeout(function () {
+      if (armed) {
+        armed = false;
+        btn.classList.remove('active');
+        hint.classList.add('d-none');
+        document.removeEventListener('paste', pasteHandler);
+      }
+    }, 15000);
   });
 })();
 

@@ -1148,6 +1148,28 @@ def solution_image_upload(request, pk):
     return JsonResponse({'url': f'/attachments/{att.pk}/download/?inline=1', 'pk': att.pk})
 
 
+@admin_required
+def ticket_paste_attachment(request, pk):
+    """Accept a pasted screenshot image and save it as a regular (non-inline) attachment."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    ticket = get_object_or_404(Ticket, pk=pk)
+    f = request.FILES.get('file')
+    if not f:
+        return JsonResponse({'error': 'No file'}, status=400)
+    if f.size > 3 * 1024 * 1024:
+        return JsonResponse({'error': 'File exceeds 3 MB limit'}, status=400)
+    att = TicketAttachment.objects.create(
+        ticket=ticket,
+        filename=f.name,
+        file=f,
+        file_size=f.size,
+        is_inline=False,
+        uploaded_by=request.user,
+    )
+    return JsonResponse({'ok': True, 'name': att.filename, 'pk': att.pk})
+
+
 # ── New-ticket poll ──────────────────────────────────────────────────────────
 
 @admin_required

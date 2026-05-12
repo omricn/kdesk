@@ -164,7 +164,7 @@ def poll_mailbox():
                             )
 
                 if existing_ticket:
-                    ticket = _handle_ticket_reply(msg, existing_ticket)
+                    ticket = _handle_ticket_reply(msg, existing_ticket, client, mailbox)
                 else:
                     ticket = _create_ticket_from_message(msg, client, mailbox)
 
@@ -194,13 +194,13 @@ def poll_mailbox():
             logger.warning(f'[EmailPoller] Could not move {msg["id"]} to deleted: {exc}')
 
 
-def _handle_ticket_reply(msg, ticket):
+def _handle_ticket_reply(msg, ticket, client, mailbox):
     """
     Process an incoming email that is a reply to an existing ticket.
     Updates ticket status to 'user_responded' and logs the email in TicketEmail.
     Returns the Ticket instance.
     """
-    from tickets.models import Ticket, TicketEmail
+    from tickets.models import Ticket, TicketEmail, TicketAttachment
 
     sender = msg.get('from', {}).get('emailAddress', {})
     sender_email = sender.get('address', 'unknown@unknown.com')
@@ -216,15 +216,56 @@ def _handle_ticket_reply(msg, ticket):
 
     body_content = msg.get('body', {}).get('content', '')
     content_type = msg.get('body', {}).get('contentType', '').lower()
-    if content_type == 'html':
+    is_html = content_type == 'html'
+
+    if is_html:
         body_content = _sanitize_html(body_content)
         body_content = _strip_quoted_html(body_content)
-        body_content = _html_to_plain(body_content)
-    body_content = _strip_quoted_reply(body_content)
+    else:
+        body_content = _strip_quoted_reply(body_content)
+
+    # Download attachments and resolve cid: inline image references.
+    cid_map = {}
+    has_inline_refs = is_html and 'cid:' in body_content
+    if msg.get('hasAttachments') or has_inline_refs:
+        try:
+            attachments = client.get_message_attachments(mailbox, msg['id'])
+            for att in attachments:
+                if att.get('@odata.type') != '#microsoft.graph.fileAttachment':
+                    continue
+                filename = att.get('name', 'attachment')
+                content_bytes = base64.b64decode(att.get('contentBytes', ''))
+                att_content_id = att.get('contentId', '')
+                att_is_inline = att.get('isInline', False)
+                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                    tmp.write(content_bytes)
+                    tmp_path = tmp.name
+                try:
+                    with open(tmp_path, 'rb') as f:
+                        ta = TicketAttachment.objects.create(
+                            ticket=ticket,
+                            filename=filename,
+                            file=File(f, name=filename),
+                            file_size=len(content_bytes),
+                            content_id=att_content_id,
+                            is_inline=att_is_inline,
+                        )
+                    if att_content_id:
+                        cid_key = att_content_id.strip('<>').strip()
+                        if cid_key:
+                            cid_map[cid_key] = f'/attachments/{ta.pk}/download/?inline=1'
+                finally:
+                    os.unlink(tmp_path)
+        except Exception as exc:
+            logger.warning(f'[EmailPoller] Could not save reply attachments for ticket #{ticket.pk}: {exc}')
+
+    if is_html and cid_map:
+        for cid, url in cid_map.items():
+            body_content = body_content.replace(f'cid:{cid}', url)
 
     subject = msg.get('subject', f'Re: [Ticket #{ticket.pk:04d}]').strip()
 
-    # If the sender is an admin, post their reply as an internal note
+    # If the sender is an admin, post their reply as an internal note (plain text).
     from users.models import User
     try:
         sender_admin = User.objects.get(email__iexact=sender_email, is_admin=True)
@@ -233,10 +274,11 @@ def _handle_ticket_reply(msg, ticket):
 
     if sender_admin:
         from tickets.models import TicketComment
+        plain_body = _html_to_plain(body_content) if is_html else body_content
         TicketComment.objects.create(
             ticket=ticket,
             author=sender_admin,
-            body=body_content,
+            body=plain_body,
             is_internal=True,
         )
         if ticket.status != Ticket.STATUS_USER_RESPONDED:
@@ -245,14 +287,15 @@ def _handle_ticket_reply(msg, ticket):
         logger.info(f'[EmailPoller] Admin reply from {sender_email} added as internal note to ticket #{ticket.pk}')
         return ticket
 
-    # Regular end-user reply — log in correspondence record
+    # Regular end-user reply — log in correspondence record (preserve HTML for inline images).
     TicketEmail.objects.create(
         ticket=ticket,
         direction=TicketEmail.DIRECTION_RECEIVED,
         subject=subject,
         body=body_content,
+        body_is_html=is_html,
         from_email=sender_email,
-        to_email='',  # The mailbox — not stored separately
+        to_email='',
     )
 
     if ticket.status != Ticket.STATUS_USER_RESPONDED:
