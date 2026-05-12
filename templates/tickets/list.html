@@ -533,7 +533,7 @@ document.addEventListener('click', function(e) {
   }
   lastChecked = e.target;
   updateBulkBar();
-});
+}, true);
 
 document.addEventListener('change', function(e) {
   if (e.target.classList.contains('row-check')) updateBulkBar();
