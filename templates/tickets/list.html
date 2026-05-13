@@ -258,7 +258,7 @@
               <th></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tickets-tbody">
             {% for t in tickets %}
             <tr class="{{ t|sla_row_class }}" data-pk="{{ t.pk }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td onclick="event.stopPropagation();"><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
@@ -305,7 +305,7 @@
         </table>
       </div>
     </div>
-    <div class="card-footer text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div id="tickets-footer" class="card-footer text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
       <span>{{ page_obj.paginator.count }} ticket(s) found</span>
       {% if page_obj.has_other_pages %}
       <nav>
@@ -370,6 +370,28 @@ document.addEventListener('DOMContentLoaded', function() {
   var t = document.getElementById('tickets-table');
   if (t) initResizableCols(t, 'kdesk-col-widths-tickets');
 });
+
+// Soft refresh: swap only tbody + footer, no full page reload (no jitter)
+window.softRefresh = function() {
+  fetch(window.location.href, {credentials: 'same-origin'})
+    .then(function(r) { return r.ok ? r.text() : null; })
+    .then(function(html) {
+      if (!html) return;
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var newTbody = doc.getElementById('tickets-tbody');
+      var newFooter = doc.getElementById('tickets-footer');
+      var tbody = document.getElementById('tickets-tbody');
+      var footer = document.getElementById('tickets-footer');
+      if (newTbody && tbody) tbody.innerHTML = newTbody.innerHTML;
+      if (newFooter && footer) footer.innerHTML = newFooter.innerHTML;
+      // Reset bulk selection since rows were replaced
+      var sa = document.getElementById('select-all');
+      var bb = document.getElementById('bulk-bar');
+      if (sa) { sa.checked = false; sa.indeterminate = false; }
+      if (bb) bb.classList.add('d-none');
+    })
+    .catch(function() {});
+};
 </script>
 <script>
 // ── Category modal ────────────────────────────────────────────────────────────
@@ -406,22 +428,22 @@ selSub.addEventListener('change', function() {
   selItem.disabled = !subId;
 });
 
-document.querySelectorAll('.cat-edit-btn').forEach(btn => {
-  btn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    _catModalTicketPk = this.dataset.pk;
-    const catId  = parseInt(this.dataset.cat)  || null;
-    const subId  = parseInt(this.dataset.sub)  || null;
-    const itemId = parseInt(this.dataset.item) || null;
-    selCat.value = catId || '';
-    selCat.dispatchEvent(new Event('change'));
-    if (subId) {
-      selSub.value = subId;
-      selSub.dispatchEvent(new Event('change'));
-      if (itemId) selItem.value = itemId;
-    }
-    new bootstrap.Modal(document.getElementById('catModal')).show();
-  });
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.cat-edit-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  _catModalTicketPk = btn.dataset.pk;
+  const catId  = parseInt(btn.dataset.cat)  || null;
+  const subId  = parseInt(btn.dataset.sub)  || null;
+  const itemId = parseInt(btn.dataset.item) || null;
+  selCat.value = catId || '';
+  selCat.dispatchEvent(new Event('change'));
+  if (subId) {
+    selSub.value = subId;
+    selSub.dispatchEvent(new Event('change'));
+    if (itemId) selItem.value = itemId;
+  }
+  new bootstrap.Modal(document.getElementById('catModal')).show();
 });
 
 document.getElementById('catModal-save').addEventListener('click', function() {

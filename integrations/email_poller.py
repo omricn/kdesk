@@ -281,14 +281,17 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
 
     subject = msg.get('subject', f'Re: [Ticket #{ticket.pk:04d}]').strip()
 
-    # If the sender is an admin, post their reply as an internal note (plain text).
+    # If the sender is an admin who is NOT the ticket's requester, log as internal note.
+    # If the admin IS the requester (e.g. they sent a ticket to themselves for testing),
+    # fall through to the normal user-reply path so the ticket flips to user_responded.
     from users.models import User
     try:
         sender_admin = User.objects.get(email__iexact=sender_email, is_admin=True)
     except User.DoesNotExist:
         sender_admin = None
 
-    if sender_admin:
+    is_own_ticket = sender_email.lower() == (ticket.requester_email or '').lower()
+    if sender_admin and not is_own_ticket:
         from tickets.models import TicketComment
         plain_body = _html_to_plain(body_content) if is_html else body_content
         TicketComment.objects.create(
@@ -297,9 +300,9 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
             body=plain_body,
             is_internal=True,
         )
-        if ticket.status != Ticket.STATUS_USER_RESPONDED:
+        if ticket.status not in Ticket.TERMINAL_STATUSES:
             ticket.status = Ticket.STATUS_USER_RESPONDED
-            ticket.save(update_fields=['status'])
+            ticket.save(update_fields=['status', 'updated_at'])
         logger.info(f'[EmailPoller] Admin reply from {sender_email} added as internal note to ticket #{ticket.pk}')
         return ticket
 

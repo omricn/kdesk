@@ -204,6 +204,133 @@
   </div>
 </div>
 
+<!-- Ticket Statuses -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-tags me-1" style="color:var(--kramer-purple);"></i>Ticket Statuses</span>
+    <small class="text-muted fw-normal">Configure SLA and terminal behaviour per status</small>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0" id="status-table">
+      <thead class="table-light">
+        <tr>
+          <th style="width:28px;"></th>
+          <th>Status</th>
+          <th class="text-center" style="width:110px;">Pauses SLA</th>
+          <th class="text-center" style="width:110px;">Terminal</th>
+          <th style="width:60px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in ticket_statuses %}
+        <tr id="status-row-{{ s.pk }}" data-id="{{ s.pk }}" data-builtin="{{ s.is_builtin|yesno:'1,0' }}">
+          <td>
+            <span class="badge {{ s.badge_class }}" id="status-badge-{{ s.pk }}" style="display:inline-block;min-width:12px;">&nbsp;</span>
+          </td>
+          <td>
+            <span class="status-label" id="status-label-{{ s.pk }}">{{ s.label }}</span>
+            <small class="text-muted ms-1" style="font-size:.75rem;">{{ s.key }}</small>
+          </td>
+          <td class="text-center">
+            <input type="checkbox" class="form-check-input status-pauses-sla" data-id="{{ s.pk }}"
+                   {% if s.pauses_sla %}checked{% endif %}>
+          </td>
+          <td class="text-center">
+            <input type="checkbox" class="form-check-input status-is-terminal" data-id="{{ s.pk }}"
+                   {% if s.is_terminal %}checked{% endif %}>
+          </td>
+          <td class="text-end pe-3">
+            <div class="d-flex gap-1 justify-content-end">
+              <button class="btn btn-sm btn-link p-0 text-secondary status-edit-btn" data-id="{{ s.pk }}" title="Edit label / colour"><i class="bi bi-pencil"></i></button>
+              {% if not s.is_builtin %}
+              <button class="btn btn-sm btn-link p-0 text-danger status-del-btn" data-id="{{ s.pk }}" title="Delete"><i class="bi bi-trash"></i></button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-muted text-center py-3 small">No statuses configured.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <!-- Add new status -->
+    <div class="d-flex align-items-end gap-2 p-3 border-top flex-wrap" style="background:var(--kramer-surface2);">
+      <div>
+        <label class="form-label small fw-semibold mb-1">Label</label>
+        <input type="text" id="new-status-label" class="form-control form-control-sm" placeholder="e.g. On Hold – Billing" style="width:180px;">
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Key (slug)</label>
+        <input type="text" id="new-status-key" class="form-control form-control-sm" placeholder="e.g. on_hold_billing" style="width:160px;">
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Colour</label>
+        <select id="new-status-badge" class="form-select form-select-sm" style="width:150px;">
+          <option value="bg-primary">Blue</option>
+          <option value="bg-info">Cyan</option>
+          <option value="bg-success">Green</option>
+          <option value="bg-warning">Yellow</option>
+          <option value="bg-danger">Red</option>
+          <option value="bg-secondary" selected>Grey</option>
+          <option value="bg-dark">Dark</option>
+          <option value="bg-pending-manager">Purple (custom)</option>
+          <option value="bg-user-responded">Teal (custom)</option>
+        </select>
+      </div>
+      <div class="d-flex flex-column gap-1" style="min-width:90px;">
+        <div class="form-check form-check-sm">
+          <input class="form-check-input" type="checkbox" id="new-status-pauses-sla">
+          <label class="form-check-label small" for="new-status-pauses-sla">Pauses SLA</label>
+        </div>
+        <div class="form-check form-check-sm">
+          <input class="form-check-input" type="checkbox" id="new-status-terminal">
+          <label class="form-check-label small" for="new-status-terminal">Terminal</label>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-outline-primary" id="add-status-btn" style="align-self:flex-end;">
+        <i class="bi bi-plus me-1"></i>Add Status
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Status Modal -->
+<div class="modal fade" id="statusEditModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title mb-0">Edit Status</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-status-id">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Label</label>
+          <input type="text" id="edit-status-label" class="form-control form-control-sm">
+        </div>
+        <div class="mb-0">
+          <label class="form-label small fw-semibold">Colour</label>
+          <select id="edit-status-badge" class="form-select form-select-sm">
+            <option value="bg-primary">Blue</option>
+            <option value="bg-info">Cyan</option>
+            <option value="bg-success">Green</option>
+            <option value="bg-warning">Yellow</option>
+            <option value="bg-danger">Red</option>
+            <option value="bg-secondary">Grey</option>
+            <option value="bg-dark">Dark</option>
+            <option value="bg-pending-manager">Purple (custom)</option>
+            <option value="bg-user-responded">Teal (custom)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="save-status-edit-btn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Ticket Categories -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
@@ -294,8 +421,164 @@
 
 {% block extra_js %}
 <script>
+const _STATUS_API = '{% url "statuses_api" %}';
 const _CAT_API   = '{% url "categories_api" %}';
 const _CSRF      = '{{ csrf_token }}';
+
+function _esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _statusApi(data) {
+  return fetch(_STATUS_API, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': _CSRF},
+    body: JSON.stringify(data),
+  }).then(r => r.json());
+}
+
+// Inline checkboxes: pauses_sla and is_terminal
+document.querySelectorAll('.status-pauses-sla').forEach(cb => {
+  cb.addEventListener('change', async function() {
+    const id = this.dataset.id;
+    const res = await _statusApi({action: 'status_update', id: parseInt(id), pauses_sla: this.checked});
+    if (!res.ok) { alert(res.error || 'Error saving'); this.checked = !this.checked; }
+  });
+});
+
+document.querySelectorAll('.status-is-terminal').forEach(cb => {
+  cb.addEventListener('change', async function() {
+    const id = this.dataset.id;
+    const res = await _statusApi({action: 'status_update', id: parseInt(id), is_terminal: this.checked});
+    if (!res.ok) { alert(res.error || 'Error saving'); this.checked = !this.checked; }
+  });
+});
+
+// Edit label/badge modal
+document.querySelectorAll('.status-edit-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const row = document.getElementById('status-row-' + id);
+    const label = document.getElementById('status-label-' + id).textContent.trim();
+    const badge = document.getElementById('status-badge-' + id).className.replace('badge', '').trim();
+    document.getElementById('edit-status-id').value = id;
+    document.getElementById('edit-status-label').value = label;
+    document.getElementById('edit-status-badge').value = badge;
+    new bootstrap.Modal(document.getElementById('statusEditModal')).show();
+  });
+});
+
+document.getElementById('save-status-edit-btn').addEventListener('click', async function() {
+  const id = parseInt(document.getElementById('edit-status-id').value);
+  const label = document.getElementById('edit-status-label').value.trim();
+  const badge_class = document.getElementById('edit-status-badge').value;
+  if (!label) { alert('Label is required'); return; }
+  const res = await _statusApi({action: 'status_update', id, label, badge_class});
+  if (res.ok) {
+    document.getElementById('status-label-' + id).textContent = label;
+    const badgeEl = document.getElementById('status-badge-' + id);
+    badgeEl.className = 'badge ' + badge_class;
+    bootstrap.Modal.getInstance(document.getElementById('statusEditModal')).hide();
+  } else {
+    alert(res.error || 'Error saving');
+  }
+});
+
+// Delete
+document.querySelectorAll('.status-del-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    if (!confirm('Delete this status?')) return;
+    const id = this.dataset.id;
+    const res = await _statusApi({action: 'status_delete', id: parseInt(id)});
+    if (res.ok) {
+      document.getElementById('status-row-' + id).remove();
+    } else {
+      alert(res.error || 'Error deleting');
+    }
+  });
+});
+
+// Auto-generate slug from label
+document.getElementById('new-status-label').addEventListener('input', function() {
+  const key = document.getElementById('new-status-key');
+  if (!key._manuallyEdited) {
+    key.value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  }
+});
+document.getElementById('new-status-key').addEventListener('input', function() {
+  this._manuallyEdited = true;
+});
+
+// Add new status
+document.getElementById('add-status-btn').addEventListener('click', async function() {
+  const label = document.getElementById('new-status-label').value.trim();
+  const key   = document.getElementById('new-status-key').value.trim();
+  const badge_class = document.getElementById('new-status-badge').value;
+  const pauses_sla  = document.getElementById('new-status-pauses-sla').checked;
+  const is_terminal = document.getElementById('new-status-terminal').checked;
+  if (!label || !key) { alert('Label and key are required'); return; }
+  const res = await _statusApi({action: 'status_add', label, key, badge_class, pauses_sla, is_terminal});
+  if (res.ok) {
+    const tbody = document.querySelector('#status-table tbody');
+    const row = document.createElement('tr');
+    row.id = 'status-row-' + res.id;
+    row.dataset.id = res.id;
+    row.dataset.builtin = '0';
+    row.innerHTML = `
+      <td><span class="badge ${_esc(res.badge_class)}" id="status-badge-${res.id}" style="display:inline-block;min-width:12px;">&nbsp;</span></td>
+      <td>
+        <span class="status-label" id="status-label-${res.id}">${_esc(res.label)}</span>
+        <small class="text-muted ms-1" style="font-size:.75rem;">${_esc(res.key)}</small>
+      </td>
+      <td class="text-center">
+        <input type="checkbox" class="form-check-input status-pauses-sla" data-id="${res.id}" ${res.pauses_sla ? 'checked' : ''}>
+      </td>
+      <td class="text-center">
+        <input type="checkbox" class="form-check-input status-is-terminal" data-id="${res.id}" ${res.is_terminal ? 'checked' : ''}>
+      </td>
+      <td class="text-end pe-3">
+        <div class="d-flex gap-1 justify-content-end">
+          <button class="btn btn-sm btn-link p-0 text-secondary status-edit-btn" data-id="${res.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-link p-0 text-danger status-del-btn" data-id="${res.id}" title="Delete"><i class="bi bi-trash"></i></button>
+        </div>
+      </td>`;
+    // Remove "no statuses" row if present
+    const empty = tbody.querySelector('td[colspan]');
+    if (empty) empty.closest('tr').remove();
+    // Insert before the add-bar (which is outside tbody) — just append
+    tbody.appendChild(row);
+    // Wire new checkboxes
+    row.querySelectorAll('.status-pauses-sla').forEach(cb => cb.addEventListener('change', async function() {
+      const r = await _statusApi({action: 'status_update', id: parseInt(this.dataset.id), pauses_sla: this.checked});
+      if (!r.ok) { alert(r.error || 'Error'); this.checked = !this.checked; }
+    }));
+    row.querySelectorAll('.status-is-terminal').forEach(cb => cb.addEventListener('change', async function() {
+      const r = await _statusApi({action: 'status_update', id: parseInt(this.dataset.id), is_terminal: this.checked});
+      if (!r.ok) { alert(r.error || 'Error'); this.checked = !this.checked; }
+    }));
+    row.querySelectorAll('.status-edit-btn').forEach(btn => btn.addEventListener('click', function() {
+      document.getElementById('edit-status-id').value = this.dataset.id;
+      document.getElementById('edit-status-label').value = document.getElementById('status-label-' + this.dataset.id).textContent.trim();
+      document.getElementById('edit-status-badge').value = document.getElementById('status-badge-' + this.dataset.id).className.replace('badge', '').trim();
+      new bootstrap.Modal(document.getElementById('statusEditModal')).show();
+    }));
+    row.querySelectorAll('.status-del-btn').forEach(btn => btn.addEventListener('click', async function() {
+      if (!confirm('Delete this status?')) return;
+      const r = await _statusApi({action: 'status_delete', id: parseInt(this.dataset.id)});
+      r.ok ? document.getElementById('status-row-' + this.dataset.id).remove() : alert(r.error || 'Error');
+    }));
+    // Reset form
+    document.getElementById('new-status-label').value = '';
+    document.getElementById('new-status-key').value = '';
+    document.getElementById('new-status-key')._manuallyEdited = false;
+    document.getElementById('new-status-pauses-sla').checked = false;
+    document.getElementById('new-status-terminal').checked = false;
+  } else {
+    alert(res.error || 'Error adding status');
+  }
+});
+</script>
+<script>
 
 function _api(data) {
   return fetch(_CAT_API, {

@@ -1,6 +1,42 @@
+import time as _time
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+
+
+class _DynamicStatusList:
+    """Descriptor that returns a DB-backed list (30 s TTL) for TERMINAL_STATUSES / SLA_PAUSED_STATUSES.
+    Falls back to a hardcoded list when the DB isn't available (migrations, first boot)."""
+
+    _TTL = 30
+
+    def __init__(self, filter_field, fallback):
+        self._filter_field = filter_field
+        self._fallback = list(fallback)
+        self._cache = None
+        self._cache_ts = 0.0
+
+    def _load(self):
+        now = _time.monotonic()
+        if self._cache is not None and now - self._cache_ts < self._TTL:
+            return self._cache
+        try:
+            self._cache = list(
+                TicketStatus.objects.filter(**{self._filter_field: True}, is_active=True)
+                .values_list('key', flat=True)
+            )
+            self._cache_ts = now
+            return self._cache
+        except Exception:
+            return self._fallback
+
+    def __get__(self, obj, objtype=None):
+        return self._load()
+
+    def invalidate(self):
+        self._cache = None
+        self._cache_ts = 0.0
 
 
 class Ticket(models.Model):
@@ -28,18 +64,16 @@ class Ticket(models.Model):
         (STATUS_CLOSED, 'Closed'),
     ]
 
-    # Statuses considered "terminal" (SLA stops, ticket is done)
-    TERMINAL_STATUSES = [STATUS_CLOSED]
+    TERMINAL_STATUSES = _DynamicStatusList('is_terminal', [STATUS_CLOSED])
 
-    # Statuses where the SLA clock is paused (waiting on someone else)
-    SLA_PAUSED_STATUSES = [
+    SLA_PAUSED_STATUSES = _DynamicStatusList('pauses_sla', [
         STATUS_PENDING_USER,
         STATUS_PENDING_VENDOR,
         STATUS_HOLD,
         STATUS_PENDING_MANAGER,
         STATUS_REQUIRES_SPEC,
         STATUS_DEVELOPER,
-    ]
+    ])
 
     SOURCE_EMAIL = 'email'
     SOURCE_MANUAL = 'manual'
@@ -51,7 +85,7 @@ class Ticket(models.Model):
     # Core fields
     title = models.CharField(max_length=300)
     description = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW, db_index=True)
+    status = models.CharField(max_length=40, default=STATUS_NEW, db_index=True)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_MANUAL)
 
     # People
@@ -122,6 +156,12 @@ class Ticket(models.Model):
 
     def __str__(self):
         return f'#{self.pk:04d} — {self.title}'
+
+    def get_status_display(self):
+        try:
+            return TicketStatus.label_map().get(self.status) or self.status
+        except Exception:
+            return dict(self.STATUS_CHOICES).get(self.status, self.status)
 
     def save(self, *args, **kwargs):
         # Auto-set SLA deadline for brand-new tickets that don't have one yet.
@@ -343,3 +383,56 @@ class TicketEmail(models.Model):
 
     def __str__(self):
         return f'[{self.direction}] #{self.ticket_id}: {self.subject}'
+
+
+class TicketStatus(models.Model):
+    """Configurable ticket statuses. Built-in ones can't be deleted."""
+    key = models.SlugField(max_length=40, unique=True)
+    label = models.CharField(max_length=100)
+    badge_class = models.CharField(max_length=50, default='bg-secondary')
+    is_terminal = models.BooleanField(default=False, help_text='SLA stops; ticket is done')
+    pauses_sla = models.BooleanField(default=False, help_text='SLA clock paused while in this status')
+    is_active = models.BooleanField(default=True)
+    is_builtin = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    _label_cache: dict = {}
+    _label_cache_ts: float = 0.0
+    _badge_cache: dict = {}
+    _badge_cache_ts: float = 0.0
+
+    class Meta:
+        ordering = ['order', 'label']
+
+    def __str__(self):
+        return self.label
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        TicketStatus._label_cache.clear()
+        TicketStatus._badge_cache.clear()
+        Ticket.TERMINAL_STATUSES.invalidate()
+        Ticket.SLA_PAUSED_STATUSES.invalidate()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        TicketStatus._label_cache.clear()
+        TicketStatus._badge_cache.clear()
+        Ticket.TERMINAL_STATUSES.invalidate()
+        Ticket.SLA_PAUSED_STATUSES.invalidate()
+
+    @classmethod
+    def label_map(cls):
+        now = _time.monotonic()
+        if not cls._label_cache or now - cls._label_cache_ts > 30:
+            cls._label_cache = {s.key: s.label for s in cls.objects.filter(is_active=True)}
+            cls._label_cache_ts = now
+        return cls._label_cache
+
+    @classmethod
+    def badge_map(cls):
+        now = _time.monotonic()
+        if not cls._badge_cache or now - cls._badge_cache_ts > 30:
+            cls._badge_cache = {s.key: s.badge_class for s in cls.objects.filter(is_active=True)}
+            cls._badge_cache_ts = now
+        return cls._badge_cache

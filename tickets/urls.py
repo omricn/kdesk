@@ -28,6 +28,7 @@ urlpatterns = [
     path('dev/email-preview/', views.email_preview, name='email_preview'),
     path('settings/import-sysaid/', views.import_sysaid, name='import_sysaid'),
     path('settings/categories/api/', views.categories_api, name='categories_api'),
+    path('settings/statuses/api/', views.statuses_api, name='statuses_api'),
     # ── Employee portal ───────────────────────────────────────────────────────
     path('portal/teams-sso/', views.portal_teams_sso, name='portal_teams_sso'),
     path('portal/teams-entry/', views.portal_teams_entry, name='portal_teams_entry'),

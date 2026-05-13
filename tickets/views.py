@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Max
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -41,7 +41,7 @@ def portal_required(view_func):
     return _wrapped
 from .models import (
     SystemSetting, Ticket, TicketAttachment, TicketComment,
-    TicketCategory, TicketSubCategory, TicketItem, TicketHistory, TicketEmail,
+    TicketCategory, TicketSubCategory, TicketItem, TicketHistory, TicketEmail, TicketStatus,
 )
 
 from users.models import User
@@ -93,7 +93,10 @@ def _maybe_save_sidebar(request, ticket):
         update_fields.append('assignee_id')
     if 'status' in request.POST:
         status = request.POST.get('status', '')
-        if status in {s for s, _ in Ticket.STATUS_CHOICES}:
+        valid_keys = set(TicketStatus.objects.filter(is_active=True).values_list('key', flat=True))
+        if not valid_keys:
+            valid_keys = {s for s, _ in Ticket.STATUS_CHOICES}
+        if status in valid_keys:
             ticket.status = status
             update_fields.append('status')
     if update_fields:
@@ -236,16 +239,20 @@ def ticket_list(request):
             Q(requester_email__icontains=col_requester)
         )
     if search:
-        search_q = (
-            Q(title__icontains=search) |
-            Q(description__icontains=search) |
-            Q(requester_email__icontains=search) |
-            Q(requester_name__icontains=search)
-        )
         ticket_num = search.lstrip('#').lstrip('0') or '0'
         if ticket_num.isdigit():
-            search_q |= Q(pk=int(ticket_num))
-        qs = qs.filter(search_q)
+            # Ticket number search — bypass all active filters (assignee, status, category)
+            qs = Ticket.objects.select_related(
+                'assignee', 'category', 'subcategory', 'ticket_item'
+            ).filter(pk=int(ticket_num))
+        else:
+            search_q = (
+                Q(title__icontains=search) |
+                Q(description__icontains=search) |
+                Q(requester_email__icontains=search) |
+                Q(requester_name__icontains=search)
+            )
+            qs = qs.filter(search_q)
 
     # Deduplicate by email in case sync created two records for the same person
     _seen_email = set()
@@ -296,7 +303,7 @@ def ticket_list(request):
         'page_obj': page_obj,
         'admins': admins,
         'all_categories': TicketCategory.objects.order_by('name'),
-        'status_choices': Ticket.STATUS_CHOICES,
+        'status_choices': [(s.key, s.label) for s in TicketStatus.objects.filter(is_active=True)] or Ticket.STATUS_CHOICES,
         'current_filters': {
             'status': statuses,
             'assignee': assignee_list,
@@ -433,7 +440,7 @@ def ticket_detail(request, pk):
                         if sol_pks:
                             updated.attachments.filter(pk__in=sol_pks).update(is_solution_image=True)
                     # Record history
-                    status_labels = dict(Ticket.STATUS_CHOICES)
+                    status_labels = TicketStatus.label_map() or dict(Ticket.STATUS_CHOICES)
                     history_entries = []
                     if updated.status != old_status:
                         history_entries.append(TicketHistory(
@@ -1010,6 +1017,8 @@ def settings_view(request):
     admins_qs = User.objects.filter(is_admin=True, is_active=True).order_by('display_name')
     admins_json = json.dumps([[str(a.pk), a.display_name or a.email] for a in admins_qs])
 
+    ticket_statuses = list(TicketStatus.objects.all())
+
     context = {
         'servicedesk_email': settings.SERVICEDESK_EMAIL,
         'notify_requester_on_close': SystemSetting.get('notify_requester_on_close', '1') == '1',
@@ -1027,6 +1036,7 @@ def settings_view(request):
         'admins': admins_qs,
         'admins_json': admins_json,
         'sound_choices': request.user.NOTIFICATION_SOUND_CHOICES,
+        'ticket_statuses': ticket_statuses,
     }
     return render(request, 'settings.html', context)
 
@@ -1708,6 +1718,83 @@ def categories_api(request):
             TicketItem.objects.get(pk=data.get('id')).delete()
         except TicketItem.DoesNotExist:
             return JsonResponse({'ok': False, 'error': 'Not found'})
+        return JsonResponse({'ok': True})
+
+    return JsonResponse({'ok': False, 'error': 'Unknown action'}, status=400)
+
+
+# ── Statuses API ──────────────────────────────────────────────────────────────
+
+BADGE_CHOICES = [
+    'bg-primary', 'bg-secondary', 'bg-success', 'bg-danger',
+    'bg-warning', 'bg-info', 'bg-dark',
+    'bg-pending-manager', 'bg-user-responded',
+]
+
+@admin_required
+def statuses_api(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'ok': False, 'error': 'Superuser required'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+
+    action = data.get('action', '')
+
+    if action == 'status_add':
+        label = data.get('label', '').strip()
+        key = data.get('key', '').strip()
+        badge_class = data.get('badge_class', 'bg-secondary')
+        if not label or not key:
+            return JsonResponse({'ok': False, 'error': 'Label and key are required'})
+        import re
+        if not re.match(r'^[a-z0-9_]+$', key):
+            return JsonResponse({'ok': False, 'error': 'Key must be lowercase letters, digits, and underscores only'})
+        if TicketStatus.objects.filter(key=key).exists():
+            return JsonResponse({'ok': False, 'error': 'A status with this key already exists'})
+        if badge_class not in BADGE_CHOICES:
+            badge_class = 'bg-secondary'
+        max_order = TicketStatus.objects.aggregate(m=Max('order'))['m'] or 0
+        s = TicketStatus.objects.create(
+            key=key, label=label, badge_class=badge_class,
+            is_terminal=bool(data.get('is_terminal')),
+            pauses_sla=bool(data.get('pauses_sla')),
+            is_builtin=False, is_active=True,
+            order=max_order + 10,
+        )
+        return JsonResponse({'ok': True, 'id': s.pk, 'key': s.key, 'label': s.label,
+                             'badge_class': s.badge_class, 'is_terminal': s.is_terminal,
+                             'pauses_sla': s.pauses_sla, 'order': s.order})
+
+    elif action == 'status_update':
+        try:
+            s = TicketStatus.objects.get(pk=data.get('id'))
+        except TicketStatus.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        if 'label' in data:
+            label = data['label'].strip()
+            if label:
+                s.label = label
+        if 'badge_class' in data and data['badge_class'] in BADGE_CHOICES:
+            s.badge_class = data['badge_class']
+        if 'is_terminal' in data:
+            s.is_terminal = bool(data['is_terminal'])
+        if 'pauses_sla' in data:
+            s.pauses_sla = bool(data['pauses_sla'])
+        s.save()
+        return JsonResponse({'ok': True})
+
+    elif action == 'status_delete':
+        try:
+            s = TicketStatus.objects.get(pk=data.get('id'))
+        except TicketStatus.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Not found'})
+        if s.is_builtin:
+            return JsonResponse({'ok': False, 'error': 'Built-in statuses cannot be deleted'})
+        s.delete()
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': False, 'error': 'Unknown action'}, status=400)

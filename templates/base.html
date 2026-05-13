@@ -293,7 +293,7 @@
   function tick() {
     if (document.hidden) return;
     remaining--;
-    if (remaining <= 0) window.location.reload();
+    if (remaining <= 0) { if (typeof window.softRefresh === 'function') window.softRefresh(); else window.location.reload(); }
   }
 
   if (document.getElementById('auto-refresh-enabled')) {

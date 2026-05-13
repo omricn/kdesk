@@ -28,8 +28,15 @@ class TicketUpdateForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from users.models import User
+        from .models import TicketStatus
         self.fields['assignee'].queryset = User.objects.filter(is_admin=True, is_active=True)
         self.fields['assignee'].empty_label = '— Unassigned —'
+        status_qs = list(TicketStatus.objects.filter(is_active=True))
+        if status_qs:
+            self.fields['status'] = forms.ChoiceField(
+                choices=[(s.key, s.label) for s in status_qs],
+                widget=forms.Select(attrs={'class': 'form-control'}),
+            )
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-control')
 

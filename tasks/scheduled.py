@@ -1211,7 +1211,7 @@ def send_weekly_digest():
         for t in open_tickets:
             url = f'{settings.SITE_URL}/tickets/{t.pk}/'
             sla_str = t.sla_deadline.strftime('%d %b %H:%M') if t.sla_deadline else '—'
-            status_label = dict(Ticket.STATUS_CHOICES).get(t.status, t.status)
+            status_label = t.get_status_display()
             ticket_rows += (
                 f'<tr>'
                 f'<td style="padding:4px 8px;"><a href="{url}" style="color:#8205B4;font-weight:600;">#{t.pk:04d}</a></td>'

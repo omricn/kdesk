@@ -24,17 +24,11 @@ def sla_suspension_info():
 
 @register.filter
 def status_badge(status):
-    classes = {
-        'new':              'bg-primary',
-        'in_progress':      'bg-info',
-        'pending_user':     'bg-warning',
-        'pending_vendor':   'bg-warning',
-        'hold':             'bg-secondary',
-        'pending_manager':  'bg-pending-manager',
-        'closed':           'bg-secondary',
-        'user_responded':   'bg-user-responded',
-    }
-    return classes.get(status, 'bg-secondary')
+    from tickets.models import TicketStatus
+    try:
+        return TicketStatus.badge_map().get(status, 'bg-secondary')
+    except Exception:
+        return 'bg-secondary'
 
 
 @register.filter
