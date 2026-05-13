@@ -217,7 +217,6 @@
           <th style="width:28px;"></th>
           <th>Status</th>
           <th class="text-center" style="width:110px;">Pauses SLA</th>
-          <th class="text-center" style="width:110px;">Terminal</th>
           <th style="width:60px;"></th>
         </tr>
       </thead>
@@ -235,10 +234,6 @@
             <input type="checkbox" class="form-check-input status-pauses-sla" data-id="{{ s.pk }}"
                    {% if s.pauses_sla %}checked{% endif %}>
           </td>
-          <td class="text-center">
-            <input type="checkbox" class="form-check-input status-is-terminal" data-id="{{ s.pk }}"
-                   {% if s.is_terminal %}checked{% endif %}>
-          </td>
           <td class="text-end pe-3">
             <div class="d-flex gap-1 justify-content-end">
               <button class="btn btn-sm btn-link p-0 text-secondary status-edit-btn" data-id="{{ s.pk }}" title="Edit label / colour"><i class="bi bi-pencil"></i></button>
@@ -249,7 +244,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-muted text-center py-3 small">No statuses configured.</td></tr>
+        <tr><td colspan="4" class="text-muted text-center py-3 small">No statuses configured.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -281,10 +276,6 @@
         <div class="form-check form-check-sm">
           <input class="form-check-input" type="checkbox" id="new-status-pauses-sla">
           <label class="form-check-label small" for="new-status-pauses-sla">Pauses SLA</label>
-        </div>
-        <div class="form-check form-check-sm">
-          <input class="form-check-input" type="checkbox" id="new-status-terminal">
-          <label class="form-check-label small" for="new-status-terminal">Terminal</label>
         </div>
       </div>
       <button class="btn btn-sm btn-outline-primary" id="add-status-btn" style="align-self:flex-end;">
@@ -446,14 +437,6 @@ document.querySelectorAll('.status-pauses-sla').forEach(cb => {
   });
 });
 
-document.querySelectorAll('.status-is-terminal').forEach(cb => {
-  cb.addEventListener('change', async function() {
-    const id = this.dataset.id;
-    const res = await _statusApi({action: 'status_update', id: parseInt(id), is_terminal: this.checked});
-    if (!res.ok) { alert(res.error || 'Error saving'); this.checked = !this.checked; }
-  });
-});
-
 // Edit label/badge modal
 document.querySelectorAll('.status-edit-btn').forEach(btn => {
   btn.addEventListener('click', function() {
@@ -515,9 +498,8 @@ document.getElementById('add-status-btn').addEventListener('click', async functi
   const key   = document.getElementById('new-status-key').value.trim();
   const badge_class = document.getElementById('new-status-badge').value;
   const pauses_sla  = document.getElementById('new-status-pauses-sla').checked;
-  const is_terminal = document.getElementById('new-status-terminal').checked;
   if (!label || !key) { alert('Label and key are required'); return; }
-  const res = await _statusApi({action: 'status_add', label, key, badge_class, pauses_sla, is_terminal});
+  const res = await _statusApi({action: 'status_add', label, key, badge_class, pauses_sla});
   if (res.ok) {
     const tbody = document.querySelector('#status-table tbody');
     const row = document.createElement('tr');
@@ -533,9 +515,6 @@ document.getElementById('add-status-btn').addEventListener('click', async functi
       <td class="text-center">
         <input type="checkbox" class="form-check-input status-pauses-sla" data-id="${res.id}" ${res.pauses_sla ? 'checked' : ''}>
       </td>
-      <td class="text-center">
-        <input type="checkbox" class="form-check-input status-is-terminal" data-id="${res.id}" ${res.is_terminal ? 'checked' : ''}>
-      </td>
       <td class="text-end pe-3">
         <div class="d-flex gap-1 justify-content-end">
           <button class="btn btn-sm btn-link p-0 text-secondary status-edit-btn" data-id="${res.id}" title="Edit"><i class="bi bi-pencil"></i></button>
@@ -550,10 +529,6 @@ document.getElementById('add-status-btn').addEventListener('click', async functi
     // Wire new checkboxes
     row.querySelectorAll('.status-pauses-sla').forEach(cb => cb.addEventListener('change', async function() {
       const r = await _statusApi({action: 'status_update', id: parseInt(this.dataset.id), pauses_sla: this.checked});
-      if (!r.ok) { alert(r.error || 'Error'); this.checked = !this.checked; }
-    }));
-    row.querySelectorAll('.status-is-terminal').forEach(cb => cb.addEventListener('change', async function() {
-      const r = await _statusApi({action: 'status_update', id: parseInt(this.dataset.id), is_terminal: this.checked});
       if (!r.ok) { alert(r.error || 'Error'); this.checked = !this.checked; }
     }));
     row.querySelectorAll('.status-edit-btn').forEach(btn => btn.addEventListener('click', function() {
@@ -572,7 +547,6 @@ document.getElementById('add-status-btn').addEventListener('click', async functi
     document.getElementById('new-status-key').value = '';
     document.getElementById('new-status-key')._manuallyEdited = false;
     document.getElementById('new-status-pauses-sla').checked = false;
-    document.getElementById('new-status-terminal').checked = false;
   } else {
     alert(res.error || 'Error adding status');
   }
