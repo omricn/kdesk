@@ -245,7 +245,7 @@ def _row(label: str, value: str, color: str = '#8205B4') -> str:
             f'<td style="color:{color};font-weight:600;white-space:nowrap;width:140px;'
             f"    vertical-align:top;padding:4px 16px 4px 0;font-family:'GT Eesti Display Md','GT Eesti Display','Segoe UI',Calibri,Arial,sans-serif;"
             f'>{_esc(label)}</td>'
-            f'<td dir="auto" style="color:#333333;vertical-align:top;padding:4px 0;">{_esc(value)}</td>'
+            f'<td dir="auto" style="color:#333333;vertical-align:top;padding:4px 0;unicode-bidi:plaintext;">{_esc(value)}</td>'
             f'</tr>')
 
 
@@ -1073,7 +1073,7 @@ def create_change_calendar_events(change_pk: int):
 
     body_html = _email_html(
         header_title='Planned Maintenance',
-        header_subtitle=f'#{change.pk:04d} — {change.title}',
+        header_subtitle=f'#{change.pk:04d} — {system_str} · {date_str}',
         greeting=(
             'A change request has been <strong>approved</strong> and is scheduled for implementation. '
             'The calendar block has been added to your calendar for reference — '
