@@ -1049,28 +1049,52 @@ def create_change_calendar_events(change_pk: int):
     start_iso = start_dt.strftime('%Y-%m-%dT%H:%M:%S')
     end_iso   = end_dt.strftime('%Y-%m-%dT%H:%M:%S')
 
-    system_str = change.affected_system_display
-    date_str   = change.planned_date.strftime('%A, %d %B %Y')
-    timeframe  = (
+    system_str  = change.affected_system_display
+    region_str  = change.get_affected_region_display() if hasattr(change, 'get_affected_region_display') else (change.affected_region or '').capitalize()
+    date_str    = change.planned_date.strftime('%d %B %Y')
+    timeframe   = (
         f'{start_dt.strftime("%H:%M")} – {end_dt.strftime("%H:%M")}'
         if planned_from else 'TBD'
     )
-    subject = f'[Planned Maintenance] {system_str} – {date_str}, {timeframe}'
+    submitter   = change.submitted_by.get_full_name() if change.submitted_by else '—'
+    created_str = change.created_at.strftime('%d %B %Y %H:%M') if change.created_at else '—'
+    risk_str    = change.get_risk_level_display()
+    change_url  = f'{settings.SITE_URL}/changes/{change.pk}/'
+
+    subject = f'[Planned Maintenance] #{change.pk:04d} — {change.title}'
+
+    def _row(label, value):
+        return (
+            f'<tr>'
+            f'<td style="padding:6px 16px 6px 0;font-weight:600;color:#555;white-space:nowrap;vertical-align:top;">{label}</td>'
+            f'<td style="padding:6px 0;color:#222;">{value}</td>'
+            f'</tr>'
+        )
+
+    RISK_COLOURS = {'low': '#22c55e', 'medium': '#f59e0b', 'high': '#ef4444', 'critical': '#7c3aed'}
+    risk_colour = RISK_COLOURS.get((change.risk_level or '').lower(), '#6b7280')
+
     body_html = (
-        f'<p>A planned maintenance window has been approved in Kdesk.</p>'
-        f'<table style="border-collapse:collapse;">'
-        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Change</td>'
-        f'<td>#{change.pk:04d} — {change.title}</td></tr>'
-        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">System</td>'
-        f'<td>{system_str}</td></tr>'
-        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Date</td>'
-        f'<td>{date_str}</td></tr>'
-        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Timeframe</td>'
-        f'<td>{timeframe}</td></tr>'
-        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Risk</td>'
-        f'<td>{change.get_risk_level_display()}</td></tr>'
+        f'<div style="font-family:Arial,sans-serif;font-size:14px;max-width:560px;">'
+        f'<div style="background:#1e40af;color:#fff;padding:16px 20px;border-radius:6px 6px 0 0;">'
+        f'<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.75;">Planned Maintenance</div>'
+        f'<div style="font-size:18px;font-weight:700;margin-top:4px;">#{change.pk:04d} — {_esc(change.title)}</div>'
+        f'</div>'
+        f'<div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 6px 6px;padding:16px 20px;">'
+        f'<table style="border-collapse:collapse;width:100%;">'
+        f'{_row("Risk Level", f"<span style=\'display:inline-block;padding:2px 10px;border-radius:12px;background:{risk_colour};color:#fff;font-size:12px;font-weight:600;\'>{_esc(risk_str)}</span>")}'
+        f'{_row("Affected System", _esc(system_str))}'
+        f'{_row("Affected Region", _esc(region_str))}'
+        f'{_row("Planned Date", _esc(date_str))}'
+        f'{_row("Planned Timeframe", _esc(timeframe))}'
+        f'{_row("Submitted By", _esc(submitter))}'
+        f'{_row("Created", _esc(created_str))}'
         f'</table>'
-        f'<p><a href="{settings.SITE_URL}/changes/{change.pk}/">View in Kdesk</a></p>'
+        f'<div style="margin-top:16px;">'
+        f'<a href="{change_url}" style="display:inline-block;background:#1e40af;color:#fff;padding:8px 18px;border-radius:5px;text-decoration:none;font-weight:600;font-size:13px;">View in Kdesk</a>'
+        f'</div>'
+        f'</div>'
+        f'</div>'
     )
 
     group_name = SystemSetting.get('change_it_calendar_group', '_Global_OPS_IT')
