@@ -343,6 +343,12 @@ def _handle_ticket_reply(msg, ticket, client, mailbox):
         ticket.save(update_fields=['status'])
         logger.info(f'[EmailPoller] Ticket #{ticket.pk} marked as user_responded (reply from {sender_email})')
 
+    try:
+        from tasks.scheduled import send_assignee_user_replied
+        send_assignee_user_replied.delay(ticket.pk)
+    except Exception as exc:
+        logger.warning(f'[EmailPoller] Could not queue assignee reply notification for ticket #{ticket.pk}: {exc}')
+
     return ticket
 
 

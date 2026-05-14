@@ -328,6 +328,41 @@ def send_requester_created(ticket_pk: int):
     logger.info(f'[Requester] Creation confirmation sent for ticket #{ticket_pk}.')
 
 
+@shared_task(name='tasks.send_assignee_user_replied')
+def send_assignee_user_replied(ticket_pk: int):
+    """Notify the assigned admin when a user replies to their ticket."""
+    from tickets.models import Ticket
+    try:
+        ticket = Ticket.objects.select_related('assignee').get(pk=ticket_pk)
+    except Ticket.DoesNotExist:
+        return
+    if not ticket.assignee or not ticket.assignee.email:
+        return
+    requester = _esc(ticket.requester_name or ticket.requester_email)
+    ticket_url = f'{settings.SITE_URL}/tickets/{ticket.pk}/'
+    body = _email_html(
+        header_title='User Replied',
+        header_subtitle=f'Ticket #{ticket.pk:04d} — {_esc(ticket.title)}',
+        greeting=(
+            f'Hi <strong>{_esc(ticket.assignee.display_name or ticket.assignee.email)}</strong>,<br><br>'
+            f'<strong>{requester}</strong> has replied to a ticket assigned to you.'
+        ),
+        body_rows=(
+            _row('Ticket #', f'#{ticket.pk:04d}') +
+            _row('Subject', _esc(ticket.title)) +
+            _row('From', requester)
+        ),
+        cta_url=ticket_url,
+        cta_label='View Ticket',
+    )
+    _send_notification_email(
+        to=ticket.assignee.email,
+        subject=f'[Ticket #{ticket.pk:04d}] User replied — {ticket.title}',
+        body=body,
+    )
+    logger.info(f'[Assignee] User-replied notification sent for ticket #{ticket_pk}.')
+
+
 @shared_task(name='tasks.send_requester_closed')
 def send_requester_closed(ticket_pk: int):
     """Email the requester when their ticket is closed (if the global toggle is on)."""
