@@ -102,15 +102,15 @@ def poll_mailbox():
         # remove the stale log entry and re-process so a new ticket is created.
         existing_log = EmailLog.objects.filter(message_id=internet_msg_id).first()
         if existing_log:
-            if existing_log.ticket_id is not None:
-                # Ticket still exists — genuine duplicate, skip
+            if existing_log.ticket_id is not None or existing_log.error:
+                # Already processed (ticket exists, or was intentionally discarded/errored) — skip
                 try:
                     client.move_message_to_deleted(mailbox, msg['id'])
                 except Exception as exc:
                     logger.warning(f'[EmailPoller] Could not move already-processed {msg["id"]} to deleted: {exc}')
                 continue
             else:
-                # Ticket was deleted — clear the stale log so we re-process
+                # ticket_id is NULL with no error — ticket was deleted after creation; re-process
                 existing_log.delete()
                 logger.info(f'[EmailPoller] Reprocessing {internet_msg_id} — original ticket was deleted')
 
@@ -118,8 +118,23 @@ def poll_mailbox():
         sender_email = sender.get('address', '').lower()
         subject = msg.get('subject', '')
 
-        # Ignore messages sent by the servicedesk itself (delivery receipts, loops)
-        is_from_servicedesk = sender_email == mailbox.lower()
+        # Hard-skip any email sent FROM the servicedesk mailbox itself.
+        # These are change broadcast self-copies, delivery receipts, or loop artifacts.
+        # Do NOT create tickets from them — that is what causes the mail loop.
+        if sender_email == mailbox.lower():
+            logger.info(f'[EmailPoller] Skipping self-email (from=servicedesk): {subject!r}')
+            try:
+                client.move_message_to_deleted(mailbox, msg['id'])
+            except Exception as exc:
+                logger.warning(f'[EmailPoller] Could not move self-email to deleted: {exc}')
+            try:
+                EmailLog.objects.get_or_create(
+                    message_id=internet_msg_id,
+                    defaults={'ticket': None, 'error': 'self-email skipped'},
+                )
+            except Exception:
+                pass
+            continue
 
         ticket = None
         error_text = ''
@@ -134,7 +149,7 @@ def poll_mailbox():
             with transaction.atomic():
                 # Resolve which existing ticket this message belongs to, if any.
                 existing_ticket = None
-                if not is_from_servicedesk and not is_forward:
+                if not is_forward:
                     if reply_match:
                         # Explicit [Ticket #N] in subject (reply to a Kdesk notification)
                         try:
@@ -185,10 +200,13 @@ def poll_mailbox():
 
                 # Create EmailLog inside the same transaction so a crash between
                 # ticket creation and log creation cannot produce duplicate tickets.
+                # Use error='autoreply-discarded' when ticket is None (autoreply was
+                # dropped) so the log is NOT mistaken for a deleted-ticket entry on
+                # the next poll cycle (which would delete the log and re-process).
                 EmailLog.objects.create(
                     message_id=internet_msg_id,
                     ticket=ticket,
-                    error='',
+                    error='' if ticket is not None else 'autoreply-discarded',
                 )
         except Exception as exc:
             error_text = str(exc)
