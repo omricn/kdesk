@@ -174,7 +174,7 @@ class GraphClient:
             'body': {'contentType': 'HTML', 'content': body_html},
             'start': {'dateTime': start_iso, 'timeZone': timezone},
             'end':   {'dateTime': end_iso,   'timeZone': timezone},
-            'showAs': 'busy',
+            'showAs': 'free',
             'isReminderOn': True,
             'reminderMinutesBeforeStart': 60,
         }
