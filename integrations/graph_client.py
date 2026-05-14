@@ -162,6 +162,24 @@ class GraphClient:
         except Exception:
             return False
 
+    # ── Calendar ──────────────────────────────────────────────────────────────
+
+    def create_calendar_event(self, user_email: str, subject: str,
+                               start_iso: str, end_iso: str,
+                               body_html: str, timezone: str = 'Israel Standard Time'):
+        """Create a calendar event on a user's calendar (app-only, no invite sent)."""
+        path = f'/users/{user_email}/events'
+        payload = {
+            'subject': subject,
+            'body': {'contentType': 'HTML', 'content': body_html},
+            'start': {'dateTime': start_iso, 'timeZone': timezone},
+            'end':   {'dateTime': end_iso,   'timeZone': timezone},
+            'showAs': 'busy',
+            'isReminderOn': True,
+            'reminderMinutesBeforeStart': 60,
+        }
+        return self.post(path, payload)
+
     def get_user_profile(self, user_access_token: str) -> dict:
         """Fetch the signed-in user's profile using their own access token."""
         r = requests.get(

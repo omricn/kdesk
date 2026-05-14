@@ -915,6 +915,8 @@ def notify_change(change_pk: int, event: str):
             )
         # Broadcast maintenance announcement to all affected employees
         _send_maintenance_announcement(change)
+        # Add calendar event to every GLOBAL_OPT_IT member's calendar
+        create_change_calendar_events.delay(change_pk)
 
     elif event == 'not_approved':
         if submitter_email:
@@ -1014,6 +1016,91 @@ def notify_change(change_pk: int, event: str):
         _send_maintenance_complete_announcement(change)
 
     logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
+
+
+@shared_task(name='tasks.create_change_calendar_events')
+def create_change_calendar_events(change_pk: int):
+    """Create a calendar event on every GLOBAL_OPT_IT member's calendar when a change is approved."""
+    from datetime import datetime, date
+    from changes.models import Change
+    from tickets.models import SystemSetting
+    try:
+        change = Change.objects.get(pk=change_pk)
+    except Change.DoesNotExist:
+        return
+
+    if not change.planned_date:
+        logger.warning(f'[Calendar] Change #{change_pk} has no planned_date — skipping calendar events.')
+        return
+
+    # Build ISO start/end strings (naive — Graph interprets them in the given timeZone)
+    planned_from = change.planned_from
+    planned_to   = change.planned_to
+    if planned_from:
+        start_dt = datetime.combine(change.planned_date, planned_from)
+    else:
+        start_dt = datetime.combine(change.planned_date, datetime.min.time().replace(hour=8))
+    if planned_to:
+        end_dt = datetime.combine(change.planned_date, planned_to)
+    else:
+        from datetime import timedelta
+        end_dt = start_dt + timedelta(hours=2)
+
+    start_iso = start_dt.strftime('%Y-%m-%dT%H:%M:%S')
+    end_iso   = end_dt.strftime('%Y-%m-%dT%H:%M:%S')
+
+    system_str = change.affected_system_display
+    date_str   = change.planned_date.strftime('%A, %d %B %Y')
+    timeframe  = (
+        f'{start_dt.strftime("%H:%M")} – {end_dt.strftime("%H:%M")}'
+        if planned_from else 'TBD'
+    )
+    subject = f'[Planned Maintenance] {system_str} – {date_str}, {timeframe}'
+    body_html = (
+        f'<p>A planned maintenance window has been approved in Kdesk.</p>'
+        f'<table style="border-collapse:collapse;">'
+        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Change</td>'
+        f'<td>#{change.pk:04d} — {change.title}</td></tr>'
+        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">System</td>'
+        f'<td>{system_str}</td></tr>'
+        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Date</td>'
+        f'<td>{date_str}</td></tr>'
+        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Timeframe</td>'
+        f'<td>{timeframe}</td></tr>'
+        f'<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Risk</td>'
+        f'<td>{change.get_risk_level_display()}</td></tr>'
+        f'</table>'
+        f'<p><a href="{settings.SITE_URL}/changes/{change.pk}/">View in Kdesk</a></p>'
+    )
+
+    group_name = SystemSetting.get('change_it_calendar_group', 'GLOBAL_OPT_IT')
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        group_id = client.get_group_id_by_name(group_name)
+        members  = client.get_group_members(group_id)
+    except Exception as exc:
+        logger.error(f'[Calendar] Could not fetch members of {group_name}: {exc}')
+        return
+
+    ok = 0
+    for member in members:
+        email = member.get('mail')
+        if not email:
+            continue
+        try:
+            client.create_calendar_event(
+                user_email=email,
+                subject=subject,
+                start_iso=start_iso,
+                end_iso=end_iso,
+                body_html=body_html,
+            )
+            ok += 1
+        except Exception as exc:
+            logger.warning(f'[Calendar] Could not create event for {email}: {exc}')
+
+    logger.info(f'[Calendar] Created calendar events for {ok}/{len(members)} members of {group_name} (change #{change_pk}).')
 
 
 # ── Change status reminders ───────────────────────────────────────────────────
