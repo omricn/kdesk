@@ -210,7 +210,6 @@ a:hover { color: #a0ffdb; }
   border: 1px solid var(--kramer-border) !important;
   border-radius: 10px;
   color: var(--kramer-neutral);
-  overflow: hidden;
 }
 
 .card-header {
