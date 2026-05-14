@@ -541,11 +541,12 @@ def _send_maintenance_complete_announcement(change):
         client = get_client()
         client.send_email(
             from_mailbox=settings.SERVICEDESK_EMAIL,
-            to_email=to_email,
+            to_email=change.submitted_by.email,
+            bcc_email=to_email,
             subject=subject,
             body_html=body,
         )
-        logger.info(f'[Change] Completion announcement sent to {to_email} for change #{change.pk}.')
+        logger.info(f'[Change] Completion announcement sent (BCC) to {to_email} for change #{change.pk}.')
     except Exception as exc:
         logger.error(f'[Change] Failed to send completion announcement: {exc}')
 
@@ -611,11 +612,12 @@ def _send_maintenance_announcement(change):
         client = get_client()
         client.send_email(
             from_mailbox=settings.SERVICEDESK_EMAIL,
-            to_email=to_email,
+            to_email=change.submitted_by.email,
+            bcc_email=to_email,
             subject=subject,
             body_html=body,
         )
-        logger.info(f'[Change] Maintenance announcement sent to {to_email} for change #{change.pk}.')
+        logger.info(f'[Change] Maintenance announcement sent (BCC) to {to_email} for change #{change.pk}.')
     except Exception as exc:
         logger.error(f'[Change] Failed to send maintenance announcement: {exc}')
 
