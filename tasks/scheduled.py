@@ -1012,8 +1012,7 @@ def check_change_reminders():
         change.save(update_fields=['reminded_overdue'])
         logger.info(f'[Change] Overdue approval reminder sent for change #{change.pk}.')
 
-    # ── Reminder 1: Start reminder ─────────────────────────────────────────────
-    # Approved changes whose planned window has started but submitter hasn't moved them
+    # ── Auto-advance: approved → in_progress when planned window starts ───────
     start_candidates = Change.objects.filter(
         status=Change.STATUS_APPROVED,
         planned_date__lte=today,
@@ -1022,12 +1021,11 @@ def check_change_reminders():
     ).select_related('submitted_by')
 
     for change in start_candidates:
-        # Only trigger once the planned_from time has passed on the planned date
         if change.planned_date < today or (change.planned_date == today and change.planned_from <= current_time):
-            _send_change_reminder(change, 'start')
+            change.status = Change.STATUS_IN_PROGRESS
             change.reminded_start = True
-            change.save(update_fields=['reminded_start'])
-            logger.info(f'[Change] Start reminder sent for change #{change.pk}.')
+            change.save(update_fields=['status', 'reminded_start', 'updated_at'])
+            logger.info(f'[Change] Auto-advanced change #{change.pk} to in_progress at planned start time.')
 
     # ── Reminder 2: Done reminder ──────────────────────────────────────────────
     # In-progress changes whose planned window has ended
