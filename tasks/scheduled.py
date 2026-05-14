@@ -137,14 +137,21 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
           </table>
         </td></tr>'''
 
+    font_stack = f"'GT Eesti Display Lt','GT Eesti Display','Segoe UI',Calibri,Arial,sans-serif"
+    font_stack_md = f"'GT Eesti Display Md','GT Eesti Display','Segoe UI',Calibri,Arial,sans-serif"
+    font_url_lt = f'{settings.SITE_URL}/static/fonts/GT-Eesti-Display-Light.woff2'
+    font_url_md = f'{settings.SITE_URL}/static/fonts/GT-Eesti-Display-Medium.woff2'
+
     return f'''<!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
   <style>
+    @font-face {{font-family:'GT Eesti Display Lt';src:url('{font_url_lt}') format('woff2');font-weight:normal;font-style:normal;}}
+    @font-face {{font-family:'GT Eesti Display Md';src:url('{font_url_md}') format('woff2');font-weight:normal;font-style:normal;}}
     :root{{color-scheme:light only;}}
     [data-ogsc] .og-header{{background-color:{header_color}!important;}}
     [data-ogsc] .og-body{{background-color:#ffffff!important;color:#333333!important;}}
@@ -154,7 +161,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f0f0f0;color-scheme:light;
-             font-family:'Segoe UI',Calibri,Arial,sans-serif;" bgcolor="#f0f0f0">
+             font-family:{font_stack};" bgcolor="#f0f0f0">
 <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f0f0f0"
        style="background-color:#f0f0f0;padding:30px 0;">
 <tr><td align="center" style="padding:30px 0;">
@@ -171,14 +178,14 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
         <tr>
           <td style="vertical-align:middle;">
             <p style="margin:0;color:{header_text_color};font-size:11px;letter-spacing:2px;
-                      text-transform:uppercase;opacity:{subtitle_opacity};font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+                      text-transform:uppercase;opacity:{subtitle_opacity};font-family:{font_stack};">
               IT Support
             </p>
-            <h1 style="margin:4px 0 0;color:{header_text_color};font-size:20px;font-weight:700;
-                       font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.3;">
+            <h1 style="margin:4px 0 0;color:{header_text_color};font-size:22px;font-weight:700;
+                       font-family:{font_stack_md};line-height:1.3;">
               {header_title}
             </h1>
-            {f'<p style="margin:4px 0 0;color:{header_text_color};opacity:{subtitle_opacity};font-size:13px;font-family:Segoe UI,Calibri,Arial,sans-serif;">{_esc(header_subtitle)}</p>' if header_subtitle else ''}
+            {f'<p dir="auto" style="margin:4px 0 0;color:{header_text_color};opacity:{subtitle_opacity};font-size:13px;font-family:{font_stack};">{_esc(header_subtitle)}</p>' if header_subtitle else ''}
           </td>
           <td style="text-align:right;vertical-align:middle;padding-left:16px;">
             <img src="{logo_url}" alt="Kramer" width="110" height="auto"
@@ -195,7 +202,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
         style="background-color:#ffffff;padding:32px 36px;">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr><td style="font-size:15px;color:#333333;padding-bottom:20px;
-                       font-family:'Segoe UI',Calibri,Arial,sans-serif;line-height:1.6;">
+                       font-family:{font_stack};line-height:1.6;">
           {greeting}
         </td></tr>
         {details_block}
@@ -211,7 +218,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td style="color:#D8D8D8;font-size:12px;line-height:1.7;
-                     font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+                     font-family:{font_stack};">
             <strong style="color:#D8D8D8;">IT Support Team</strong><br>
             <a href="mailto:servicedesk@kramerav.com"
                style="color:#69FFC3;text-decoration:none;">servicedesk@kramerav.com</a>
@@ -236,8 +243,9 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 def _row(label: str, value: str, color: str = '#8205B4') -> str:
     return (f'<tr>'
             f'<td style="color:{color};font-weight:600;white-space:nowrap;width:140px;'
-            f'    vertical-align:top;padding:4px 16px 4px 0;">{_esc(label)}</td>'
-            f'<td style="color:#333333;vertical-align:top;padding:4px 0;">{_esc(value)}</td>'
+            f"    vertical-align:top;padding:4px 16px 4px 0;font-family:'GT Eesti Display Md','GT Eesti Display','Segoe UI',Calibri,Arial,sans-serif;"
+            f'>{_esc(label)}</td>'
+            f'<td dir="auto" style="color:#333333;vertical-align:top;padding:4px 0;">{_esc(value)}</td>'
             f'</tr>')
 
 
