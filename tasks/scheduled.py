@@ -1073,7 +1073,7 @@ def create_change_calendar_events(change_pk: int):
         f'<p><a href="{settings.SITE_URL}/changes/{change.pk}/">View in Kdesk</a></p>'
     )
 
-    group_name = SystemSetting.get('change_it_calendar_group', 'GLOBAL_OPT_IT')
+    group_name = SystemSetting.get('change_it_calendar_group', '_Global_OPS_IT')
     try:
         from integrations.graph_client import get_client
         client = get_client()
