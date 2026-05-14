@@ -71,8 +71,11 @@ def _is_autoreply(msg) -> bool:
     if headers.get('x-autoreply') == 'yes':
         return True
 
-    # Precedence: bulk/list/junk signals machine-generated mail
-    if headers.get('precedence') in ('bulk', 'list', 'junk', 'auto-reply'):
+    # Precedence: auto-reply / junk are genuine autoreply signals.
+    # Do NOT include 'bulk' or 'list' — those are mass-mail markers used by
+    # legitimate notification systems (HiBob, Jira, Monday, etc.) and would
+    # cause real action-required emails to be silently discarded.
+    if headers.get('precedence') in ('junk', 'auto-reply'):
         return True
 
     return False
