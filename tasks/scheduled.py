@@ -668,19 +668,22 @@ def _send_maintenance_announcement(change):
 
 
 def _send_upcoming_maintenance_broadcast(change):
-    """Broadcast a 3-hour-before reminder to the relevant employee group."""
+    """Send a 3-hour-before reminder to the submitter, BCC to the relevant employee group."""
     from changes.models import Change
     from tickets.models import SystemSetting
     if SystemSetting.get('emails_enabled', '1') != '1':
         logger.info(f'[Change] Upcoming broadcast skipped — emails disabled.')
         return
 
+    if not change.submitted_by:
+        return
+
     region_recipients = {
         Change.REGION_ISRAEL: SystemSetting.get('change_broadcast_il', 'IL_All_Employees@kramerav.com'),
         Change.REGION_GLOBAL: SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
     }
-    to_email = region_recipients.get(change.affected_region)
-    if not to_email:
+    bcc_email = region_recipients.get(change.affected_region)
+    if not bcc_email:
         logger.warning(f'[Change] Unknown region "{change.affected_region}" — skipping upcoming broadcast.')
         return
 
@@ -721,11 +724,12 @@ def _send_upcoming_maintenance_broadcast(change):
         client = get_client()
         client.send_email(
             from_mailbox=settings.SERVICEDESK_EMAIL,
-            to_email=to_email,
+            to_email=change.submitted_by.email,
+            bcc_email=bcc_email,
             subject=subject,
             body_html=body,
         )
-        logger.info(f'[Change] Upcoming broadcast sent to {to_email} for change #{change.pk}.')
+        logger.info(f'[Change] Upcoming broadcast sent (BCC) to {bcc_email} for change #{change.pk}.')
     except Exception as exc:
         logger.error(f'[Change] Failed to send upcoming broadcast: {exc}')
 
