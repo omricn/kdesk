@@ -667,6 +667,69 @@ def _send_maintenance_announcement(change):
         logger.error(f'[Change] Failed to send maintenance announcement: {exc}')
 
 
+def _send_upcoming_maintenance_broadcast(change):
+    """Broadcast a 3-hour-before reminder to the relevant employee group."""
+    from changes.models import Change
+    from tickets.models import SystemSetting
+    if SystemSetting.get('emails_enabled', '1') != '1':
+        logger.info(f'[Change] Upcoming broadcast skipped — emails disabled.')
+        return
+
+    region_recipients = {
+        Change.REGION_ISRAEL: SystemSetting.get('change_broadcast_il', 'IL_All_Employees@kramerav.com'),
+        Change.REGION_GLOBAL: SystemSetting.get('change_broadcast_global', 'GLOBAL_All_Employees@kramerav.com'),
+    }
+    to_email = region_recipients.get(change.affected_region)
+    if not to_email:
+        logger.warning(f'[Change] Unknown region "{change.affected_region}" — skipping upcoming broadcast.')
+        return
+
+    date_str = change.planned_date.strftime('%A, %d %B %Y') if change.planned_date else 'TBD'
+    if change.planned_from and change.planned_to:
+        timeframe_str = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")}'
+    elif change.planned_from:
+        timeframe_str = f'From {change.planned_from.strftime("%H:%M")}'
+    else:
+        timeframe_str = 'To be confirmed'
+
+    system_str = change.affected_system_display
+    region_str = change.get_affected_region_display()
+
+    body = _email_html(
+        header_title='Maintenance Starting in ~3 Hours',
+        header_subtitle=f'{system_str} — {date_str}',
+        greeting=(
+            'Dear Employees,<br><br>'
+            'This is a reminder that a <strong>Planned Maintenance</strong> window is starting '
+            '<strong>in approximately 3 hours</strong>. The affected system may be temporarily '
+            'unavailable during this time.<br><br>'
+            'Please save your work and plan accordingly. '
+            'If you have any questions please contact '
+            '<a href="mailto:servicedesk@kramerav.com" style="color:#8205B4;">servicedesk@kramerav.com</a>.'
+        ),
+        body_rows=(
+            _row('System', system_str) +
+            _row('Date', date_str) +
+            _row('Timeframe', timeframe_str) +
+            _row('Region', region_str)
+        ),
+    )
+
+    subject = f'[Reminder] Planned Maintenance in ~3 Hours — {system_str}, {timeframe_str}'
+    try:
+        from integrations.graph_client import get_client
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email=to_email,
+            subject=subject,
+            body_html=body,
+        )
+        logger.info(f'[Change] Upcoming broadcast sent to {to_email} for change #{change.pk}.')
+    except Exception as exc:
+        logger.error(f'[Change] Failed to send upcoming broadcast: {exc}')
+
+
 def _send_notification_email(to: str, subject: str, body: str):
     from tickets.models import SystemSetting
     if SystemSetting.get('emails_enabled', '1') != '1':
@@ -1210,6 +1273,25 @@ def check_change_reminders():
             change.reminded_done_followup = True
             change.save(update_fields=['reminded_done_followup'])
             logger.info(f'[Change] Done follow-up reminder sent for change #{change.pk}.')
+
+    # ── Reminder 4: Upcoming broadcast (3 hours before planned_from) ───────────
+    # Approved changes whose start is within the next 3 hours — broadcast to
+    # the relevant employee group (IL or Global) so everyone knows it's imminent.
+    upcoming_candidates = Change.objects.filter(
+        status=Change.STATUS_APPROVED,
+        planned_date__isnull=False,
+        planned_from__isnull=False,
+        reminded_upcoming=False,
+    )
+
+    for change in upcoming_candidates:
+        start_dt = datetime.combine(change.planned_date, change.planned_from)
+        start_dt_aware = timezone.make_aware(start_dt)
+        if now >= start_dt_aware - timedelta(hours=3) and now < start_dt_aware:
+            _send_upcoming_maintenance_broadcast(change)
+            change.reminded_upcoming = True
+            change.save(update_fields=['reminded_upcoming'])
+            logger.info(f'[Change] Upcoming (3 h) broadcast sent for change #{change.pk}.')
 
 
 def _send_change_reminder(change, reminder_type: str):
