@@ -307,9 +307,11 @@ def _send_sla_warning_email(ticket):
 def send_requester_created(ticket_pk: int):
     """Email the requester confirming their ticket was received."""
     from tickets.models import Ticket
+    logger.info('[Requester] send_requester_created called for ticket_pk=%s', ticket_pk)
     try:
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
+        logger.warning('[Requester] send_requester_created: ticket #%s not found — skipping.', ticket_pk)
         return
     name = _esc(ticket.requester_name or ticket.requester_email)
     submitted = ticket.created_at.strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'

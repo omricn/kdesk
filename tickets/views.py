@@ -608,15 +608,20 @@ def ticket_create(request):
                 old_value='',
                 new_value=f'By {request.user}',
             )
-            try:
-                if ticket.assignee and ticket.assignee.notify_on_assign:
-                    from tasks.scheduled import send_ticket_notification
-                    send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
-                from tasks.scheduled import send_requester_created, generate_ai_summary
-                send_requester_created.delay(ticket.pk)
-                generate_ai_summary.delay(ticket.pk)
-            except Exception:
-                logger.exception('[ticket_create] Celery task dispatch failed for ticket #%s', ticket.pk)
+            _pk = ticket.pk
+            _user_pk = request.user.pk
+            _notify = ticket.assignee and ticket.assignee.notify_on_assign
+            def _dispatch_create_tasks():
+                try:
+                    from tasks.scheduled import send_requester_created, generate_ai_summary, send_ticket_notification
+                    if _notify:
+                        send_ticket_notification.delay('assign', _pk, _user_pk)
+                    send_requester_created.delay(_pk)
+                    generate_ai_summary.delay(_pk)
+                except Exception:
+                    logger.exception('[ticket_create] Celery task dispatch failed for ticket #%s', _pk)
+            from django.db import transaction as _dbt
+            _dbt.on_commit(_dispatch_create_tasks)
             messages.success(request, f'Ticket #{ticket.pk:04d} created.')
             return redirect('ticket_detail', pk=ticket.pk)
 
@@ -1943,12 +1948,16 @@ def portal_ticket_create(request):
                 old_value='',
                 new_value=f'By {request.user} (portal)',
             )
-            try:
-                from tasks.scheduled import send_requester_created, generate_ai_summary
-                send_requester_created.delay(ticket.pk)
-                generate_ai_summary.delay(ticket.pk)
-            except Exception:
-                logger.exception('[portal_ticket_create] Celery task dispatch failed for ticket #%s', ticket.pk)
+            _pk = ticket.pk
+            def _dispatch_portal_tasks():
+                try:
+                    from tasks.scheduled import send_requester_created, generate_ai_summary
+                    send_requester_created.delay(_pk)
+                    generate_ai_summary.delay(_pk)
+                except Exception:
+                    logger.exception('[portal_ticket_create] Celery task dispatch failed for ticket #%s', _pk)
+            from django.db import transaction as _dbt
+            _dbt.on_commit(_dispatch_portal_tasks)
             messages.success(request, f'Ticket #{ticket.pk:04d} submitted. We\'ll be in touch soon.')
             return redirect('portal_ticket_detail', pk=ticket.pk)
     else:

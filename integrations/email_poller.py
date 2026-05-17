@@ -449,13 +449,20 @@ def _create_ticket_from_message(msg, client, mailbox):
         ticket.description = description
         ticket.save(update_fields=['description'])
 
-    # Confirm receipt to the requester and generate AI summary
-    try:
-        from tasks.scheduled import send_requester_created, generate_ai_summary
-        send_requester_created.delay(ticket.pk)
-        generate_ai_summary.delay(ticket.pk)
-    except Exception as exc:
-        logger.warning(f'[EmailPoller] Could not queue post-create tasks: {exc}')
+    # Confirm receipt to the requester and generate AI summary.
+    # Use on_commit so tasks are only dispatched after the enclosing transaction
+    # commits — dispatching inside an uncommitted atomic() risks queuing a task
+    # whose ticket pk either no longer exists (after a rollback) or resolves to a
+    # stale committed row with the same pk, causing wrong-ticket confirmation emails.
+    _pk = ticket.pk
+    def _dispatch_post_create_tasks():
+        try:
+            from tasks.scheduled import send_requester_created, generate_ai_summary
+            send_requester_created.delay(_pk)
+            generate_ai_summary.delay(_pk)
+        except Exception as exc:
+            logger.warning(f'[EmailPoller] Could not queue post-create tasks for ticket #{_pk}: {exc}')
+    transaction.on_commit(_dispatch_post_create_tasks)
 
     logger.info(f'[EmailPoller] Created ticket #{ticket.pk} from email: {subject}')
     return ticket
