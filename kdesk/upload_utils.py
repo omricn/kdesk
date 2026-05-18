@@ -4,7 +4,7 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     '.pdf', '.txt', '.csv', '.log', '.rtf',
     '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp',
-    '.zip', '.7z',
+    '.zip', '.7z', '.sh',
     '.eml', '.msg',
 }
 
