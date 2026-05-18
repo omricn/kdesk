@@ -96,7 +96,7 @@ class Ticket(models.Model):
         related_name='assigned_tickets',
     )
     # Requester info (from email — may not be a system user)
-    requester_email = models.EmailField(db_index=True)
+    requester_email = models.EmailField(max_length=500, db_index=True)
     requester_name = models.CharField(max_length=200, blank=True)
     requester_department = models.CharField(max_length=200, blank=True)
 

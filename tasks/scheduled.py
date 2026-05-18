@@ -314,7 +314,7 @@ def send_requester_created(ticket_pk: int):
         logger.warning('[Requester] send_requester_created: ticket #%s not found — skipping.', ticket_pk)
         return
     name = _esc(ticket.requester_name or ticket.requester_email)
-    submitted = ticket.created_at.strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'
+    submitted = timezone.localtime(ticket.created_at).strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'
     portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
     body = _email_html(
         header_title='We received your request',
