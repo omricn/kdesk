@@ -106,7 +106,6 @@
         {% else %}
         <p class="text-muted small mb-2">No attachments.</p>
         {% endif %}
-        {% if change.status == 'new' or change.status == 'pending_changes' %}
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <input type="hidden" name="action" value="upload_attachment">
@@ -118,7 +117,6 @@
           </div>
           <div class="form-text">Max 3 MB per file</div>
         </form>
-        {% endif %}
       </div>
     </div>
 

@@ -70,8 +70,7 @@ def change_detail(request, pk):
             return redirect('change_detail', pk=pk)
 
         elif action == 'upload_attachment':
-            if change.status in (Change.STATUS_NEW, Change.STATUS_PENDING_CHANGES):
-                _save_attachments(request, change)
+            _save_attachments(request, change)
             return redirect('change_detail', pk=pk)
 
         elif action == 'delete_attachment':
