@@ -164,19 +164,21 @@ def poll_mailbox():
                             email_conversation_id=conversation_id
                         ).first()
 
-                    # Fallback: RE:/FW: email whose conversationId didn't match.
+                    # Fallback: email whose conversationId didn't match any open ticket.
                     # Covers:
                     # 1. Ticket predates email_conversation_id (field is blank)
                     # 2. Original ticket was created from a FW: — its conversationId differs
                     #    from the original thread that everyone replies to
                     # 3. Stacked prefixes (Re: FW: Re: …) on both stored titles and replies
+                    # 4. Ticket was created from a RE:-prefixed email; the follow-up arrives
+                    #    without any prefix (bare subject matches stored RE: title when stripped)
                     #
                     # Strategy: normalize BOTH the incoming subject AND stored ticket titles
                     # by stripping all RE:/FW: prefixes, then compare. Use Python-level
                     # iteration (open ticket count is small) so we can normalize both sides.
                     # Guard: only route if exactly one open non-merged ticket matches.
                     bare_incoming = _SUBJECT_PREFIX_RE.sub('', subject).strip().lower()
-                    if not existing_ticket and bare_incoming and bare_incoming != subject.strip().lower():
+                    if not existing_ticket and bare_incoming:
                         open_tickets = list(
                             Ticket.objects.filter(merged_into__isnull=True)
                             .exclude(status=Ticket.STATUS_CLOSED)
