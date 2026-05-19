@@ -540,6 +540,14 @@ def send_ticket_notification(event_type: str, ticket_pk: int, actor_pk):
         )
 
 
+def _change_window_end(change):
+    """Return the tz-aware datetime when the maintenance window ends, or None if unknown."""
+    from datetime import datetime, timedelta
+    if not change.planned_date or not change.planned_to:
+        return None
+    return timezone.make_aware(datetime.combine(change.planned_date, change.planned_to))
+
+
 def _send_maintenance_complete_announcement(change):
     """Send a Maintenance Completed broadcast email to all affected employees."""
     from changes.models import Change
@@ -990,8 +998,12 @@ def notify_change(change_pk: int, event: str):
                     cta_label='View in Kdesk',
                 ),
             )
-        # Broadcast maintenance announcement to all affected employees
-        _send_maintenance_announcement(change)
+        # Broadcast maintenance announcement only if the window hasn't ended yet
+        window_end = _change_window_end(change)
+        if window_end is None or timezone.now() < window_end:
+            _send_maintenance_announcement(change)
+        else:
+            logger.info(f'[Change] Skipping approval broadcast for #{change.pk} — approved after maintenance window.')
         # Add calendar event to every GLOBAL_OPT_IT member's calendar
         create_change_calendar_events.delay(change_pk)
 
@@ -1089,8 +1101,13 @@ def notify_change(change_pk: int, event: str):
                     body_rows=done_rows,
                 ),
             )
-        # Broadcast completion to affected employees
-        _send_maintenance_complete_announcement(change)
+        # Broadcast completion only if done within 3 hours of the window ending
+        from datetime import timedelta
+        window_end = _change_window_end(change)
+        if window_end is None or timezone.now() < window_end + timedelta(hours=3):
+            _send_maintenance_complete_announcement(change)
+        else:
+            logger.info(f'[Change] Skipping completion broadcast for #{change.pk} — marked done 3h+ after maintenance window.')
 
     logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
 
