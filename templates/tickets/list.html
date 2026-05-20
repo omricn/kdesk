@@ -260,7 +260,7 @@
           </thead>
           <tbody id="tickets-tbody">
             {% for t in tickets %}
-            <tr class="{{ t|sla_row_class }}" data-pk="{{ t.pk }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+            <tr class="{{ t|sla_row_class }}" data-pk="{{ t.pk }}" onclick="if(!event.target.closest('.cat-edit-btn')) window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td onclick="event.stopPropagation();"><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
               <td>
                 <a href="{% url 'ticket_detail' t.pk %}" class="fw-semibold text-decoration-none">
