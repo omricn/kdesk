@@ -260,7 +260,7 @@
           </thead>
           <tbody id="tickets-tbody">
             {% for t in tickets %}
-            <tr class="{{ t|sla_row_class }}" data-pk="{{ t.pk }}" onclick="if(!event.target.closest('.cat-edit-btn')) window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
+            <tr class="{{ t|sla_row_class }}" data-pk="{{ t.pk }}" onclick="window.location='{% url 'ticket_detail' t.pk %}'" style="cursor:pointer;">
               <td onclick="event.stopPropagation();"><input type="checkbox" name="ticket_ids" value="{{ t.pk }}" class="form-check-input row-check"></td>
               <td>
                 <a href="{% url 'ticket_detail' t.pk %}" class="fw-semibold text-decoration-none">
@@ -280,7 +280,7 @@
                 <span class="cat-label">
                   {% if t.ticket_item %}{{ t.category.name }} / {{ t.subcategory.name }} / {{ t.ticket_item.name }}{% else %}<span class="text-muted">—</span>{% endif %}
                 </span>
-                <i class="bi bi-pencil-square cat-edit-btn ms-1 text-muted" style="cursor:pointer;font-size:12px;" title="Set category" data-pk="{{ t.pk }}" data-cat="{{ t.category_id|default:'' }}" data-sub="{{ t.subcategory_id|default:'' }}" data-item="{{ t.ticket_item_id|default:'' }}"></i>
+                <i class="bi bi-pencil-square cat-edit-btn ms-1 text-muted" style="cursor:pointer;font-size:12px;" title="Set category" data-pk="{{ t.pk }}" data-cat="{{ t.category_id|default:'' }}" data-sub="{{ t.subcategory_id|default:'' }}" data-item="{{ t.ticket_item_id|default:'' }}" onclick="event.stopPropagation(); openCatModal(this);"></i>
               </td>
               <td>
                 {% if t.sla_deadline %}
@@ -428,10 +428,7 @@ selSub.addEventListener('change', function() {
   selItem.disabled = !subId;
 });
 
-document.addEventListener('click', function(e) {
-  const btn = e.target.closest('.cat-edit-btn');
-  if (!btn) return;
-  e.stopPropagation();
+function openCatModal(btn) {
   _catModalTicketPk = btn.dataset.pk;
   const catId  = parseInt(btn.dataset.cat)  || null;
   const subId  = parseInt(btn.dataset.sub)  || null;
@@ -444,7 +441,7 @@ document.addEventListener('click', function(e) {
     if (itemId) selItem.value = itemId;
   }
   new bootstrap.Modal(document.getElementById('catModal')).show();
-});
+}
 
 document.getElementById('catModal-save').addEventListener('click', function() {
   if (!_catModalTicketPk) return;
