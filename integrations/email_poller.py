@@ -182,11 +182,14 @@ def poll_mailbox():
                         open_tickets = list(
                             Ticket.objects.filter(merged_into__isnull=True)
                             .exclude(status=Ticket.STATUS_CLOSED)
-                            .only('pk', 'title')
+                            .only('pk', 'title', 'requester_email')
                         )
                         matches = [
                             t for t in open_tickets
-                            if _SUBJECT_PREFIX_RE.sub('', t.title).strip().lower() == bare_incoming
+                            if (
+                                _SUBJECT_PREFIX_RE.sub('', t.title).strip().lower() == bare_incoming
+                                and t.requester_email.lower() == sender_email.lower()
+                            )
                         ]
                         if len(matches) == 1:
                             existing_ticket = matches[0]
@@ -451,22 +454,76 @@ def _create_ticket_from_message(msg, client, mailbox):
         ticket.description = description
         ticket.save(update_fields=['description'])
 
-    # Confirm receipt to the requester and generate AI summary.
+    # Detect HiBob new-employee notification → create a ProvisioningRequest
+    _ticket_pk = ticket.pk
+    _hibob_provisioning_data = None
+    try:
+        from hibob_sync.provisioning_utils import (
+            is_hibob_new_employee_email, parse_hibob_email_body,
+            resolve_m365_groups, UNIVERSAL_M365_GROUPS,
+        )
+        if is_hibob_new_employee_email(msg):
+            raw_body = msg.get('body', {}).get('content', '')
+            raw_ct   = msg.get('body', {}).get('contentType', '').lower()
+            emp = parse_hibob_email_body(raw_body, is_html=(raw_ct == 'html'))
+            if emp.get('first_name') and emp.get('last_name'):
+                lookup_groups, fallback = resolve_m365_groups(
+                    emp['region'], emp['country'], emp['division'], emp['department'],
+                )
+                all_groups = UNIVERSAL_M365_GROUPS + lookup_groups
+                _hibob_provisioning_data = {**emp, 'm365_groups': all_groups, 'groups_fallback': fallback}
+                logger.info(
+                    '[EmailPoller] HiBob new-employee email detected for %s %s',
+                    emp['first_name'], emp['last_name'],
+                )
+    except Exception as exc:
+        logger.warning('[EmailPoller] HiBob provisioning parse failed: %s', exc)
+
+    def _dispatch_post_create_tasks():
+        try:
+            from tasks.scheduled import send_requester_created, generate_ai_summary
+            send_requester_created.delay(_ticket_pk)
+            generate_ai_summary.delay(_ticket_pk)
+        except Exception as exc:
+            logger.warning(f'[EmailPoller] Could not queue post-create tasks for ticket #{_ticket_pk}: {exc}')
+
+        if _hibob_provisioning_data:
+            try:
+                from hibob_sync.models import ProvisioningRequest
+                d = _hibob_provisioning_data
+                ProvisioningRequest.objects.create(
+                    ticket_id=_ticket_pk,
+                    first_name=d['first_name'],
+                    last_name=d['last_name'],
+                    middle_name=d.get('middle_name', ''),
+                    department=d['department'],
+                    division=d['division'],
+                    country=d['country'],
+                    region=d['region'],
+                    start_date=d.get('start_date'),
+                    personal_mobile=d.get('personal_mobile', ''),
+                    reports_to=d.get('reports_to', ''),
+                    job_title=d.get('job_title', ''),
+                    employment_type=d.get('employment_type', ''),
+                    employee_id=d.get('employee_id', ''),
+                    m365_groups=d['m365_groups'],
+                    groups_fallback=d['groups_fallback'],
+                    status='pending',
+                )
+                logger.info(
+                    '[EmailPoller] ProvisioningRequest created for %s %s (ticket #%s)',
+                    d['first_name'], d['last_name'], _ticket_pk,
+                )
+            except Exception as exc:
+                logger.error('[EmailPoller] Failed to create ProvisioningRequest: %s', exc)
+
     # Use on_commit so tasks are only dispatched after the enclosing transaction
     # commits — dispatching inside an uncommitted atomic() risks queuing a task
     # whose ticket pk either no longer exists (after a rollback) or resolves to a
     # stale committed row with the same pk, causing wrong-ticket confirmation emails.
-    _pk = ticket.pk
-    def _dispatch_post_create_tasks():
-        try:
-            from tasks.scheduled import send_requester_created, generate_ai_summary
-            send_requester_created.delay(_pk)
-            generate_ai_summary.delay(_pk)
-        except Exception as exc:
-            logger.warning(f'[EmailPoller] Could not queue post-create tasks for ticket #{_pk}: {exc}')
     transaction.on_commit(_dispatch_post_create_tasks)
 
-    logger.info(f'[EmailPoller] Created ticket #{ticket.pk} from email: {subject}')
+    logger.info(f'[EmailPoller] Created ticket #{_ticket_pk} from email: {subject}')
     return ticket
 
 

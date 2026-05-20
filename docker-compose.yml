@@ -51,7 +51,7 @@ services:
 
   celery:
     build: .
-    restart: always
+    restart: "no"
     volumes:
       - media_data:/app/media
       - ./kdesk:/app/kdesk
@@ -62,6 +62,8 @@ services:
       - ./changes:/app/changes
     env_file:
       - .env
+    environment:
+      - ENABLE_EMAIL_POLLING=false
     depends_on:
       - db
       - redis
@@ -69,12 +71,14 @@ services:
 
   celery-beat:
     build: .
-    restart: always
+    restart: "no"
     volumes:
       - ./kdesk:/app/kdesk
       - ./tasks:/app/tasks
     env_file:
       - .env
+    environment:
+      - ENABLE_EMAIL_POLLING=false
     depends_on:
       - db
       - redis

@@ -113,6 +113,11 @@
         {% endif %}
         {% if user.is_superuser %}
         <li>
+          <a href="{% url 'hibob_sync_dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'hibob_sync_dashboard' %}active{% endif %}">
+            <i class="bi bi-arrow-left-right me-2"></i>HiBob Sync
+          </a>
+        </li>
+        <li>
           <a href="{% url 'budget' %}" class="nav-link {% if request.resolver_match.url_name == 'budget' %}active{% endif %}">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>Budget
           </a>
@@ -174,6 +179,11 @@
         </li>
         {% endif %}
         {% if user.is_superuser %}
+        <li>
+          <a href="{% url 'hibob_sync_dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'hibob_sync_dashboard' %}active{% endif %}" data-label="HiBob Sync">
+            <i class="bi bi-arrow-left-right me-2"></i><span class="sidebar-label">HiBob Sync</span>
+          </a>
+        </li>
         <li>
           <a href="{% url 'budget' %}" class="nav-link {% if request.resolver_match.url_name == 'budget' %}active{% endif %}" data-label="Budget">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i><span class="sidebar-label">Budget</span>

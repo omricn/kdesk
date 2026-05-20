@@ -32,7 +32,10 @@ INSTALLED_APPS = [
     'changes',
     'budget',
     'kb',
+    'hibob_sync',
 ]
+
+HIBOB_SYNC_API_KEY = os.environ.get('HIBOB_SYNC_API_KEY', '')
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

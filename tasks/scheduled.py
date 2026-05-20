@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 @shared_task(name='tasks.poll_mailbox', time_limit=300, soft_time_limit=270)
 def poll_mailbox():
     """Check the servicedesk mailbox for new emails and create tickets."""
+    import os
+    # Safety guard: only poll in production. Without this flag, a local dev
+    # Celery worker would process the live mailbox and steal emails before
+    # production sees them, causing lost tickets and wrong confirmation emails.
+    if os.environ.get('ENABLE_EMAIL_POLLING', '').lower() != 'true':
+        logger.info('[Task] poll_mailbox skipped — ENABLE_EMAIL_POLLING not set.')
+        return
     from tickets.models import SystemSetting
     if SystemSetting.get('emails_enabled', '1') != '1':
         logger.info('[Task] poll_mailbox skipped — emails disabled.')
@@ -307,11 +314,20 @@ def _send_sla_warning_email(ticket):
 def send_requester_created(ticket_pk: int):
     """Email the requester confirming their ticket was received."""
     from tickets.models import Ticket
+    from datetime import timedelta
     logger.info('[Requester] send_requester_created called for ticket_pk=%s', ticket_pk)
     try:
         ticket = Ticket.objects.get(pk=ticket_pk)
     except Ticket.DoesNotExist:
         logger.warning('[Requester] send_requester_created: ticket #%s not found — skipping.', ticket_pk)
+        return
+    # Guard against stale queued tasks firing for old tickets.
+    # A confirmation email should only go out within 2 hours of ticket creation.
+    if ticket.created_at and timezone.now() - ticket.created_at > timedelta(hours=2):
+        logger.warning(
+            '[Requester] send_requester_created: ticket #%s is too old (%s) — skipping stale task.',
+            ticket_pk, ticket.created_at,
+        )
         return
     name = _esc(ticket.requester_name or ticket.requester_email)
     submitted = timezone.localtime(ticket.created_at).strftime('%d %b %Y %H:%M') if ticket.created_at else 'N/A'
@@ -631,9 +647,9 @@ def _send_maintenance_announcement(change):
         date_str = 'TBD'
 
     if change.planned_from and change.planned_to:
-        timeframe_str = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")}'
+        timeframe_str = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")} [Israel Time]'
     elif change.planned_from:
-        timeframe_str = f'From {change.planned_from.strftime("%H:%M")}'
+        timeframe_str = f'From {change.planned_from.strftime("%H:%M")} [Israel Time]'
     else:
         timeframe_str = 'To be confirmed'
 
@@ -697,9 +713,9 @@ def _send_upcoming_maintenance_broadcast(change):
 
     date_str = change.planned_date.strftime('%A, %d %B %Y') if change.planned_date else 'TBD'
     if change.planned_from and change.planned_to:
-        timeframe_str = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")}'
+        timeframe_str = f'{change.planned_from.strftime("%H:%M")} – {change.planned_to.strftime("%H:%M")} [Israel Time]'
     elif change.planned_from:
-        timeframe_str = f'From {change.planned_from.strftime("%H:%M")}'
+        timeframe_str = f'From {change.planned_from.strftime("%H:%M")} [Israel Time]'
     else:
         timeframe_str = 'To be confirmed'
 

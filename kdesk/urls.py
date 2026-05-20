@@ -18,4 +18,5 @@ urlpatterns = [
     path('', include('changes.urls')),
     path('', include('budget.urls')),
     path('', include('kb.urls')),
+    path('', include('hibob_sync.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
