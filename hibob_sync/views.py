@@ -268,6 +268,40 @@ def api_provisioning_pending(request):
 
 
 @csrf_exempt
+def api_provisioning_data(request, req_id):
+    """Return full data for a claimed provisioning request (called by the PS script after claiming)."""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    req = ProvisioningRequest.objects.filter(id=req_id, status='claimed').first()
+    if not req:
+        return JsonResponse({'error': 'Request not found or not in claimed state'}, status=404)
+
+    return JsonResponse({
+        'id': req.id,
+        'first_name': req.first_name,
+        'last_name': req.last_name,
+        'middle_name': req.middle_name,
+        'department': req.department,
+        'division': req.division,
+        'country': req.country,
+        'region': req.region,
+        'start_date': req.start_date.isoformat() if req.start_date else '',
+        'personal_mobile': req.personal_mobile,
+        'reports_to': req.reports_to,
+        'job_title': req.job_title,
+        'employment_type': req.employment_type,
+        'employee_id': req.employee_id,
+        'm365_groups': req.m365_groups,
+        'groups_fallback': req.groups_fallback,
+        'is_dry_run': req.is_dry_run,
+        'force_create': req.force_create,
+    })
+
+
+@csrf_exempt
 def api_provisioning_claim(request, req_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
