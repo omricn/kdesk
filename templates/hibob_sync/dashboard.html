@@ -371,18 +371,6 @@
     </div>
     {% endif %}
 
-    <!-- Seed test request (superuser dev tool) -->
-    {% if user.is_superuser %}
-    <form method="post" action="{% url 'hibob_sync_provisioning_seed_test' %}"
-          class="mb-3"
-          onsubmit="return confirm('Create a test provisioning request for Tester Testerson (ticket #0410) with all 8 Israel IT groups?\n\nThis will provision a real AD account. Make sure provisioning is enabled after.')">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-flask me-1"></i>Seed test: Tester Testerson → ticket #0410
-      </button>
-    </form>
-    {% endif %}
-
     <!-- Provisioning requests table -->
     <div class="card">
       <div class="card-header fw-semibold">

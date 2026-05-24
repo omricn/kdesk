@@ -11,7 +11,6 @@ urlpatterns = [
     path('hibob-sync/provisioning/<int:req_id>/cancel/', views.provisioning_cancel, name='hibob_sync_provisioning_cancel'),
     path('hibob-sync/provisioning/<int:req_id>/pause/', views.provisioning_pause, name='hibob_sync_provisioning_pause'),
     path('hibob-sync/provisioning/<int:req_id>/resume/', views.provisioning_resume, name='hibob_sync_provisioning_resume'),
-    path('hibob-sync/provisioning/seed-test/', views.provisioning_seed_test, name='hibob_sync_provisioning_seed_test'),
     # Agent-facing API — sync triggers
     path('hibob-sync/api/pending/', views.api_pending, name='hibob_sync_api_pending'),
     path('hibob-sync/api/claim/<int:trigger_id>/', views.api_claim, name='hibob_sync_api_claim'),
