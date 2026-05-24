@@ -53,6 +53,7 @@ def hibob_sync_dashboard(request):
     pending_provisioning_count = ProvisioningRequest.objects.filter(
         status__in=['pending', 'claimed', 'review_needed', 'paused']
     ).count()
+    active_provisioning = ProvisioningRequest.objects.filter(status='claimed').first()
 
     return render(request, 'hibob_sync/dashboard.html', {
         'last_run': last_run,
@@ -62,6 +63,7 @@ def hibob_sync_dashboard(request):
         'prov_settings': prov_settings,
         'recent_provisioning': recent_provisioning,
         'pending_provisioning_count': pending_provisioning_count,
+        'active_provisioning': active_provisioning,
     })
 
 

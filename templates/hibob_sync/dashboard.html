@@ -36,7 +36,7 @@
 </div>
 
 <!-- Auto-refresh while a sync is active -->
-{% if active_trigger %}
+{% if active_trigger or active_provisioning %}
 <meta http-equiv="refresh" content="6">
 {% endif %}
 
