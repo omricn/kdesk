@@ -1,6 +1,7 @@
 import json
 import logging
 from collections import defaultdict
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
@@ -55,6 +56,13 @@ def hibob_sync_dashboard(request):
     ).count()
     active_provisioning = ProvisioningRequest.objects.filter(status='claimed').first()
 
+    # Stuck: any request that has been in 'claimed' for more than 15 minutes
+    stuck_threshold = timezone.now() - timedelta(minutes=15)
+    stuck_provisioning = ProvisioningRequest.objects.filter(
+        status='claimed',
+        claimed_at__lt=stuck_threshold,
+    ).first()
+
     return render(request, 'hibob_sync/dashboard.html', {
         'last_run': last_run,
         'active_trigger': active_trigger,
@@ -64,6 +72,8 @@ def hibob_sync_dashboard(request):
         'recent_provisioning': recent_provisioning,
         'pending_provisioning_count': pending_provisioning_count,
         'active_provisioning': active_provisioning,
+        'stuck_provisioning': stuck_provisioning,
+        'now': timezone.now(),
     })
 
 
@@ -127,6 +137,17 @@ def hibob_sync_log(request, run_id):
 
     run = get_object_or_404(SyncRun, id=run_id)
     return HttpResponse(run.raw_log, content_type='text/plain; charset=utf-8')
+
+
+def provisioning_log(request, req_id):
+    """Return the raw PS log stored for a provisioning request as plain text."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    req = get_object_or_404(ProvisioningRequest, id=req_id)
+    content = req.result_log or '(no log available for this provisioning request)'
+    return HttpResponse(content, content_type='text/plain; charset=utf-8')
 
 
 # ── Agent API Views ───────────────────────────────────────────────────────────

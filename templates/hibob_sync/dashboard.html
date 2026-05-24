@@ -371,6 +371,17 @@
     </div>
     {% endif %}
 
+    {% if stuck_provisioning %}
+    <div class="alert alert-danger mb-3">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>
+      <strong>Possible stuck request:</strong>
+      Provisioning for <strong>{{ stuck_provisioning.first_name }} {{ stuck_provisioning.last_name }}</strong>
+      has been in <em>Running</em> state since {{ stuck_provisioning.claimed_at|date:"d M H:i" }}
+      — the KAPPIT agent may have crashed or lost connectivity.
+      You can <em>Cancel</em> it below to reset, then check KAPPIT logs for details.
+    </div>
+    {% endif %}
+
     <!-- Provisioning requests table -->
     <div class="card">
       <div class="card-header fw-semibold">
@@ -418,15 +429,25 @@
                       <span class="spinner-border spinner-border-sm" style="width:.6rem;height:.6rem;"></span>
                       Running
                     </span>
+                    {% if pr.claimed_at %}
+                      <div class="text-muted mt-1" style="font-size:0.72rem;">
+                        since {{ pr.claimed_at|date:"H:i:s" }}
+                      </div>
+                    {% endif %}
                   {% elif pr.status == 'completed' %}
                     <span class="badge bg-success">
                       <i class="bi bi-check-lg"></i> Done
                       {% if pr.work_email %}&nbsp;{{ pr.work_email }}{% endif %}
                     </span>
                   {% elif pr.status == 'failed' %}
-                    <span class="badge bg-danger" title="{{ pr.result_message }}">
+                    <span class="badge bg-danger">
                       <i class="bi bi-x-lg"></i> Failed
                     </span>
+                    {% if pr.result_message %}
+                      <div class="text-danger mt-1" style="font-size:0.72rem;word-break:break-word;max-width:200px;">
+                        {{ pr.result_message }}
+                      </div>
+                    {% endif %}
                   {% elif pr.status == 'review_needed' %}
                     <div>
                       <span class="badge text-dark" style="background:#fff3cd;border:1px solid #ffc107;">
@@ -532,6 +553,12 @@
                         <i class="bi bi-archive"></i> Dismiss
                       </button>
                     </form>
+                    {% if pr.result_log %}
+                    <a href="{% url 'hibob_sync_provisioning_log' pr.id %}" target="_blank"
+                       class="btn btn-xs btn-outline-secondary py-0 px-1 ms-1" style="font-size:0.7rem;" title="View provisioning log">
+                      <i class="bi bi-file-text"></i> Log
+                    </a>
+                    {% endif %}
 
                   {% elif pr.status == 'review_needed' %}
                     {# Continue — re-queue with force_create=True #}
@@ -552,6 +579,28 @@
                         <i class="bi bi-x"></i> No Action
                       </button>
                     </form>
+                    {% if pr.result_log %}
+                    <a href="{% url 'hibob_sync_provisioning_log' pr.id %}" target="_blank"
+                       class="btn btn-xs btn-outline-secondary py-0 px-1 ms-1" style="font-size:0.7rem;" title="View provisioning log">
+                      <i class="bi bi-file-text"></i> Log
+                    </a>
+                    {% endif %}
+
+                  {% elif pr.status == 'completed' %}
+                    {% if pr.result_log %}
+                    <a href="{% url 'hibob_sync_provisioning_log' pr.id %}" target="_blank"
+                       class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:0.7rem;" title="View provisioning log">
+                      <i class="bi bi-file-text"></i> Log
+                    </a>
+                    {% endif %}
+
+                  {% elif pr.status == 'cancelled' %}
+                    {% if pr.result_log %}
+                    <a href="{% url 'hibob_sync_provisioning_log' pr.id %}" target="_blank"
+                       class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:0.7rem;" title="View provisioning log">
+                      <i class="bi bi-file-text"></i> Log
+                    </a>
+                    {% endif %}
 
                   {% endif %}
                 </td>
