@@ -562,22 +562,21 @@
                     {% endif %}
 
                   {% elif pr.status == 'review_needed' %}
-                    {# Continue — re-queue with force_create=True #}
-                    <form method="post" action="{% url 'hibob_sync_provisioning_requeue' pr.id %}" class="d-inline"
-                          onsubmit="return confirm('Continue provisioning for {{ pr.first_name }} {{ pr.last_name }}? A NEW account will be created. Only do this if this is genuinely a different person.')">
+                    {# Cancel — prominent safe action #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-xs btn-warning py-0 px-1 me-1"
-                              style="font-size:0.7rem;" title="Create a new account — different person with same name">
-                        <i class="bi bi-arrow-repeat"></i> Continue
+                      <button type="submit" class="btn btn-sm btn-danger me-2"
+                              title="Cancel — the existing account is the same person, no new account needed">
+                        <i class="bi bi-x-circle-fill me-1"></i>Cancel
                       </button>
                     </form>
-                    {# No action needed — cancel #}
-                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
-                          onsubmit="return confirm('No action needed — dismiss this request? No account will be created.')">
+                    {# Continue — small, less prominent, requires double confirmation #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_requeue' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('⚠️ Are you sure?\n\nThis will create a BRAND NEW AD account for {{ pr.first_name }} {{ pr.last_name }} even though {{ pr.blocked_by_email }} already exists.\n\nOnly continue if this is genuinely a different person with the same name.')">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-1"
-                              style="font-size:0.7rem;" title="Same person, no provisioning needed">
-                        <i class="bi bi-x"></i> Cancel
+                      <button type="submit" class="btn btn-xs btn-outline-secondary"
+                              title="Only use this if it is genuinely a different person with the same name">
+                        <i class="bi bi-arrow-repeat"></i> Create new account anyway
                       </button>
                     </form>
                     {% if pr.result_log %}
