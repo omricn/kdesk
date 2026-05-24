@@ -139,6 +139,23 @@ def hibob_sync_log(request, run_id):
     return HttpResponse(run.raw_log, content_type='text/plain; charset=utf-8')
 
 
+def api_provisioning_statuses(request):
+    """Lightweight JSON endpoint for live dashboard polling (UI only, not agent API)."""
+    if not request.user.is_authenticated or not request.user.is_superuser:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    recent = ProvisioningRequest.objects.all()[:20]
+    return JsonResponse({
+        'requests': [
+            {
+                'id': r.id,
+                'status': r.status,
+                'claimed_at': r.claimed_at.isoformat() if r.claimed_at else None,
+            }
+            for r in recent
+        ]
+    })
+
+
 def provisioning_log(request, req_id):
     """Return the raw PS log stored for a provisioning request as plain text."""
     deny = _superuser_required(request)
