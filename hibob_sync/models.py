@@ -9,6 +9,7 @@ class ProvisioningRequest(models.Model):
     STATUS_FAILED = 'failed'
     STATUS_REVIEW_NEEDED = 'review_needed'
     STATUS_CANCELLED = 'cancelled'
+    STATUS_PAUSED = 'paused'
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('claimed', 'Claimed'),
@@ -16,6 +17,7 @@ class ProvisioningRequest(models.Model):
         ('failed', 'Failed'),
         ('review_needed', 'Review Needed'),
         ('cancelled', 'Cancelled'),
+        ('paused', 'Paused'),
     ]
 
     # Linked ticket (created from the HiBob notification email)

@@ -51,7 +51,7 @@ def hibob_sync_dashboard(request):
     prov_settings = ProvisioningSettings.get()
     recent_provisioning = ProvisioningRequest.objects.select_related('ticket').all()[:20]
     pending_provisioning_count = ProvisioningRequest.objects.filter(
-        status__in=['pending', 'claimed', 'review_needed']
+        status__in=['pending', 'claimed', 'review_needed', 'paused']
     ).count()
 
     return render(request, 'hibob_sync/dashboard.html', {
@@ -445,18 +445,53 @@ def provisioning_requeue(request, req_id):
 
 
 @require_POST
-def provisioning_dismiss(request, req_id):
-    """Dismiss a review_needed request — the existing user is the same person, no provisioning needed."""
+def provisioning_cancel(request, req_id):
+    """Cancel any active provisioning request — it will not be picked up again."""
     deny = _superuser_required(request)
     if deny:
         return deny
 
-    updated = ProvisioningRequest.objects.filter(id=req_id, status='review_needed').update(
+    CANCELLABLE = ('pending', 'paused', 'claimed', 'failed', 'review_needed')
+    updated = ProvisioningRequest.objects.filter(id=req_id, status__in=CANCELLABLE).update(
         status='cancelled',
         completed_at=timezone.now(),
     )
     if updated:
-        messages.success(request, 'Provisioning dismissed — no new account will be created.')
+        messages.success(request, 'Provisioning request cancelled.')
     else:
-        messages.warning(request, 'Could not dismiss — request may not be in review state.')
+        messages.warning(request, 'Could not cancel — request may already be completed or cancelled.')
+    return redirect('hibob_sync_dashboard')
+
+
+@require_POST
+def provisioning_pause(request, req_id):
+    """Pause a pending request — it will stay visible but the agent will not pick it up."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    updated = ProvisioningRequest.objects.filter(id=req_id, status='pending').update(
+        status='paused',
+    )
+    if updated:
+        messages.success(request, 'Provisioning paused — the agent will skip this request until resumed.')
+    else:
+        messages.warning(request, 'Could not pause — request may not be in pending state.')
+    return redirect('hibob_sync_dashboard')
+
+
+@require_POST
+def provisioning_resume(request, req_id):
+    """Resume a paused request — puts it back in the pending queue."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    updated = ProvisioningRequest.objects.filter(id=req_id, status='paused').update(
+        status='pending',
+    )
+    if updated:
+        messages.success(request, 'Provisioning resumed — the agent will pick it up shortly.')
+    else:
+        messages.warning(request, 'Could not resume — request may not be paused.')
     return redirect('hibob_sync_dashboard')

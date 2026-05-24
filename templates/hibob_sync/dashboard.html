@@ -394,6 +394,7 @@
                 <th>Groups</th>
                 <th>Ticket</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -403,9 +404,15 @@
                 <td class="text-muted">{{ pr.country }} / {{ pr.division }} / {{ pr.department }}</td>
                 <td class="text-muted">{{ pr.job_title|default:"—" }}</td>
                 <td>{{ pr.start_date|default:"—" }}</td>
+
+                {# ── Status cell ── #}
                 <td>
                   {% if pr.status == 'pending' %}
                     <span class="badge bg-warning text-dark">Pending</span>
+                  {% elif pr.status == 'paused' %}
+                    <span class="badge bg-secondary">
+                      <i class="bi bi-pause-fill me-1"></i>Paused
+                    </span>
                   {% elif pr.status == 'claimed' %}
                     <span class="badge bg-info text-dark">
                       <span class="spinner-border spinner-border-sm" style="width:.6rem;height:.6rem;"></span>
@@ -421,41 +428,30 @@
                       <i class="bi bi-x-lg"></i> Failed
                     </span>
                   {% elif pr.status == 'review_needed' %}
-                    <div class="d-flex flex-column gap-1">
+                    <div>
                       <span class="badge text-dark" style="background:#fff3cd;border:1px solid #ffc107;">
-                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
-                        Active user detected —
-                        <span class="font-monospace" style="font-size:0.7rem;">{{ pr.blocked_by_email }}</span>
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Review Needed
                       </span>
-                      <div class="d-flex gap-1 flex-wrap">
-                        <form method="post" action="{% url 'hibob_sync_provisioning_requeue' pr.id %}"
-                              onsubmit="return confirm('Re-queue provisioning for {{ pr.first_name }} {{ pr.last_name }}? A NEW account will be created (different username). Only do this if this is genuinely a different person.')">
-                          {% csrf_token %}
-                          <button type="submit" class="btn btn-xs btn-warning py-0 px-2" style="font-size:0.72rem;">
-                            <i class="bi bi-arrow-repeat me-1"></i>Continue Provisioning
-                          </button>
-                        </form>
-                        <form method="post" action="{% url 'hibob_sync_provisioning_dismiss' pr.id %}"
-                              onsubmit="return confirm('Dismiss this request? No account will be created.')">
-                          {% csrf_token %}
-                          <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.72rem;">
-                            <i class="bi bi-x me-1"></i>No Action Needed
-                          </button>
-                        </form>
-                      </div>
+                      {% if pr.blocked_by_email %}
+                        <div class="text-muted mt-1" style="font-size:0.72rem;">
+                          Active account: <span class="font-monospace">{{ pr.blocked_by_email }}</span>
+                        </div>
+                      {% endif %}
                     </div>
                   {% elif pr.status == 'cancelled' %}
                     <span class="badge bg-secondary">
-                      <i class="bi bi-slash-circle me-1"></i>Dismissed
+                      <i class="bi bi-slash-circle me-1"></i>Cancelled
                     </span>
                   {% endif %}
-                  {% if pr.groups_fallback and pr.status not in 'review_needed,cancelled' %}
+                  {% if pr.groups_fallback and pr.status == 'completed' %}
                     <span class="badge bg-warning text-dark ms-1"
-                          title="No Excel match found — only universal groups assigned. Manual group assignment needed.">
+                          title="No Excel match — only universal groups assigned. Manual assignment needed.">
                       <i class="bi bi-exclamation-triangle"></i> Manual groups
                     </span>
                   {% endif %}
                 </td>
+
+                {# ── Groups cell ── #}
                 <td class="text-muted" style="font-size:0.75rem;">
                   {% if pr.groups_fallback %}
                     <span class="text-warning">{{ pr.m365_groups|length }}</span>
@@ -463,6 +459,8 @@
                     {{ pr.m365_groups|length }}
                   {% endif %}
                 </td>
+
+                {# ── Ticket cell ── #}
                 <td>
                   {% if pr.ticket %}
                     <a href="{% url 'ticket_detail' pr.ticket.pk %}" class="text-decoration-none">
@@ -470,7 +468,94 @@
                     </a>
                   {% else %}<span class="text-muted">—</span>{% endif %}
                 </td>
+
                 <td class="text-muted text-nowrap">{{ pr.created_at|date:"d M H:i" }}</td>
+
+                {# ── Actions cell ── #}
+                <td class="text-nowrap">
+                  {% if pr.status == 'pending' %}
+                    {# Pause #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_pause' pr.id %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-1 me-1"
+                              style="font-size:0.7rem;" title="Pause — stop the agent from picking this up">
+                        <i class="bi bi-pause-fill"></i> Pause
+                      </button>
+                    </form>
+                    {# Cancel #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('Cancel provisioning for {{ pr.first_name }} {{ pr.last_name }}? This cannot be undone.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1"
+                              style="font-size:0.7rem;" title="Cancel permanently">
+                        <i class="bi bi-x-lg"></i> Cancel
+                      </button>
+                    </form>
+
+                  {% elif pr.status == 'paused' %}
+                    {# Resume #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_resume' pr.id %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-success py-0 px-1 me-1"
+                              style="font-size:0.7rem;" title="Resume — put back in queue">
+                        <i class="bi bi-play-fill"></i> Resume
+                      </button>
+                    </form>
+                    {# Cancel #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('Cancel provisioning for {{ pr.first_name }} {{ pr.last_name }}? This cannot be undone.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1"
+                              style="font-size:0.7rem;" title="Cancel permanently">
+                        <i class="bi bi-x-lg"></i> Cancel
+                      </button>
+                    </form>
+
+                  {% elif pr.status == 'claimed' %}
+                    {# Cancel while running — script may already be running, warn the user #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('The agent may already be processing this request. Cancel anyway? The AD changes may still have happened.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1"
+                              style="font-size:0.7rem;" title="Cancel (script may already be running)">
+                        <i class="bi bi-x-lg"></i> Cancel
+                      </button>
+                    </form>
+
+                  {% elif pr.status == 'failed' %}
+                    {# Cancel a failed request to stop it from being re-tried #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('Cancel this failed request? It will no longer appear as actionable.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-1"
+                              style="font-size:0.7rem;" title="Mark as cancelled">
+                        <i class="bi bi-archive"></i> Dismiss
+                      </button>
+                    </form>
+
+                  {% elif pr.status == 'review_needed' %}
+                    {# Continue — re-queue with force_create=True #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_requeue' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('Continue provisioning for {{ pr.first_name }} {{ pr.last_name }}? A NEW account will be created. Only do this if this is genuinely a different person.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-warning py-0 px-1 me-1"
+                              style="font-size:0.7rem;" title="Create a new account — different person with same name">
+                        <i class="bi bi-arrow-repeat"></i> Continue
+                      </button>
+                    </form>
+                    {# No action needed — cancel #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('No action needed — dismiss this request? No account will be created.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-1"
+                              style="font-size:0.7rem;" title="Same person, no provisioning needed">
+                        <i class="bi bi-x"></i> No Action
+                      </button>
+                    </form>
+
+                  {% endif %}
+                </td>
+
               </tr>
               {% endfor %}
             </tbody>
