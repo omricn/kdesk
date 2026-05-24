@@ -23,6 +23,7 @@
   .run-type-badge { font-size: 0.7rem; }
   .prov-table th { font-size: 0.75rem; white-space: nowrap; }
   .prov-table td { font-size: 0.82rem; vertical-align: middle; }
+  .btn-xs { padding: 0.1rem 0.35rem; font-size: 0.7rem; line-height: 1.4; display: inline-flex; align-items: center; gap: 2px; }
 </style>
 {% endblock %}
 
@@ -35,9 +36,9 @@
   </h4>
 </div>
 
-<!-- Auto-refresh while a sync is active -->
-{% if active_trigger or active_provisioning %}
-<meta http-equiv="refresh" content="6">
+<!-- Auto-refresh while a sync is active or provisioning is pending/running -->
+{% if active_trigger or active_provisioning or pending_provisioning_count %}
+<meta http-equiv="refresh" content="10">
 {% endif %}
 
 <!-- ── Tabs ─────────────────────────────────────────────────────────────────── -->
@@ -576,7 +577,7 @@
                       {% csrf_token %}
                       <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-1"
                               style="font-size:0.7rem;" title="Same person, no provisioning needed">
-                        <i class="bi bi-x"></i> No Action
+                        <i class="bi bi-x"></i> Cancel
                       </button>
                     </form>
                     {% if pr.result_log %}
