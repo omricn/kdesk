@@ -495,3 +495,49 @@ def provisioning_resume(request, req_id):
     else:
         messages.warning(request, 'Could not resume — request may not be paused.')
     return redirect('hibob_sync_dashboard')
+
+
+@require_POST
+def provisioning_seed_test(request):
+    """Create a test ProvisioningRequest for Tester Testerson (ticket #0410). Superuser only."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    try:
+        from tickets.models import Ticket
+        ticket = Ticket.objects.get(pk=410)
+    except Exception:
+        messages.error(request, 'Ticket #0410 not found.')
+        return redirect('hibob_sync_dashboard')
+
+    if ProvisioningRequest.objects.filter(ticket=ticket, status__in=['pending', 'claimed', 'paused']).exists():
+        messages.warning(request, 'An active provisioning request for ticket #0410 already exists.')
+        return redirect('hibob_sync_dashboard')
+
+    pr = ProvisioningRequest.objects.create(
+        ticket=ticket,
+        first_name='Tester',
+        last_name='Testerson',
+        department='IT',
+        division='Operations',
+        country='Israel',
+        region='HQ',
+        job_title='Test Engineer',
+        employment_type='Full-time',
+        m365_groups=[
+            'Joiners@kramerav.com',
+            'Microsoft 365 E5 Users',
+            'IL_All_Employees@kramerav.com',
+            'IL_OPS_IT@kramerav.com',
+            'HQ_OPS_IT@kramerav.com',
+            'HQ_OPS@kramerav.com',
+            'Global_OPS@kramerav.com',
+            'Global_OPS_IT@kramerav.com',
+        ],
+        groups_fallback=False,
+        status='pending',
+        is_dry_run=False,
+    )
+    messages.success(request, f'Test provisioning request #{pr.id} created for Tester Testerson — ticket #0410. Enable provisioning to run it.')
+    return redirect('hibob_sync_dashboard')
