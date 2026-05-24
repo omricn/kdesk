@@ -7,6 +7,8 @@ urlpatterns = [
     path('hibob-sync/cancel/<int:trigger_id>/', views.hibob_sync_cancel, name='hibob_sync_cancel'),
     path('hibob-sync/log/<int:run_id>/', views.hibob_sync_log, name='hibob_sync_log'),
     path('hibob-sync/provisioning/toggle/', views.hibob_sync_provisioning_toggle, name='hibob_sync_provisioning_toggle'),
+    path('hibob-sync/provisioning/<int:req_id>/requeue/', views.provisioning_requeue, name='hibob_sync_provisioning_requeue'),
+    path('hibob-sync/provisioning/<int:req_id>/dismiss/', views.provisioning_dismiss, name='hibob_sync_provisioning_dismiss'),
     # Agent-facing API — sync triggers
     path('hibob-sync/api/pending/', views.api_pending, name='hibob_sync_api_pending'),
     path('hibob-sync/api/claim/<int:trigger_id>/', views.api_claim, name='hibob_sync_api_claim'),

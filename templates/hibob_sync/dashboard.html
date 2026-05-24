@@ -62,6 +62,7 @@
       {% endif %}
     </button>
   </li>
+
 </ul>
 
 <div class="tab-content" id="hibobTabContent">
@@ -419,8 +420,36 @@
                     <span class="badge bg-danger" title="{{ pr.result_message }}">
                       <i class="bi bi-x-lg"></i> Failed
                     </span>
+                  {% elif pr.status == 'review_needed' %}
+                    <div class="d-flex flex-column gap-1">
+                      <span class="badge text-dark" style="background:#fff3cd;border:1px solid #ffc107;">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                        Active user detected —
+                        <span class="font-monospace" style="font-size:0.7rem;">{{ pr.blocked_by_email }}</span>
+                      </span>
+                      <div class="d-flex gap-1 flex-wrap">
+                        <form method="post" action="{% url 'hibob_sync_provisioning_requeue' pr.id %}"
+                              onsubmit="return confirm('Re-queue provisioning for {{ pr.first_name }} {{ pr.last_name }}? A NEW account will be created (different username). Only do this if this is genuinely a different person.')">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-xs btn-warning py-0 px-2" style="font-size:0.72rem;">
+                            <i class="bi bi-arrow-repeat me-1"></i>Continue Provisioning
+                          </button>
+                        </form>
+                        <form method="post" action="{% url 'hibob_sync_provisioning_dismiss' pr.id %}"
+                              onsubmit="return confirm('Dismiss this request? No account will be created.')">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:0.72rem;">
+                            <i class="bi bi-x me-1"></i>No Action Needed
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  {% elif pr.status == 'cancelled' %}
+                    <span class="badge bg-secondary">
+                      <i class="bi bi-slash-circle me-1"></i>Dismissed
+                    </span>
                   {% endif %}
-                  {% if pr.groups_fallback %}
+                  {% if pr.groups_fallback and pr.status not in 'review_needed,cancelled' %}
                     <span class="badge bg-warning text-dark ms-1"
                           title="No Excel match found — only universal groups assigned. Manual group assignment needed.">
                       <i class="bi bi-exclamation-triangle"></i> Manual groups

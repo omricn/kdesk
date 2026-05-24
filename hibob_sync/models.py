@@ -7,11 +7,15 @@ class ProvisioningRequest(models.Model):
     STATUS_CLAIMED = 'claimed'
     STATUS_COMPLETED = 'completed'
     STATUS_FAILED = 'failed'
+    STATUS_REVIEW_NEEDED = 'review_needed'
+    STATUS_CANCELLED = 'cancelled'
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('claimed', 'Claimed'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
+        ('review_needed', 'Review Needed'),
+        ('cancelled', 'Cancelled'),
     ]
 
     # Linked ticket (created from the HiBob notification email)
@@ -39,6 +43,10 @@ class ProvisioningRequest(models.Model):
     work_email = models.EmailField(blank=True)    # e.g. clinetski@kramerav.com
     m365_groups = models.JSONField(default=list)  # resolved group email addresses
     groups_fallback = models.BooleanField(default=False)  # True when Excel lookup found no match
+
+    # Review / active-user-conflict fields
+    force_create = models.BooleanField(default=False)    # set True to skip active-account check on re-queue
+    blocked_by_email = models.CharField(max_length=200, blank=True)  # existing active account UPN
 
     # Workflow
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
