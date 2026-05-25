@@ -424,7 +424,9 @@ def api_provisioning_report(request):
             _send_provisioning_result_notification(req, outcome='success', work_email=work_email)
         else:
             # Script reported failure (not a sentinel)
-            _send_provisioning_result_notification(req, outcome='failed', failure_reason=result_message)
+            _send_provisioning_result_notification(
+                req, outcome='failed', failure_reason=result_message, result_log=result_log,
+            )
     except Exception as exc:
         logger.error('[Provisioning] Post-report actions failed for req #%s: %s', req_id, exc)
 
@@ -556,11 +558,12 @@ def _post_disabled_user_ticket_comment(req, disabled_upn):
 
 
 def _send_provisioning_result_notification(req, outcome='success', work_email='',
-                                           failure_reason='', blocked_upn=''):
+                                           failure_reason='', blocked_upn='', result_log=''):
     """
     Send a provisioning outcome email to Kdesk_Superusers.
 
     outcome: 'success' | 'failed' | 'disabled'
+    result_log: full PS log text (included in failure emails as a highlighted tail).
     """
     try:
         from integrations.graph_client import get_client
@@ -587,7 +590,7 @@ def _send_provisioning_result_notification(req, outcome='success', work_email=''
             header_color = '#dc3545'
             header_title = 'Provisioning Failed'
             extra_label  = 'Failure Reason'
-            extra_value  = (failure_reason or 'See full log in the dashboard.').replace('<', '&lt;').replace('>', '&gt;')
+            extra_value  = (failure_reason or 'See log below.').replace('<', '&lt;').replace('>', '&gt;')
         else:  # disabled
             subject      = f'⚠️ Disabled Account Found — {full_name}'
             header_color = '#fd7e14'
@@ -598,12 +601,12 @@ def _send_provisioning_result_notification(req, outcome='success', work_email=''
         td_k = 'style="padding:6px 12px;font-weight:bold;color:#555;white-space:nowrap;vertical-align:top;"'
         td_v = 'style="padding:6px 12px;"'
         rows = [
-            ('Employee',    f'<strong>{full_name}</strong>'),
-            ('Job Title',   req.job_title or '—'),
-            ('Department',  dept_str),
-            ('Country',     req.country or '—'),
-            ('Start Date',  str(req.start_date) if req.start_date else '—'),
-            (extra_label,   extra_value),
+            ('Employee',   f'<strong>{full_name}</strong>'),
+            ('Job Title',  req.job_title or '—'),
+            ('Department', dept_str),
+            ('Country',    req.country or '—'),
+            ('Start Date', str(req.start_date) if req.start_date else '—'),
+            (extra_label,  extra_value),
         ]
         rows_html = ''.join(
             f'<tr{"" if i % 2 == 0 else " style=\\"background:#f9f9f9;\\""}>'
@@ -618,14 +621,51 @@ def _send_provisioning_result_notification(req, outcome='success', work_email=''
                 f'<a href="{ticket_url}" style="color:#0078d4;text-decoration:none;">View Ticket</a>'
             )
 
+        # For failure emails: include a highlighted log tail (last 50 lines,
+        # with ERROR lines in red and WARN lines in orange).
+        log_html = ''
+        if outcome == 'failed' and result_log:
+            all_lines = result_log.splitlines()
+            tail = all_lines[-50:] if len(all_lines) > 50 else all_lines
+            line_parts = []
+            for line in tail:
+                escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if '[ERROR]' in line:
+                    line_parts.append(
+                        f'<span style="color:#dc3545;font-weight:bold;">{escaped}</span>'
+                    )
+                elif '[WARN]' in line:
+                    line_parts.append(
+                        f'<span style="color:#fd7e14;">{escaped}</span>'
+                    )
+                else:
+                    line_parts.append(escaped)
+            log_block = '\n'.join(line_parts)
+            omitted = len(all_lines) - len(tail)
+            omitted_note = (
+                f'<div style="color:#888;font-size:11px;margin-bottom:4px;">'
+                f'(first {omitted} lines omitted — <a href="{dashboard_url}" style="color:#0078d4;">view full log in dashboard</a>)'
+                f'</div>'
+            ) if omitted else ''
+            log_html = (
+                f'<div style="margin-top:16px;">'
+                f'<div style="font-weight:bold;color:#555;margin-bottom:6px;font-size:13px;">Script Log</div>'
+                f'{omitted_note}'
+                f'<pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;'
+                f'font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;'
+                f'word-break:break-all;margin:0;">{log_block}</pre>'
+                f'</div>'
+            )
+
         body_html = (
-            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto;">'
+            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;">'
             f'<div style="background:{header_color};color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
             f'<h2 style="margin:0;font-size:17px;font-weight:600;">{header_title}</h2></div>'
             '<div style="border:1px solid #ddd;border-top:none;padding:20px 20px 16px;'
             'border-radius:0 0 6px 6px;background:#fafafa;">'
             '<table style="border-collapse:collapse;width:100%;background:#fff;'
             f'border:1px solid #eee;border-radius:4px;">{rows_html}</table>'
+            f'{log_html}'
             f'<p style="margin:14px 0 0;font-size:13px;color:#555;">{links_html}</p>'
             '</div></div>'
         )
