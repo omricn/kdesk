@@ -127,9 +127,9 @@ def resolve_m365_groups(region: str, country: str, division: str, department: st
             (row[3] or '').strip(),
         )
         if (r_country == country_code
-                and r_region == region_norm
-                and r_division == division_norm
-                and r_dept == department_norm):
+                and r_region.lower() == region_norm.lower()
+                and r_division.lower() == division_norm.lower()
+                and r_dept.lower() == department_norm.lower()):
             groups = [v for v in row[4:10] if v and str(v).strip()]
             return groups, False
 
@@ -201,15 +201,18 @@ def parse_hibob_email_body(body: str, is_html: bool) -> dict:
         key_norm = key.strip().lower()
         value = value.strip()
         if key_norm in _FIELD_MAP:
-            fields[_FIELD_MAP[key_norm]] = value
+            dest = _FIELD_MAP[key_norm]
+            if dest not in fields:  # first occurrence wins — ignore quoted/repeated lines
+                fields[dest] = value
 
-    # Parse start date (DD/MM/YYYY or YYYY-MM-DD)
+    # Parse start date (DD/MM/YYYY or YYYY-MM-DD, with optional time component)
     start_date = None
     raw = fields.pop('start_date_raw', '')
     if raw:
+        raw_date = raw.split()[0]  # strip any trailing time component (e.g. "01/06/2025 00:00:00")
         for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y'):
             try:
-                start_date = datetime.strptime(raw, fmt).date()
+                start_date = datetime.strptime(raw_date, fmt).date()
                 break
             except ValueError:
                 pass

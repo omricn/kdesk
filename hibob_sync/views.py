@@ -369,17 +369,25 @@ def api_provisioning_report(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
     req_id = data.get('req_id')
+    if not req_id:
+        return JsonResponse({'error': 'req_id is required'}, status=400)
+
     success = data.get('success', True)
     result_log = data.get('log', '')
     result_message = data.get('message', '')
     work_email = data.get('work_email', '')
 
-    # Detect active-user-found sentinel from the PowerShell script
-    ACTIVE_USER_PREFIX = 'ACTIVE_USER_FOUND:'
+    # Detect sentinels from the PowerShell script
+    ACTIVE_USER_PREFIX   = 'ACTIVE_USER_FOUND:'
+    DISABLED_USER_PREFIX = 'DISABLED_USER_FOUND:'
     is_active_user_blocked = isinstance(result_message, str) and result_message.startswith(ACTIVE_USER_PREFIX)
+    is_disabled_user       = isinstance(result_message, str) and result_message.startswith(DISABLED_USER_PREFIX)
 
     if is_active_user_blocked:
         blocked_email = result_message[len(ACTIVE_USER_PREFIX):].strip()
+        new_status = 'review_needed'
+    elif is_disabled_user:
+        blocked_email = result_message[len(DISABLED_USER_PREFIX):].strip()
         new_status = 'review_needed'
     else:
         blocked_email = ''
@@ -393,7 +401,7 @@ def api_provisioning_report(request):
         'result_message': result_message,
         'work_email': work_email,
     }
-    if is_active_user_blocked:
+    if is_active_user_blocked or is_disabled_user:
         update_kwargs['blocked_by_email'] = blocked_email
 
     updated = ProvisioningRequest.objects.filter(id=req_id, status='claimed').update(**update_kwargs)
@@ -401,13 +409,25 @@ def api_provisioning_report(request):
         return JsonResponse({'error': 'Request not found or not in claimed state'}, status=409)
 
     if is_active_user_blocked:
-        req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
-        _post_active_user_ticket_comment(req, blocked_email)
-        _send_active_user_notification(req, blocked_email)
+        try:
+            req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+            _post_active_user_ticket_comment(req, blocked_email)
+            _send_active_user_notification(req, blocked_email)
+        except Exception as exc:
+            logger.error('[Provisioning] Post-active-user actions failed for req #%s: %s', req_id, exc)
+    elif is_disabled_user:
+        try:
+            req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+            _post_disabled_user_ticket_comment(req, blocked_email)
+        except Exception as exc:
+            logger.error('[Provisioning] Post-disabled-user actions failed for req #%s: %s', req_id, exc)
     elif success and work_email:
-        req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
-        _post_provisioning_ticket_comment(req, work_email, result_log)
-        _create_system_tickets(req, work_email)
+        try:
+            req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+            _post_provisioning_ticket_comment(req, work_email, result_log)
+            _create_system_tickets(req, work_email)
+        except Exception as exc:
+            logger.error('[Provisioning] Post-success actions failed for req #%s: %s', req_id, exc)
 
     return JsonResponse({'ok': True})
 
@@ -512,6 +532,28 @@ def _post_active_user_ticket_comment(req, blocked_email):
         )
     except Exception as exc:
         logger.warning('[Provisioning] Could not post active-user ticket comment: %s', exc)
+
+
+def _post_disabled_user_ticket_comment(req, disabled_upn):
+    """Post an internal ticket comment when a disabled AD account is found (returning employee)."""
+    try:
+        if not req.ticket:
+            return
+        from tickets.models import TicketComment
+        body = (
+            f'⚠️ Provisioning paused — a disabled AD account already exists for this employee.\n'
+            f'Existing disabled account: {disabled_upn}\n\n'
+            f'This may be a returning employee. Please re-activate the account manually in AD,\n'
+            f'run an AD Connect delta sync, then close this provisioning request once complete.\n'
+        )
+        TicketComment.objects.create(
+            ticket=req.ticket,
+            author=None,
+            body=body,
+            is_internal=True,
+        )
+    except Exception as exc:
+        logger.warning('[Provisioning] Could not post disabled-user ticket comment: %s', exc)
 
 
 def _send_active_user_notification(req, blocked_email):
