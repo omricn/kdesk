@@ -80,7 +80,7 @@ COUNTRY_CODE_TO_OU_NAME = {
 
 # Universal groups every employee receives
 UNIVERSAL_M365_GROUPS = [
-    'Joiners@kramerav.com',
+    'Joiners',
     'Microsoft 365 E5 Users',
 ]
 

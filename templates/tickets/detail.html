@@ -467,16 +467,18 @@
           {% endif %}
           {% if ticket.satisfaction_rating %}
           <div class="mt-2">
-            <strong>Satisfaction:</strong>
-            <span class="ms-1">
-              {% for i in "12345" %}
-                {% if forloop.counter <= ticket.satisfaction_rating %}
-                  <i class="bi bi-star-fill" style="color:var(--kramer-mint);font-size:13px;"></i>
-                {% else %}
-                  <i class="bi bi-star" style="color:#aaa;font-size:13px;"></i>
-                {% endif %}
-              {% endfor %}
-            </span>
+            <div>
+              <strong>Satisfaction:</strong>
+              <span class="ms-1">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= ticket.satisfaction_rating %}
+                    <i class="bi bi-star-fill" style="color:var(--kramer-mint);font-size:13px;"></i>
+                  {% else %}
+                    <i class="bi bi-star" style="color:#aaa;font-size:13px;"></i>
+                  {% endif %}
+                {% endfor %}
+              </span>
+            </div>
             {% if ticket.satisfaction_text %}
             <div class="text-muted mt-1" style="font-size:12px;word-break:break-word;">"{{ ticket.satisfaction_text }}"</div>
             {% endif %}

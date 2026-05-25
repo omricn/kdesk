@@ -253,7 +253,7 @@
           Approved — implementation will begin automatically on the planned date
         </div>
 
-        {% elif change.status == 'in_progress' %}
+        {% elif change.status == 'in_progress' or change.status == 'approved' %}
         <form method="post" action="{% url 'change_transition' change.pk %}">
           {% csrf_token %}
           <input type="hidden" name="action" value="complete">

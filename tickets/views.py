@@ -509,6 +509,13 @@ def ticket_detail(request, pk):
                     suffix = '?confetti=1' if just_closed else ''
                     return redirect(f'/tickets/{pk}/{suffix}')
 
+        elif action == 'clear_rating':
+            ticket.satisfaction_rating = None
+            ticket.satisfaction_text = ''
+            ticket.save(update_fields=['satisfaction_rating', 'satisfaction_text'])
+            messages.success(request, 'Satisfaction rating cleared.')
+            return redirect('ticket_detail', pk=pk)
+
         elif action == 'upload':
             file_obj = request.FILES.get('file')
             if file_obj:
@@ -1553,8 +1560,8 @@ def email_preview(request):
         {
             'label': 'Maintenance Broadcast (to all employees)',
             'html': _email_html(
-                header_title='Planned Maintenance Notification',
-                header_subtitle='Network — Sunday, 20 April 2026',
+                header_title='Planned Maintenance — Network',
+                header_subtitle='Sunday, 20 April 2026 · 22:00 – 23:00 [Israel Time]',
                 greeting=(
                     'Dear Employees,<br><br>'
                     'Please be informed that the IT Department has scheduled a <strong>Planned Maintenance</strong> '
@@ -1566,7 +1573,7 @@ def email_preview(request):
                 body_rows=(
                     _row('System', 'Network') +
                     _row('Date', 'Sunday, 20 April 2026') +
-                    _row('Timeframe', '22:00 – 23:00') +
+                    _row('Timeframe', '22:00 – 23:00 [Israel Time]') +
                     _row('Region', 'Israel')
                 ),
             ),

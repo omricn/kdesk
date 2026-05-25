@@ -587,8 +587,8 @@ def _send_maintenance_complete_announcement(change):
     region_str = change.get_affected_region_display()
 
     body = _email_html(
-        header_title='Maintenance Completed',
-        header_subtitle=f'{system_str} — {date_str}',
+        header_title=f'Maintenance Completed — {_esc(system_str)}',
+        header_subtitle=date_str,
         header_color='#69FFC3',
         header_text_color='#1a1a2e',
         greeting=(
@@ -657,8 +657,8 @@ def _send_maintenance_announcement(change):
     region_str = change.get_affected_region_display()
 
     body = _email_html(
-        header_title='Planned Maintenance Notification',
-        header_subtitle=f'{system_str} — {date_str}',
+        header_title=f'Planned Maintenance — {_esc(system_str)}',
+        header_subtitle=f'{date_str} · {timeframe_str}',
         greeting=(
             'Dear Employees,<br><br>'
             'Please be informed that the IT Department has scheduled a <strong>Planned Maintenance</strong> '
@@ -723,8 +723,8 @@ def _send_upcoming_maintenance_broadcast(change):
     region_str = change.get_affected_region_display()
 
     body = _email_html(
-        header_title='Maintenance Starting in ~3 Hours',
-        header_subtitle=f'{system_str} — {date_str}',
+        header_title=f'Maintenance in ~3 Hours — {_esc(system_str)}',
+        header_subtitle=f'{date_str} · {timeframe_str}',
         greeting=(
             'Dear Employees,<br><br>'
             'This is a reminder that a <strong>Planned Maintenance</strong> window is starting '
@@ -1241,8 +1241,11 @@ def check_change_reminders():
     from changes.models import Change
 
     now = timezone.now()
-    today = now.date()
-    current_time = now.time()
+    # Use local (Israel) time for date/time comparisons — planned_from/planned_to
+    # are stored as naive local times, so comparing against UTC would be 3 hours off.
+    local_now = timezone.localtime(now)
+    today = local_now.date()
+    current_time = local_now.time()
 
     # ── Reminder 0: Overdue approval reminder ─────────────────────────────────
     # Changes still in an un-actioned state (New / Pending Approval / Pending Changes)

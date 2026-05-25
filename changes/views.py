@@ -161,7 +161,7 @@ def change_transition(request, pk):
         'not_approve':      (Change.STATUS_PENDING,          Change.STATUS_NOT_APPROVED),
         'request_changes':  (Change.STATUS_PENDING,          Change.STATUS_PENDING_CHANGES),
         'start':            (Change.STATUS_APPROVED,         Change.STATUS_IN_PROGRESS),
-        'complete':         (Change.STATUS_IN_PROGRESS,      Change.STATUS_DONE),
+        'complete':         (Change.STATUS_IN_PROGRESS,      Change.STATUS_DONE),  # also handles APPROVED below
         'reopen':           (Change.STATUS_DONE,             Change.STATUS_NEW),
     }
 
@@ -175,7 +175,11 @@ def change_transition(request, pk):
         return redirect('change_detail', pk=pk)
 
     required_status, new_status = transitions[action]
-    if change.status != required_status:
+    # 'complete' is also allowed from APPROVED (covers cases where auto-advance to
+    # in_progress was missed and the admin wants to mark it done directly).
+    if action == 'complete' and change.status == Change.STATUS_APPROVED:
+        pass  # allow approved → done
+    elif change.status != required_status:
         messages.error(request, f'Cannot perform "{action}" from current status.')
         return redirect('change_detail', pk=pk)
 
