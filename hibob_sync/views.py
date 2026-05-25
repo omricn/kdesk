@@ -408,26 +408,25 @@ def api_provisioning_report(request):
     if not updated:
         return JsonResponse({'error': 'Request not found or not in claimed state'}, status=409)
 
-    if is_active_user_blocked:
-        try:
-            req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+    # Post-report actions: fetch once, dispatch to helpers.
+    # All exceptions are caught here so a downstream failure never prevents the 200 OK.
+    try:
+        req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+        if is_active_user_blocked:
             _post_active_user_ticket_comment(req, blocked_email)
             _send_active_user_notification(req, blocked_email)
-        except Exception as exc:
-            logger.error('[Provisioning] Post-active-user actions failed for req #%s: %s', req_id, exc)
-    elif is_disabled_user:
-        try:
-            req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+        elif is_disabled_user:
             _post_disabled_user_ticket_comment(req, blocked_email)
-        except Exception as exc:
-            logger.error('[Provisioning] Post-disabled-user actions failed for req #%s: %s', req_id, exc)
-    elif success and work_email:
-        try:
-            req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+            _send_provisioning_result_notification(req, outcome='disabled', blocked_upn=blocked_email)
+        elif success and work_email:
             _post_provisioning_ticket_comment(req, work_email, result_log)
             _create_system_tickets(req, work_email)
-        except Exception as exc:
-            logger.error('[Provisioning] Post-success actions failed for req #%s: %s', req_id, exc)
+            _send_provisioning_result_notification(req, outcome='success', work_email=work_email)
+        else:
+            # Script reported failure (not a sentinel)
+            _send_provisioning_result_notification(req, outcome='failed', failure_reason=result_message)
+    except Exception as exc:
+        logger.error('[Provisioning] Post-report actions failed for req #%s: %s', req_id, exc)
 
     return JsonResponse({'ok': True})
 
@@ -554,6 +553,95 @@ def _post_disabled_user_ticket_comment(req, disabled_upn):
         )
     except Exception as exc:
         logger.warning('[Provisioning] Could not post disabled-user ticket comment: %s', exc)
+
+
+def _send_provisioning_result_notification(req, outcome='success', work_email='',
+                                           failure_reason='', blocked_upn=''):
+    """
+    Send a provisioning outcome email to Kdesk_Superusers.
+
+    outcome: 'success' | 'failed' | 'disabled'
+    """
+    try:
+        from integrations.graph_client import get_client
+
+        full_name = f'{req.first_name} {req.last_name}'.strip()
+        dashboard_url = 'https://kdesk.kramerav.com/hibob-sync/#tab-prov'
+        ticket_url = (
+            f'https://kdesk.kramerav.com/tickets/{req.ticket.pk}/'
+            if req.ticket else None
+        )
+        dept_str = (
+            f'{req.division} / {req.department}' if req.division and req.department
+            else (req.division or req.department or '—')
+        )
+
+        if outcome == 'success':
+            subject      = f'✅ Provisioned — {full_name}'
+            header_color = '#28a745'
+            header_title = 'New Employee Provisioned'
+            extra_label  = 'Work Email'
+            extra_value  = f'<a href="mailto:{work_email}" style="color:#0078d4;">{work_email}</a>'
+        elif outcome == 'failed':
+            subject      = f'❌ Provisioning FAILED — {full_name}'
+            header_color = '#dc3545'
+            header_title = 'Provisioning Failed'
+            extra_label  = 'Failure Reason'
+            extra_value  = (failure_reason or 'See full log in the dashboard.').replace('<', '&lt;').replace('>', '&gt;')
+        else:  # disabled
+            subject      = f'⚠️ Disabled Account Found — {full_name}'
+            header_color = '#fd7e14'
+            header_title = 'Returning Employee — Manual Re-activation Required'
+            extra_label  = 'Disabled Account'
+            extra_value  = blocked_upn
+
+        td_k = 'style="padding:6px 12px;font-weight:bold;color:#555;white-space:nowrap;vertical-align:top;"'
+        td_v = 'style="padding:6px 12px;"'
+        rows = [
+            ('Employee',    f'<strong>{full_name}</strong>'),
+            ('Job Title',   req.job_title or '—'),
+            ('Department',  dept_str),
+            ('Country',     req.country or '—'),
+            ('Start Date',  str(req.start_date) if req.start_date else '—'),
+            (extra_label,   extra_value),
+        ]
+        rows_html = ''.join(
+            f'<tr{"" if i % 2 == 0 else " style=\\"background:#f9f9f9;\\""}>'
+            f'<td {td_k}>{label}</td><td {td_v}>{value}</td></tr>'
+            for i, (label, value) in enumerate(rows)
+        )
+
+        links_html = f'<a href="{dashboard_url}" style="color:#0078d4;text-decoration:none;">View Dashboard</a>'
+        if ticket_url:
+            links_html += (
+                f' &nbsp;&middot;&nbsp; '
+                f'<a href="{ticket_url}" style="color:#0078d4;text-decoration:none;">View Ticket</a>'
+            )
+
+        body_html = (
+            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto;">'
+            f'<div style="background:{header_color};color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
+            f'<h2 style="margin:0;font-size:17px;font-weight:600;">{header_title}</h2></div>'
+            '<div style="border:1px solid #ddd;border-top:none;padding:20px 20px 16px;'
+            'border-radius:0 0 6px 6px;background:#fafafa;">'
+            '<table style="border-collapse:collapse;width:100%;background:#fff;'
+            f'border:1px solid #eee;border-radius:4px;">{rows_html}</table>'
+            f'<p style="margin:14px 0 0;font-size:13px;color:#555;">{links_html}</p>'
+            '</div></div>'
+        )
+
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email='Kdesk_Superusers@kramerav.com',
+            subject=subject,
+            body_html=body_html,
+        )
+        logger.info(
+            '[Provisioning] Result notification sent for req #%s (outcome=%s)', req.id, outcome
+        )
+    except Exception as exc:
+        logger.warning('[Provisioning] Could not send result notification: %s', exc)
 
 
 def _send_active_user_notification(req, blocked_email):
