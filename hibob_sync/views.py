@@ -608,11 +608,10 @@ def _send_provisioning_result_notification(req, outcome='success', work_email=''
             ('Start Date', str(req.start_date) if req.start_date else '—'),
             (extra_label,  extra_value),
         ]
-        rows_html = ''.join(
-            f'<tr{"" if i % 2 == 0 else " style=\\"background:#f9f9f9;\\""}>'
-            f'<td {td_k}>{label}</td><td {td_v}>{value}</td></tr>'
-            for i, (label, value) in enumerate(rows)
-        )
+        rows_html = ''
+        for i, (label, value) in enumerate(rows):
+            row_style = ' style="background:#f9f9f9;"' if i % 2 else ''
+            rows_html += f'<tr{row_style}><td {td_k}>{label}</td><td {td_v}>{value}</td></tr>'
 
         links_html = f'<a href="{dashboard_url}" style="color:#0078d4;text-decoration:none;">View Dashboard</a>'
         if ticket_url:
