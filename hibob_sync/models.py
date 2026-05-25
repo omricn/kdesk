@@ -46,6 +46,12 @@ class ProvisioningRequest(models.Model):
     m365_groups = models.JSONField(default=list)  # resolved group email addresses
     groups_fallback = models.BooleanField(default=False)  # True when Excel lookup found no match
 
+    # System-specific ticket creation flags (parsed from HiBob email)
+    create_priority_ticket = models.BooleanField(default=False)
+    priority_permissions_as = models.CharField(max_length=200, blank=True)
+    create_salesforce_ticket = models.BooleanField(default=False)
+    salesforce_country_permission = models.CharField(max_length=200, blank=True)
+
     # Review / active-user-conflict fields
     force_create = models.BooleanField(default=False)    # set True to skip active-account check on re-queue
     blocked_by_email = models.CharField(max_length=200, blank=True)  # existing active account UPN

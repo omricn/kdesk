@@ -405,14 +405,15 @@ def api_provisioning_report(request):
         _post_active_user_ticket_comment(req, blocked_email)
         _send_active_user_notification(req, blocked_email)
     elif success and work_email:
-        _post_provisioning_ticket_comment(req_id, work_email, result_log)
+        req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
+        _post_provisioning_ticket_comment(req, work_email, result_log)
+        _create_system_tickets(req, work_email)
 
     return JsonResponse({'ok': True})
 
 
-def _post_provisioning_ticket_comment(req_id, work_email, log):
+def _post_provisioning_ticket_comment(req, work_email, log):
     try:
-        req = ProvisioningRequest.objects.select_related('ticket').get(id=req_id)
         if not req.ticket:
             return
         from tickets.models import TicketComment
@@ -433,6 +434,60 @@ def _post_provisioning_ticket_comment(req_id, work_email, log):
         )
     except Exception as exc:
         logger.warning('[Provisioning] Could not post ticket comment: %s', exc)
+
+
+def _create_system_tickets(req, work_email):
+    """Create Priority and/or Salesforce tickets after successful provisioning."""
+    from tickets.models import Ticket, TicketCategory, TicketSubCategory, TicketItem
+    full_name = f'{req.first_name} {req.last_name}'.strip()
+
+    systems = []
+    if req.create_priority_ticket:
+        systems.append({
+            'system':    'Priority',
+            'subcat':    'Priority',
+            'item':      'New User',
+            'extra_row': f'Priority Permissions as: {req.priority_permissions_as}' if req.priority_permissions_as else '',
+        })
+    if req.create_salesforce_ticket:
+        systems.append({
+            'system':    'Salesforce',
+            'subcat':    'Salesforce',
+            'item':      'New User',
+            'extra_row': f'Country Permission: {req.salesforce_country_permission}' if req.salesforce_country_permission else '',
+        })
+
+    for s in systems:
+        try:
+            cat = TicketCategory.objects.get(name='IT')
+            subcat = TicketSubCategory.objects.get(category=cat, name=s['subcat'])
+            item, _ = TicketItem.objects.get_or_create(subcategory=subcat, name=s['item'])
+
+            description = (
+                f'New {s["system"]} user setup required.\n\n'
+                f'First name: {req.first_name}\n'
+                f'Last name: {req.last_name}\n'
+                f'Email: {work_email}\n'
+            )
+            if s['extra_row']:
+                description += f'{s["extra_row"]}\n'
+
+            ticket = Ticket(
+                title=f'NEW USER – {s["system"]} – {full_name}',
+                description=description,
+                description_is_html=False,
+                requester_email=work_email,
+                requester_name=full_name,
+                source=Ticket.SOURCE_MANUAL,
+                category=cat,
+                subcategory=subcat,
+                ticket_item=item,
+                assignee=subcat.assignee,
+            )
+            ticket.save()
+            logger.info('[Provisioning] Created %s ticket #%s for %s', s['system'], ticket.pk, work_email)
+        except Exception as exc:
+            logger.warning('[Provisioning] Could not create %s ticket: %s', s['system'], exc)
 
 
 def _post_active_user_ticket_comment(req, blocked_email):

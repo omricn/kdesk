@@ -508,6 +508,10 @@ def _create_ticket_from_message(msg, client, mailbox):
                     employee_id=d.get('employee_id', ''),
                     m365_groups=d['m365_groups'],
                     groups_fallback=d['groups_fallback'],
+                    create_priority_ticket=d.get('create_priority_ticket', False),
+                    priority_permissions_as=d.get('priority_permissions_as', ''),
+                    create_salesforce_ticket=d.get('create_salesforce_ticket', False),
+                    salesforce_country_permission=d.get('salesforce_country_permission', ''),
                     status='pending',
                 )
                 logger.info(
