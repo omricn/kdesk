@@ -5,3 +5,18 @@ __pycache__/
 media/
 staticfiles/
 .DS_Store
+
+# Generated presentations (regenerate with make_*.py scripts)
+*.pptx
+*.html
+
+# Temp / build artefacts
+deploy.zip
+*.zip
+*.docx
+tmpcelery-logs.zip
+tmpkdesk-web-logs.zip
+
+# Claude local settings
+kdesk/.claude/settings.local.json
+kdesk/.claude/settings.json
