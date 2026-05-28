@@ -358,8 +358,13 @@
         <div class="card-body">
           <form method="post" action="{% url 'ticket_send_email' ticket.pk %}" id="send-email-form" enctype="multipart/form-data">
             {% csrf_token %}
-            <textarea name="email_body" id="email_body" class="form-control form-control-sm mb-2"
+            <textarea name="email_body" id="email_body" class="form-control form-control-sm mb-1"
                       rows="4" placeholder="Type your message to {{ ticket.requester_name|default:ticket.requester_email }}…"></textarea>
+            <div class="text-muted mb-2" style="font-size:11px;"><i class="bi bi-clipboard-image me-1"></i>Paste a screenshot (Ctrl+V) to embed it in the email</div>
+
+            <!-- Inline image previews from paste -->
+            <div id="email-img-previews" class="d-flex flex-wrap gap-2 mb-2" style="min-height:0;"></div>
+            <input type="hidden" name="email_img_pks" id="email-img-pks" value="">
 
             <!-- To field (read-only display) -->
             <div class="mb-1" style="font-size:12px;color:var(--bs-secondary-color);">
@@ -1399,6 +1404,62 @@ if (INIT_CAT) {
       form.appendChild(h);
     });
   }, true);
+})();
+
+// ── Email body: paste screenshot to embed inline ──
+(function () {
+  var ta       = document.getElementById('email_body');
+  var previews = document.getElementById('email-img-previews');
+  var imgPks   = document.getElementById('email-img-pks');
+  if (!ta || !previews || !imgPks) return;
+
+  function getPks() { return imgPks.value ? imgPks.value.split(',').filter(Boolean) : []; }
+
+  function addPreview(url, pk) {
+    pk = String(pk);
+    var pks = getPks();
+    if (pks.includes(pk)) return;
+    pks.push(pk);
+    imgPks.value = pks.join(',');
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block;';
+    wrap.dataset.pk = pk;
+
+    var img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'max-width:160px;max-height:100px;border-radius:4px;border:1px solid var(--kramer-border);object-fit:cover;display:block;';
+
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.innerHTML = '&times;';
+    removeBtn.title = 'Remove image';
+    removeBtn.style.cssText = 'position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;border:none;background:#dc3545;color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;';
+    removeBtn.addEventListener('click', function () {
+      imgPks.value = getPks().filter(function (p) { return p !== pk; }).join(',');
+      wrap.remove();
+    });
+
+    wrap.appendChild(img);
+    wrap.appendChild(removeBtn);
+    previews.appendChild(wrap);
+  }
+
+  ta.addEventListener('paste', function (e) {
+    if (!e.clipboardData) return;
+    var items = Array.from(e.clipboardData.items || []);
+    var imgItem = items.find(function (i) { return i.kind === 'file' && i.type.startsWith('image/'); });
+    if (!imgItem) return;
+    e.preventDefault();
+    var blob = imgItem.getAsFile();
+    var ext  = imgItem.type.split('/')[1] || 'png';
+    var fd   = new FormData();
+    fd.append('image', new File([blob], 'email-img-' + Date.now() + '.' + ext, { type: imgItem.type }));
+    fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    fetch('{% url "ticket_email_image_upload" ticket.pk %}', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.pk) addPreview(d.url, d.pk); });
+  });
 })();
 
 // ── Paste screenshot to attachments ──

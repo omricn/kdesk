@@ -63,6 +63,15 @@
       {% endif %}
     </button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-offboard-btn" data-bs-toggle="tab"
+            data-bs-target="#tab-offboard" type="button" role="tab">
+      <i class="bi bi-person-dash-fill me-1"></i>Employee Offboarding
+      {% if pending_offboarding_count %}
+        <span class="badge bg-danger ms-1" style="font-size:0.65rem;">{{ pending_offboarding_count }}</span>
+      {% endif %}
+    </button>
+  </li>
 
 </ul>
 
@@ -620,6 +629,155 @@
 
   </div>{# /tab-prov #}
 
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 3 — Employee Offboarding                                             -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div class="tab-pane fade" id="tab-offboard" role="tabpanel">
+
+    <div class="mb-3">
+      <p class="text-muted small mb-0">
+        Automatically offboards employees at 23:59 local time on their termination date when a HiBob termination email arrives.
+      </p>
+    </div>
+
+    {% if stuck_offboarding %}
+    <div class="alert alert-danger mb-3">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>
+      <strong>Possible stuck request:</strong>
+      Offboarding for <strong>{{ stuck_offboarding.employee_email }}</strong>
+      has been in <em>Running</em> state since {{ stuck_offboarding.claimed_at|date:"d M H:i" }}
+      — the KAPPIT agent may have crashed. You can <em>Cancel</em> it below, then check KAPPIT logs.
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-person-dash-fill me-1" style="color:var(--kramer-purple);"></i>
+        Offboarding Requests
+        {% if pending_offboarding_count %}
+          <span class="badge bg-danger ms-1">{{ pending_offboarding_count }} pending</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if recent_offboarding %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 prov-table" id="offboardTable">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Manager</th>
+                <th>Country / Dept</th>
+                <th>Termination Date</th>
+                <th>Scheduled At</th>
+                <th>Status</th>
+                <th>Ticket</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ob in recent_offboarding %}
+              <tr data-offboard-id="{{ ob.id }}" data-status="{{ ob.status }}">
+                <td>
+                  <div class="fw-semibold">{{ ob.employee_name|default:ob.employee_email }}</div>
+                  {% if ob.employee_name %}
+                  <div class="text-muted" style="font-size:0.75rem;">{{ ob.employee_email }}</div>
+                  {% endif %}
+                </td>
+                <td class="text-muted">{{ ob.direct_manager|default:"—" }}</td>
+                <td class="text-muted">{{ ob.country_origin|default:"—" }}{% if ob.department %} / {{ ob.department }}{% endif %}</td>
+                <td>{{ ob.termination_date|default:"—" }}</td>
+                <td class="text-nowrap">
+                  {% if ob.scheduled_for %}
+                    {% if ob.scheduled_for > now %}
+                      <span class="text-muted" style="font-size:0.8rem;">
+                        {{ ob.scheduled_for|date:"d M H:i" }} UTC
+                      </span>
+                      <div style="font-size:0.72rem;color:#6c757d;">scheduled</div>
+                    {% else %}
+                      <span style="font-size:0.8rem;">{{ ob.scheduled_for|date:"d M H:i" }} UTC</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted fst-italic" style="font-size:0.8rem;">immediately</span>
+                  {% endif %}
+                </td>
+
+                {# ── Status cell ── #}
+                <td class="offboard-status-cell">
+                  {% if ob.status == 'pending' %}
+                    {% if ob.scheduled_for and ob.scheduled_for > now %}
+                      <span class="badge bg-secondary">Waiting</span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark">Pending</span>
+                    {% endif %}
+                  {% elif ob.status == 'claimed' %}
+                    <span class="badge bg-info text-dark">
+                      <span class="spinner-border spinner-border-sm" style="width:.6rem;height:.6rem;"></span>
+                      Running
+                    </span>
+                    {% if ob.claimed_at %}
+                      <div class="text-muted mt-1" style="font-size:0.72rem;">since {{ ob.claimed_at|date:"H:i:s" }}</div>
+                    {% endif %}
+                  {% elif ob.status == 'completed' %}
+                    <span class="badge bg-success"><i class="bi bi-check-lg"></i> Done</span>
+                  {% elif ob.status == 'failed' %}
+                    <span class="badge bg-danger"><i class="bi bi-x-lg"></i> Failed</span>
+                    {% if ob.result_message %}
+                      <div class="text-danger mt-1" style="font-size:0.72rem;word-break:break-word;max-width:200px;">{{ ob.result_message }}</div>
+                    {% endif %}
+                  {% elif ob.status == 'review_needed' %}
+                    <span class="badge text-dark" style="background:#fff3cd;border:1px solid #ffc107;">
+                      <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Not Found in AD
+                    </span>
+                    {% if ob.result_message %}
+                      <div class="text-muted mt-1" style="font-size:0.72rem;">{{ ob.result_message }}</div>
+                    {% endif %}
+                  {% elif ob.status == 'cancelled' %}
+                    <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>Cancelled</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if ob.ticket %}
+                    <a href="{% url 'ticket_detail' ob.ticket.pk %}" class="text-decoration-none">#{{ ob.ticket.pk|stringformat:"04d" }}</a>
+                  {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+
+                <td class="text-muted text-nowrap">{{ ob.created_at|date:"d M H:i" }}</td>
+
+                <td class="text-nowrap">
+                  {% if ob.status in "pending,claimed,failed,review_needed" %}
+                    <form method="post" action="{% url 'hibob_sync_offboarding_cancel' ob.id %}" class="d-inline"
+                          onsubmit="return confirm('Cancel offboarding for {{ ob.employee_email }}?{% if ob.status == "claimed" %} The script may already be running — AD changes may already have occurred.{% endif %}')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size:0.7rem;">
+                        <i class="bi bi-x-lg"></i> Cancel
+                      </button>
+                    </form>
+                  {% endif %}
+                  {% if ob.result_log %}
+                    <a href="{% url 'hibob_sync_offboarding_log' ob.id %}" target="_blank"
+                       class="btn btn-xs btn-outline-secondary py-0 px-1 ms-1" style="font-size:0.7rem;">
+                      <i class="bi bi-file-text"></i> Log
+                    </a>
+                  {% endif %}
+                </td>
+
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">
+          No offboarding requests yet. They will appear here when HiBob termination emails arrive.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>{# /tab-offboard #}
+
 </div>{# /tab-content #}
 
 <!-- ── Preserve active tab across page loads ────────────────────────────────── -->
@@ -693,6 +851,57 @@
           }
         });
 
+        if (needsReload) window.location.reload();
+      })
+      .catch(function () {});
+  }
+
+  setInterval(poll, 3000);
+})();
+</script>
+
+<!-- ── Live offboarding status polling ──────────────────────────────────────── -->
+<script>
+(function () {
+  var table = document.getElementById('offboardTable');
+  if (!table) return;
+
+  var knownStatuses = {};
+  table.querySelectorAll('tr[data-offboard-id]').forEach(function (row) {
+    knownStatuses[row.dataset.offboardId] = row.dataset.status;
+  });
+  if (Object.keys(knownStatuses).length === 0) return;
+
+  function poll() {
+    fetch('{% url "hibob_sync_api_offboarding_statuses" %}')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var needsReload = false;
+        data.requests.forEach(function (req) {
+          var id = String(req.id);
+          var prev = knownStatuses[id];
+          if (prev === undefined) { needsReload = true; return; }
+          if (prev === req.status) return;
+          knownStatuses[id] = req.status;
+          if (req.status === 'claimed') {
+            var row = table.querySelector('tr[data-offboard-id="' + id + '"]');
+            if (row) {
+              row.dataset.status = 'claimed';
+              var cell = row.querySelector('.offboard-status-cell');
+              if (cell) {
+                var since = req.claimed_at ? new Date(req.claimed_at).toLocaleTimeString() : '';
+                cell.innerHTML =
+                  '<span class="badge bg-info text-dark">' +
+                    '<span class="spinner-border spinner-border-sm" style="width:.6rem;height:.6rem;"></span>' +
+                    ' Running</span>' +
+                  (since ? '<div class="text-muted mt-1" style="font-size:0.72rem;">since ' + since + '</div>' : '');
+              }
+            }
+          } else {
+            needsReload = true;
+          }
+        });
         if (needsReload) window.location.reload();
       })
       .catch(function () {});

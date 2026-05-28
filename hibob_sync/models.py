@@ -96,6 +96,57 @@ class ProvisioningSettings(models.Model):
         return f'Provisioning {"enabled" if self.enabled else "disabled"}'
 
 
+class OffboardingRequest(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_CLAIMED = 'claimed'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+    STATUS_REVIEW_NEEDED = 'review_needed'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('claimed', 'Claimed'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('review_needed', 'Review Needed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    ticket = models.ForeignKey(
+        'tickets.Ticket', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='offboarding_requests',
+    )
+
+    # Employee data from HiBob termination email
+    employee_email = models.EmailField()
+    employee_name = models.CharField(max_length=200, blank=True)
+    department = models.CharField(max_length=200, blank=True)
+    direct_manager = models.CharField(max_length=200, blank=True)
+    country_origin = models.CharField(max_length=100, blank=True)
+    termination_date = models.DateField(null=True, blank=True)
+    termination_status = models.CharField(max_length=100, blank=True)
+
+    # 23:59 local time on termination_date converted to UTC; null = run immediately
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+
+    # Workflow
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Result reported back by the PS script
+    result_success = models.BooleanField(null=True, blank=True)
+    result_log = models.TextField(blank=True)
+    result_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.employee_email} — {self.status}'
+
+
 class SyncTrigger(models.Model):
     STATUS_PENDING = 'pending'
     STATUS_RUNNING = 'running'

@@ -479,6 +479,35 @@ def _create_ticket_from_message(msg, client, mailbox):
     except Exception as exc:
         logger.warning('[EmailPoller] HiBob provisioning parse failed: %s', exc)
 
+    # Detect HiBob termination email → create an OffboardingRequest
+    _hibob_offboarding_data = None
+    try:
+        from hibob_sync.provisioning_utils import (
+            is_hibob_termination_email, parse_hibob_termination_body,
+            parse_hibob_termination_subject, get_offboarding_scheduled_for,
+        )
+        if is_hibob_termination_email(msg):
+            raw_body = msg.get('body', {}).get('content', '')
+            raw_ct   = msg.get('body', {}).get('contentType', '').lower()
+            term = parse_hibob_termination_body(raw_body, is_html=(raw_ct == 'html'))
+            emp_name = parse_hibob_termination_subject(subject)
+            if term.get('employee_email'):
+                scheduled_for = None
+                if term.get('termination_date') and term.get('country_origin'):
+                    try:
+                        scheduled_for = get_offboarding_scheduled_for(
+                            term['termination_date'], term['country_origin'],
+                        )
+                    except Exception as tz_exc:
+                        logger.warning('[EmailPoller] Could not compute scheduled_for: %s', tz_exc)
+                _hibob_offboarding_data = {**term, 'employee_name': emp_name, 'scheduled_for': scheduled_for}
+                logger.info(
+                    '[EmailPoller] HiBob termination email detected for %s (%s)',
+                    term.get('employee_email'), emp_name,
+                )
+    except Exception as exc:
+        logger.warning('[EmailPoller] HiBob termination parse failed: %s', exc)
+
     def _dispatch_post_create_tasks():
         try:
             from tasks.scheduled import send_requester_created, generate_ai_summary
@@ -520,6 +549,29 @@ def _create_ticket_from_message(msg, client, mailbox):
                 )
             except Exception as exc:
                 logger.error('[EmailPoller] Failed to create ProvisioningRequest: %s', exc)
+
+        if _hibob_offboarding_data:
+            try:
+                from hibob_sync.models import OffboardingRequest
+                d = _hibob_offboarding_data
+                OffboardingRequest.objects.create(
+                    ticket_id=_ticket_pk,
+                    employee_email=d['employee_email'],
+                    employee_name=d.get('employee_name', ''),
+                    department=d.get('department', ''),
+                    direct_manager=d.get('direct_manager', ''),
+                    country_origin=d.get('country_origin', ''),
+                    termination_date=d.get('termination_date'),
+                    termination_status=d.get('termination_status', ''),
+                    scheduled_for=d.get('scheduled_for'),
+                    status='pending',
+                )
+                logger.info(
+                    '[EmailPoller] OffboardingRequest created for %s (ticket #%s)',
+                    d['employee_email'], _ticket_pk,
+                )
+            except Exception as exc:
+                logger.error('[EmailPoller] Failed to create OffboardingRequest: %s', exc)
 
     # Use on_commit so tasks are only dispatched after the enclosing transaction
     # commits — dispatching inside an uncommitted atomic() risks queuing a task

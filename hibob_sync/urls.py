@@ -22,4 +22,12 @@ urlpatterns = [
     path('hibob-sync/api/provisioning/<int:req_id>/data/', views.api_provisioning_data, name='hibob_sync_api_provisioning_data'),
     path('hibob-sync/api/provisioning/claim/<int:req_id>/', views.api_provisioning_claim, name='hibob_sync_api_provisioning_claim'),
     path('hibob-sync/api/provisioning/report/', views.api_provisioning_report, name='hibob_sync_api_provisioning_report'),
+    # Agent-facing API — offboarding
+    path('hibob-sync/api/offboarding/pending/', views.api_offboarding_pending, name='hibob_sync_api_offboarding_pending'),
+    path('hibob-sync/api/offboarding/claim/<int:req_id>/', views.api_offboarding_claim, name='hibob_sync_api_offboarding_claim'),
+    path('hibob-sync/api/offboarding/report/', views.api_offboarding_report, name='hibob_sync_api_offboarding_report'),
+    # Offboarding UI actions
+    path('hibob-sync/offboarding/<int:req_id>/cancel/', views.offboarding_cancel, name='hibob_sync_offboarding_cancel'),
+    path('hibob-sync/offboarding/<int:req_id>/log/', views.offboarding_log, name='hibob_sync_offboarding_log'),
+    path('hibob-sync/api/offboarding/statuses/', views.api_offboarding_statuses, name='hibob_sync_api_offboarding_statuses'),
 ]

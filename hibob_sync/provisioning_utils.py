@@ -236,3 +236,150 @@ def parse_hibob_email_body(body: str, is_html: bool) -> dict:
         'create_salesforce_ticket':    fields.get('salesforce_raw', '').strip().lower() == 'yes',
         'salesforce_country_permission': fields.get('country_permission', ''),
     }
+
+
+# ---------------------------------------------------------------------------
+# Termination email parser (HiBob offboarding flow)
+# ---------------------------------------------------------------------------
+
+# Country name (as HiBob sends it) → IANA timezone
+COUNTRY_TIMEZONE = {
+    'israel':                       'Asia/Jerusalem',
+    'united states':                'America/New_York',
+    'usa':                          'America/New_York',
+    'united kingdom':               'Europe/London',
+    'uk':                           'Europe/London',
+    'germany':                      'Europe/Berlin',
+    'france':                       'Europe/Paris',
+    'india':                        'Asia/Kolkata',
+    'australia':                    'Australia/Sydney',
+    'singapore':                    'Asia/Singapore',
+    'china':                        'Asia/Shanghai',
+    'hong kong':                    'Asia/Hong_Kong',
+    'taiwan':                       'Asia/Taipei',
+    'korea':                        'Asia/Seoul',
+    'south korea':                  'Asia/Seoul',
+    'japan':                        'Asia/Tokyo',
+    'netherlands':                  'Europe/Amsterdam',
+    'sweden':                       'Europe/Stockholm',
+    'finland':                      'Europe/Helsinki',
+    'spain':                        'Europe/Madrid',
+    'italy':                        'Europe/Rome',
+    'brazil':                       'America/Sao_Paulo',
+    'mexico':                       'America/Mexico_City',
+    'canada':                       'America/Toronto',
+    'argentina':                    'America/Argentina/Buenos_Aires',
+    'chile':                        'America/Santiago',
+    'colombia':                     'America/Bogota',
+    'peru':                         'America/Lima',
+    'new zealand':                  'Pacific/Auckland',
+    'uae':                          'Asia/Dubai',
+    'united arab emirates':         'Asia/Dubai',
+}
+
+_TERMINATION_FIELD_MAP = {
+    'department':          'department',
+    'direct manager':      'direct_manager',
+    'country origin':      'country_origin',
+    'date of termination': 'termination_date_raw',
+    'employee email':      'employee_email',
+    'status':              'termination_status',
+}
+
+# Matches "Key - Value." or "Key- Value." (no space before dash in "Date of termination-")
+_TERMINATION_LINE_RE = re.compile(r'^(.+?)\s*-\s*(.+?)\.?\s*$')
+
+_HIBOB_TERMINATION_SUBJECT_RE = re.compile(r'employee\s+termination', re.IGNORECASE)
+
+_TERMINATION_SUBJECT_NAME_RE = re.compile(
+    r'employee\s+termination\s*-\s*(.+?)\s+-\s+\d{2}/\d{2}/\d{4}',
+    re.IGNORECASE,
+)
+
+
+def is_hibob_termination_email(msg: dict) -> bool:
+    subject = msg.get('subject', '')
+    sender_email = msg.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+    return bool(_HIBOB_TERMINATION_SUBJECT_RE.search(subject)) and 'hibob.com' in sender_email
+
+
+def parse_hibob_termination_subject(subject: str) -> str:
+    """Extract employee full name from the termination email subject line."""
+    m = _TERMINATION_SUBJECT_NAME_RE.search(subject)
+    return m.group(1).strip() if m else ''
+
+
+def parse_hibob_termination_body(body: str, is_html: bool) -> dict:
+    """
+    Parse the HiBob termination notification body and return a dict of fields.
+    Handles both HTML and plain-text bodies.
+    """
+    if is_html:
+        text = re.sub(r'<br\s*/?>', '\n', body, flags=re.IGNORECASE)
+        text = re.sub(r'</(p|div|li|tr)>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<[^>]+>', '', text)
+        import html as _html
+        text = _html.unescape(text)
+    else:
+        text = body
+
+    fields = {}
+    for line in text.splitlines():
+        line = line.strip()
+        m = _TERMINATION_LINE_RE.match(line)
+        if not m:
+            continue
+        raw_key = m.group(1).strip().lower()
+        value = m.group(2).strip()
+        if raw_key in _TERMINATION_FIELD_MAP:
+            dest = _TERMINATION_FIELD_MAP[raw_key]
+            if dest not in fields:  # first occurrence wins
+                fields[dest] = value
+
+    termination_date = None
+    raw_date = fields.pop('termination_date_raw', '')
+    if raw_date:
+        raw_date = raw_date.split()[0]
+        for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y'):
+            try:
+                termination_date = datetime.strptime(raw_date, fmt).date()
+                break
+            except ValueError:
+                pass
+
+    return {
+        'employee_email':     fields.get('employee_email', ''),
+        'department':         fields.get('department', ''),
+        'direct_manager':     fields.get('direct_manager', ''),
+        'country_origin':     fields.get('country_origin', ''),
+        'termination_date':   termination_date,
+        'termination_status': fields.get('termination_status', ''),
+    }
+
+
+def get_offboarding_scheduled_for(termination_date, country_origin: str):
+    """
+    Return the UTC datetime for 23:59:00 on termination_date in the employee's local timezone.
+    Falls back to UTC if the country is unknown or timezone lookup fails.
+    """
+    from datetime import time as dtime
+    try:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        tz_name = COUNTRY_TIMEZONE.get(country_origin.lower().strip(), 'UTC')
+        try:
+            tz = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, KeyError):
+            tz = ZoneInfo('UTC')
+        local_dt = datetime(
+            termination_date.year, termination_date.month, termination_date.day,
+            23, 59, 0,
+        )
+        import datetime as _dt_mod
+        aware_local = local_dt.replace(tzinfo=tz)
+        return aware_local.astimezone(_dt_mod.timezone.utc)
+    except Exception as exc:
+        logger.warning('[Offboarding] Timezone calculation failed (%s) — using UTC', exc)
+        return datetime(
+            termination_date.year, termination_date.month, termination_date.day,
+            23, 59, 0,
+        ).replace(tzinfo=__import__('datetime').timezone.utc)

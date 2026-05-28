@@ -1070,8 +1070,51 @@ def ticket_send_email(request, pk):
 
     from django.utils.html import escape as _esc
     portal_url = f'{settings.SITE_URL}/portal/tickets/{ticket.pk}/'
+
+    if SystemSetting.get('emails_enabled', '1') != '1':
+        messages.warning(request, 'Email sending is currently disabled. Re-enable it in Settings.')
+        return redirect('ticket_detail', pk=pk)
+
+    cc_raw = request.POST.get('cc_emails', '')
+    cc_emails = [e.strip() for e in cc_raw.split(',') if e.strip()] if cc_raw else []
+
+    # Inline images pasted into the email body — read bytes and use CID references
+    email_img_pks_raw = request.POST.get('email_img_pks', '')
+    email_img_pks = [int(p) for p in email_img_pks_raw.split(',') if p.strip().isdigit()] if email_img_pks_raw else []
+    inline_images = []
+    inline_imgs_html = ''
+    if email_img_pks:
+        img_atts = list(TicketAttachment.objects.filter(pk__in=email_img_pks, ticket=ticket))
+        img_tags = []
+        for att in img_atts:
+            cid = f'email-img-{att.pk}'
+            content_type = 'image/png'
+            if att.filename.lower().endswith('.jpg') or att.filename.lower().endswith('.jpeg'):
+                content_type = 'image/jpeg'
+            elif att.filename.lower().endswith('.gif'):
+                content_type = 'image/gif'
+            elif att.filename.lower().endswith('.webp'):
+                content_type = 'image/webp'
+            try:
+                with att.file.open('rb') as fh:
+                    image_bytes = fh.read()
+            except Exception:
+                continue
+            inline_images.append({
+                'content_id': cid,
+                'name': att.filename,
+                'content_bytes': image_bytes,
+                'content_type': content_type,
+            })
+            img_tags.append(
+                f'<img src="cid:{cid}" style="max-width:100%;margin:8px 0;display:block;border-radius:4px;">'
+            )
+        if img_tags:
+            inline_imgs_html = f'<div style="margin-top:12px;">{"".join(img_tags)}</div>'
+
     html_body = f"""
     <p>{_esc(body).replace(chr(10), '<br>')}</p>
+    {inline_imgs_html}
     <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
     <p style="margin:0 0 12px;">
       <a href="{portal_url}"
@@ -1086,13 +1129,6 @@ def ticket_send_email(request, pk):
       Ticket reference: <strong>#{ticket.pk:04d}</strong>
     </p>
     """
-
-    if SystemSetting.get('emails_enabled', '1') != '1':
-        messages.warning(request, 'Email sending is currently disabled. Re-enable it in Settings.')
-        return redirect('ticket_detail', pk=pk)
-
-    cc_raw = request.POST.get('cc_emails', '')
-    cc_emails = [e.strip() for e in cc_raw.split(',') if e.strip()] if cc_raw else []
 
     uploaded_files = request.FILES.getlist('email_attachments')
     attachments = []
@@ -1116,16 +1152,26 @@ def ticket_send_email(request, pk):
             body_html=html_body,
             cc_emails=cc_emails or None,
             attachments=attachments or None,
+            inline_images=inline_images or None,
         )
     except Exception as exc:
         messages.error(request, f'Failed to send email: {exc}')
         return redirect('ticket_detail', pk=pk)
 
+    # Store body for correspondence display — use HTML when images are embedded
+    if inline_imgs_html:
+        body_for_record = f'<p style="white-space:pre-wrap;margin:0 0 8px;">{_esc(body)}</p>{inline_imgs_html}'
+        body_is_html = True
+    else:
+        body_for_record = body
+        body_is_html = False
+
     TicketEmail.objects.create(
         ticket=ticket,
         direction=TicketEmail.DIRECTION_SENT,
         subject=subject,
-        body=body,
+        body=body_for_record,
+        body_is_html=body_is_html,
         from_email=settings.SERVICEDESK_EMAIL,
         to_email=to_email,
         cc_emails=', '.join(cc_emails) if cc_emails else '',
@@ -1225,6 +1271,27 @@ def ticket_paste_attachment(request, pk):
         uploaded_by=request.user,
     )
     return JsonResponse({'ok': True, 'name': att.filename, 'pk': att.pk})
+
+
+@admin_required
+@require_POST
+def ticket_email_image_upload(request, pk):
+    """Accept a pasted screenshot for inline embedding in an outgoing email."""
+    ticket = get_object_or_404(Ticket, pk=pk)
+    f = request.FILES.get('image')
+    if not f:
+        return JsonResponse({'error': 'No file'}, status=400)
+    if f.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'File exceeds 10 MB limit'}, status=400)
+    att = TicketAttachment.objects.create(
+        ticket=ticket,
+        filename=f.name,
+        file=f,
+        file_size=f.size,
+        is_inline=True,
+        uploaded_by=request.user,
+    )
+    return JsonResponse({'url': f'/attachments/{att.pk}/download/?inline=1', 'pk': att.pk})
 
 
 # ── New-ticket poll ──────────────────────────────────────────────────────────

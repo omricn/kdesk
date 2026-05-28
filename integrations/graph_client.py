@@ -95,11 +95,14 @@ class GraphClient:
         r.raise_for_status()
 
     def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str,
-                   bcc_email: str = None, attachments: list = None, cc_emails: list = None):
+                   bcc_email: str = None, attachments: list = None, cc_emails: list = None,
+                   inline_images: list = None):
         """Send an email from the servicedesk mailbox.
 
         attachments: list of dicts with keys 'name', 'content_bytes' (bytes), 'content_type' (str).
         cc_emails: list of email address strings to CC.
+        inline_images: list of dicts with keys 'content_id' (str), 'name', 'content_bytes',
+                       'content_type'. Referenced in body_html as <img src="cid:{content_id}">.
         """
         import base64
         path = f'/users/{from_mailbox}/sendMail'
@@ -112,8 +115,10 @@ class GraphClient:
             message['bccRecipients'] = [{'emailAddress': {'address': bcc_email}}]
         if cc_emails:
             message['ccRecipients'] = [{'emailAddress': {'address': e}} for e in cc_emails]
+
+        all_attachments = []
         if attachments:
-            message['attachments'] = [
+            all_attachments += [
                 {
                     '@odata.type': '#microsoft.graph.fileAttachment',
                     'name': att['name'],
@@ -122,6 +127,20 @@ class GraphClient:
                 }
                 for att in attachments
             ]
+        if inline_images:
+            all_attachments += [
+                {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': img['name'],
+                    'contentType': img.get('content_type', 'image/png'),
+                    'contentBytes': base64.b64encode(img['content_bytes']).decode('ascii'),
+                    'isInline': True,
+                    'contentId': img['content_id'],
+                }
+                for img in inline_images
+            ]
+        if all_attachments:
+            message['attachments'] = all_attachments
         self.post(path, {'message': message})
 
     # ── Users / Groups ────────────────────────────────────────────────────────

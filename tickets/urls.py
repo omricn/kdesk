@@ -15,6 +15,7 @@ urlpatterns = [
     path('attachments/<int:pk>/delete/', views.delete_attachment, name='delete_attachment'),
     path('tickets/<int:pk>/solution-image/', views.solution_image_upload, name='solution_image_upload'),
     path('tickets/<int:pk>/paste-attachment/', views.ticket_paste_attachment, name='ticket_paste_attachment'),
+    path('tickets/<int:pk>/email-image/', views.ticket_email_image_upload, name='ticket_email_image_upload'),
     path('comments/<int:pk>/edit/', views.edit_comment, name='edit_comment'),
     path('tickets/poll-new/', views.ticket_poll_new, name='ticket_poll_new'),
     path('tickets/notification-sound/', views.save_notification_sound, name='save_notification_sound'),

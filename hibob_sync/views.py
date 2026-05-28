@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import models
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .log_parser import parse_log
-from .models import ProvisioningRequest, ProvisioningSettings, SyncChange, SyncRun, SyncTrigger
+from .models import OffboardingRequest, ProvisioningRequest, ProvisioningSettings, SyncChange, SyncRun, SyncTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,15 @@ def hibob_sync_dashboard(request):
         claimed_at__lt=stuck_threshold,
     ).first()
 
+    recent_offboarding = OffboardingRequest.objects.select_related('ticket').all()[:20]
+    pending_offboarding_count = OffboardingRequest.objects.filter(
+        status__in=['pending', 'claimed', 'review_needed'],
+    ).count()
+    stuck_offboarding = OffboardingRequest.objects.filter(
+        status='claimed',
+        claimed_at__lt=timezone.now() - timedelta(minutes=15),
+    ).first()
+
     return render(request, 'hibob_sync/dashboard.html', {
         'last_run': last_run,
         'active_trigger': active_trigger,
@@ -73,6 +83,9 @@ def hibob_sync_dashboard(request):
         'pending_provisioning_count': pending_provisioning_count,
         'active_provisioning': active_provisioning,
         'stuck_provisioning': stuck_provisioning,
+        'recent_offboarding': recent_offboarding,
+        'pending_offboarding_count': pending_offboarding_count,
+        'stuck_offboarding': stuck_offboarding,
         'now': timezone.now(),
     })
 
@@ -795,3 +808,286 @@ def provisioning_resume(request, req_id):
     return redirect('hibob_sync_dashboard')
 
 
+# ── Offboarding Agent API Views ───────────────────────────────────────────────
+
+@csrf_exempt
+def api_offboarding_pending(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    now = timezone.now()
+    req = OffboardingRequest.objects.filter(
+        status='pending',
+    ).filter(
+        models.Q(scheduled_for__lte=now) | models.Q(scheduled_for__isnull=True),
+    ).order_by('created_at').first()
+    if not req:
+        return JsonResponse({'none': True}, status=404)
+
+    return JsonResponse({
+        'id':              req.id,
+        'employee_email':  req.employee_email,
+        'employee_name':   req.employee_name,
+        'direct_manager':  req.direct_manager,
+        'country_origin':  req.country_origin,
+        'termination_date': req.termination_date.isoformat() if req.termination_date else '',
+    })
+
+
+@csrf_exempt
+def api_offboarding_claim(request, req_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    updated = OffboardingRequest.objects.filter(id=req_id, status='pending').update(
+        status='claimed',
+        claimed_at=timezone.now(),
+    )
+    if not updated:
+        return JsonResponse({'error': 'Already claimed or not found'}, status=409)
+    return JsonResponse({'ok': True})
+
+
+@csrf_exempt
+def api_offboarding_report(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    req_id = data.get('req_id')
+    if not req_id:
+        return JsonResponse({'error': 'req_id is required'}, status=400)
+
+    success = data.get('success', True)
+    result_log = data.get('log', '')
+    result_message = data.get('message', '')
+
+    EMPLOYEE_NOT_FOUND_PREFIX = 'EMPLOYEE_NOT_FOUND:'
+    is_not_found = isinstance(result_message, str) and result_message.startswith(EMPLOYEE_NOT_FOUND_PREFIX)
+
+    if is_not_found:
+        new_status = 'review_needed'
+    else:
+        new_status = 'completed' if success else 'failed'
+
+    updated = OffboardingRequest.objects.filter(id=req_id, status='claimed').update(
+        status=new_status,
+        completed_at=timezone.now(),
+        result_success=success,
+        result_log=result_log,
+        result_message=result_message,
+    )
+    if not updated:
+        return JsonResponse({'error': 'Request not found or not in claimed state'}, status=409)
+
+    try:
+        req = OffboardingRequest.objects.select_related('ticket').get(id=req_id)
+        if is_not_found:
+            _post_offboarding_ticket_comment(req, outcome='not_found')
+            _send_offboarding_notification(req, outcome='not_found')
+        elif success:
+            _post_offboarding_ticket_comment(req, outcome='success')
+            _send_offboarding_notification(req, outcome='success')
+        else:
+            _post_offboarding_ticket_comment(req, outcome='failed')
+            _send_offboarding_notification(req, outcome='failed', result_log=result_log)
+    except Exception as exc:
+        logger.error('[Offboarding] Post-report actions failed for req #%s: %s', req_id, exc)
+
+    return JsonResponse({'ok': True})
+
+
+# ── Offboarding UI Views ──────────────────────────────────────────────────────
+
+@require_POST
+def offboarding_cancel(request, req_id):
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    CANCELLABLE = ('pending', 'claimed', 'failed', 'review_needed')
+    updated = OffboardingRequest.objects.filter(id=req_id, status__in=CANCELLABLE).update(
+        status='cancelled',
+        completed_at=timezone.now(),
+    )
+    if updated:
+        messages.success(request, 'Offboarding request cancelled.')
+    else:
+        messages.warning(request, 'Could not cancel — request may already be completed or cancelled.')
+    return redirect('hibob_sync_dashboard')
+
+
+def offboarding_log(request, req_id):
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    req = get_object_or_404(OffboardingRequest, id=req_id)
+    content = req.result_log or '(no log available for this offboarding request)'
+    return HttpResponse(content, content_type='text/plain; charset=utf-8')
+
+
+def api_offboarding_statuses(request):
+    if not request.user.is_authenticated or not request.user.is_superuser:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    recent = OffboardingRequest.objects.all()[:20]
+    return JsonResponse({
+        'requests': [
+            {
+                'id':         r.id,
+                'status':     r.status,
+                'claimed_at': r.claimed_at.isoformat() if r.claimed_at else None,
+            }
+            for r in recent
+        ]
+    })
+
+
+# ── Offboarding helpers ───────────────────────────────────────────────────────
+
+def _post_offboarding_ticket_comment(req, outcome='success'):
+    try:
+        if not req.ticket:
+            return
+        from tickets.models import TicketComment
+        if outcome == 'success':
+            body = (
+                f'Employee offboarding completed automatically.\n'
+                f'Account: {req.employee_email}\n'
+                f'AD account disabled, moved to deletion OU. Mailbox converted to Shared.\n'
+            )
+        elif outcome == 'not_found':
+            body = (
+                f'Offboarding could not proceed — employee account not found in AD.\n'
+                f'Searched by email: {req.employee_email}\n'
+                f'Please verify the account manually and handle offboarding steps if needed.\n'
+            )
+        else:
+            body = (
+                f'Offboarding script failed for: {req.employee_email}\n'
+                f'See the log in the Kdesk offboarding dashboard for details.\n'
+            )
+        TicketComment.objects.create(ticket=req.ticket, author=None, body=body, is_internal=True)
+    except Exception as exc:
+        logger.warning('[Offboarding] Could not post ticket comment: %s', exc)
+
+
+def _send_offboarding_notification(req, outcome='success', result_log=''):
+    try:
+        from integrations.graph_client import get_client
+
+        dashboard_url = 'https://kdesk.kramerav.com/hibob-sync/#tab-offboard'
+        ticket_url = (
+            f'https://kdesk.kramerav.com/tickets/{req.ticket.pk}/'
+            if req.ticket else None
+        )
+
+        if outcome == 'success':
+            subject      = f'Offboarded — {req.employee_name or req.employee_email}'
+            header_color = '#28a745'
+            header_title = 'Employee Offboarding Completed'
+        elif outcome == 'not_found':
+            subject      = f'Offboarding Blocked — Employee Not Found in AD ({req.employee_email})'
+            header_color = '#fd7e14'
+            header_title = 'Offboarding Blocked — Employee Not Found'
+        else:
+            subject      = f'Offboarding FAILED — {req.employee_name or req.employee_email}'
+            header_color = '#dc3545'
+            header_title = 'Employee Offboarding Failed'
+
+        td_k = 'style="padding:6px 12px;font-weight:bold;color:#555;white-space:nowrap;vertical-align:top;"'
+        td_v = 'style="padding:6px 12px;"'
+        rows = [
+            ('Employee',         req.employee_name or '—'),
+            ('Email',            req.employee_email),
+            ('Department',       req.department or '—'),
+            ('Manager',          req.direct_manager or '—'),
+            ('Country',          req.country_origin or '—'),
+            ('Termination Date', str(req.termination_date) if req.termination_date else '—'),
+        ]
+        rows_html = ''
+        for i, (label, value) in enumerate(rows):
+            row_style = ' style="background:#f9f9f9;"' if i % 2 else ''
+            rows_html += f'<tr{row_style}><td {td_k}>{label}</td><td {td_v}>{value}</td></tr>'
+
+        if outcome == 'not_found':
+            note_html = (
+                '<p style="color:#856404;background:#fff3cd;border:1px solid #ffc107;'
+                'border-radius:4px;padding:10px 14px;margin-top:16px;font-size:13px;">'
+                '<strong>Action required:</strong> The employee\'s AD account was not found by email address. '
+                'Please verify the account exists in AD and handle offboarding steps manually if needed.'
+                '</p>'
+            )
+        else:
+            note_html = ''
+
+        log_html = ''
+        if outcome == 'failed' and result_log:
+            all_lines = result_log.splitlines()
+            tail = all_lines[-50:] if len(all_lines) > 50 else all_lines
+            line_parts = []
+            for line in tail:
+                escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if '[ERROR]' in line:
+                    line_parts.append(f'<span style="color:#dc3545;font-weight:bold;">{escaped}</span>')
+                elif '[WARN]' in line:
+                    line_parts.append(f'<span style="color:#fd7e14;">{escaped}</span>')
+                else:
+                    line_parts.append(escaped)
+            omitted = len(all_lines) - len(tail)
+            omitted_note = (
+                f'<div style="color:#888;font-size:11px;margin-bottom:4px;">'
+                f'(first {omitted} lines omitted — <a href="{dashboard_url}" style="color:#0078d4;">view full log in dashboard</a>)'
+                f'</div>'
+            ) if omitted else ''
+            log_block = '\n'.join(line_parts)
+            log_html = (
+                f'<div style="margin-top:16px;">'
+                f'<div style="font-weight:bold;color:#555;margin-bottom:6px;font-size:13px;">Script Log</div>'
+                f'{omitted_note}'
+                f'<pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;'
+                f'font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;'
+                f'word-break:break-all;margin:0;">{log_block}</pre>'
+                f'</div>'
+            )
+
+        links_html = f'<a href="{dashboard_url}" style="color:#0078d4;text-decoration:none;">View Dashboard</a>'
+        if ticket_url:
+            links_html += (
+                f' &nbsp;&middot;&nbsp; '
+                f'<a href="{ticket_url}" style="color:#0078d4;text-decoration:none;">View Ticket</a>'
+            )
+
+        body_html = (
+            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;">'
+            f'<div style="background:{header_color};color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
+            f'<h2 style="margin:0;font-size:17px;font-weight:600;">{header_title}</h2></div>'
+            '<div style="border:1px solid #ddd;border-top:none;padding:20px 20px 16px;'
+            'border-radius:0 0 6px 6px;background:#fafafa;">'
+            '<table style="border-collapse:collapse;width:100%;background:#fff;'
+            f'border:1px solid #eee;border-radius:4px;">{rows_html}</table>'
+            f'{note_html}{log_html}'
+            f'<p style="margin:14px 0 0;font-size:13px;color:#555;">{links_html}</p>'
+            '</div></div>'
+        )
+
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email='Kdesk_Superusers@kramerav.com',
+            subject=subject,
+            body_html=body_html,
+        )
+        logger.info('[Offboarding] Notification sent for req #%s (outcome=%s)', req.id, outcome)
+    except Exception as exc:
+        logger.warning('[Offboarding] Could not send notification: %s', exc)
