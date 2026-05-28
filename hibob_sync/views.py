@@ -947,6 +947,7 @@ def api_offboarding_report(request):
         elif success:
             _post_offboarding_ticket_comment(req, outcome='success')
             _send_offboarding_notification(req, outcome='success')
+            _create_offboarding_system_tickets(req)
         else:
             _post_offboarding_ticket_comment(req, outcome='failed')
             _send_offboarding_notification(req, outcome='failed', result_log=result_log)
@@ -1003,6 +1004,42 @@ def api_offboarding_statuses(request):
 
 
 # ── Offboarding helpers ───────────────────────────────────────────────────────
+
+def _create_offboarding_system_tickets(req):
+    """Create Priority and Salesforce termination tickets after successful offboarding."""
+    from tickets.models import Ticket, TicketCategory, TicketSubCategory, TicketItem
+    full_name = req.employee_name.strip() if req.employee_name else req.employee_email
+
+    for system in ('Priority', 'Salesforce'):
+        try:
+            cat = TicketCategory.objects.get(name='IT')
+            subcat = TicketSubCategory.objects.get(category=cat, name=system)
+            item, _ = TicketItem.objects.get_or_create(subcategory=subcat, name='Terminate Employee')
+
+            description = (
+                f'Please terminate the {system} account for the following employee '
+                f'if such an account exists.\n\n'
+                f'Full name: {full_name}\n'
+                f'Kramer email: {req.employee_email}\n'
+            )
+
+            ticket = Ticket(
+                title=f'TERMINATE USER – {system} – {full_name}',
+                description=description,
+                description_is_html=False,
+                requester_email=req.employee_email,
+                requester_name=full_name,
+                source=Ticket.SOURCE_MANUAL,
+                category=cat,
+                subcategory=subcat,
+                ticket_item=item,
+                assignee=subcat.assignee,
+            )
+            ticket.save()
+            logger.info('[Offboarding] Created %s termination ticket #%s for %s', system, ticket.pk, req.employee_email)
+        except Exception as exc:
+            logger.warning('[Offboarding] Could not create %s termination ticket: %s', system, exc)
+
 
 def _post_offboarding_ticket_comment(req, outcome='success'):
     try:
