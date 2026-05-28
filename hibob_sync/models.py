@@ -147,6 +147,27 @@ class OffboardingRequest(models.Model):
         return f'{self.employee_email} — {self.status}'
 
 
+class OffboardingSettings(models.Model):
+    """Singleton — always pk=1. Controls whether the offboarding pipeline is active."""
+    enabled = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+    )
+
+    class Meta:
+        verbose_name = 'Offboarding Settings'
+        verbose_name_plural = 'Offboarding Settings'
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return f'Offboarding {"enabled" if self.enabled else "disabled"}'
+
+
 class SyncTrigger(models.Model):
     STATUS_PENDING = 'pending'
     STATUS_RUNNING = 'running'

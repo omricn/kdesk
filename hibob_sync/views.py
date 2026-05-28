@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .log_parser import parse_log
-from .models import OffboardingRequest, ProvisioningRequest, ProvisioningSettings, SyncChange, SyncRun, SyncTrigger
+from .models import OffboardingRequest, OffboardingSettings, ProvisioningRequest, ProvisioningSettings, SyncChange, SyncRun, SyncTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,7 @@ def hibob_sync_dashboard(request):
         claimed_at__lt=stuck_threshold,
     ).first()
 
+    offboard_settings = OffboardingSettings.get()
     recent_offboarding = OffboardingRequest.objects.select_related('ticket').all()[:20]
     pending_offboarding_count = OffboardingRequest.objects.filter(
         status__in=['pending', 'claimed', 'review_needed'],
@@ -83,6 +84,7 @@ def hibob_sync_dashboard(request):
         'pending_provisioning_count': pending_provisioning_count,
         'active_provisioning': active_provisioning,
         'stuck_provisioning': stuck_provisioning,
+        'offboard_settings': offboard_settings,
         'recent_offboarding': recent_offboarding,
         'pending_offboarding_count': pending_offboarding_count,
         'stuck_offboarding': stuck_offboarding,
@@ -808,6 +810,22 @@ def provisioning_resume(request, req_id):
     return redirect('hibob_sync_dashboard')
 
 
+@require_POST
+def hibob_sync_offboarding_toggle(request):
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    offboard_settings = OffboardingSettings.get()
+    offboard_settings.enabled = not offboard_settings.enabled
+    offboard_settings.updated_by = request.user
+    offboard_settings.save()
+
+    state = 'enabled' if offboard_settings.enabled else 'disabled'
+    messages.success(request, f'Employee offboarding {state}.')
+    return redirect('hibob_sync_dashboard')
+
+
 # ── Offboarding Agent API Views ───────────────────────────────────────────────
 
 @csrf_exempt
@@ -816,6 +834,9 @@ def api_offboarding_pending(request):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     if not _check_api_key(request):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    if not OffboardingSettings.get().enabled:
+        return JsonResponse({'none': True}, status=404)
 
     now = timezone.now()
     req = OffboardingRequest.objects.filter(

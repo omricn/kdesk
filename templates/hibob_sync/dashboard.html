@@ -634,11 +634,37 @@
   <!-- ════════════════════════════════════════════════════════════════════════ -->
   <div class="tab-pane fade" id="tab-offboard" role="tabpanel">
 
-    <div class="mb-3">
-      <p class="text-muted small mb-0">
-        Automatically offboards employees at 23:59 local time on their termination date when a HiBob termination email arrives.
-      </p>
+    <!-- Toggle + status header -->
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <div>
+        <p class="text-muted small mb-0">
+          Automatically offboards employees at 23:59 local time on their termination date when a HiBob termination email arrives.
+          {% if offboard_settings.updated_by %}
+            Last changed by <strong>{{ offboard_settings.updated_by.display_name|default:offboard_settings.updated_by.email }}</strong>.
+          {% endif %}
+        </p>
+      </div>
+      <form method="post" action="{% url 'hibob_sync_offboarding_toggle' %}"
+            {% if offboard_settings.enabled %}onsubmit="return confirm('Disable automatic employee offboarding?')"{% endif %}>
+        {% csrf_token %}
+        {% if offboard_settings.enabled %}
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="bi bi-toggle2-on me-1"></i>Enabled — click to disable
+          </button>
+        {% else %}
+          <button type="submit" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-toggle2-off me-1"></i>Disabled — click to enable
+          </button>
+        {% endif %}
+      </form>
     </div>
+
+    {% if not offboard_settings.enabled %}
+    <div class="alert alert-warning mb-3">
+      <i class="bi bi-pause-circle-fill me-1"></i>
+      Offboarding is <strong>disabled</strong>. Termination emails will be detected and logged but the agent will not execute them until you enable it.
+    </div>
+    {% endif %}
 
     {% if stuck_offboarding %}
     <div class="alert alert-danger mb-3">
