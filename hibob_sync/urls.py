@@ -23,6 +23,7 @@ urlpatterns = [
     path('hibob-sync/api/provisioning/claim/<int:req_id>/', views.api_provisioning_claim, name='hibob_sync_api_provisioning_claim'),
     path('hibob-sync/api/provisioning/report/', views.api_provisioning_report, name='hibob_sync_api_provisioning_report'),
     path('hibob-sync/offboarding/toggle/', views.hibob_sync_offboarding_toggle, name='hibob_sync_offboarding_toggle'),
+    path('hibob-sync/offboarding/trigger/', views.offboarding_manual_trigger, name='hibob_sync_offboarding_trigger'),
     # Agent-facing API — offboarding
     path('hibob-sync/api/offboarding/pending/', views.api_offboarding_pending, name='hibob_sync_api_offboarding_pending'),
     path('hibob-sync/api/offboarding/claim/<int:req_id>/', views.api_offboarding_claim, name='hibob_sync_api_offboarding_claim'),

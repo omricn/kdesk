@@ -666,6 +666,45 @@
     </div>
     {% endif %}
 
+    <!-- Manual trigger -->
+    <div class="card mb-3">
+      <div class="card-header fw-semibold" style="font-size:0.85rem;">
+        <i class="bi bi-play-circle me-1" style="color:var(--kramer-purple);"></i>Manual Offboarding Trigger
+      </div>
+      <div class="card-body py-3">
+        <form method="post" action="{% url 'hibob_sync_offboarding_trigger' %}"
+              onsubmit="return confirm('Run offboarding for ' + this.employee_email.value + '? This will disable the AD account, convert the mailbox to Shared, and remove all group memberships.')">
+          {% csrf_token %}
+          <div class="row g-2 align-items-end">
+            <div class="col-12 col-sm-4">
+              <label class="form-label form-label-sm mb-1">Employee Email <span class="text-danger">*</span></label>
+              <input type="email" name="employee_email" class="form-control form-control-sm"
+                     placeholder="user@kramerav.com" required>
+            </div>
+            <div class="col-12 col-sm-4">
+              <label class="form-label form-label-sm mb-1">Manager Display Name <span class="text-muted">(optional)</span></label>
+              <input type="text" name="manager_name" class="form-control form-control-sm"
+                     placeholder="e.g. Pedro Marquez">
+            </div>
+            <div class="col-12 col-sm-4">
+              <label class="form-label form-label-sm mb-1">Employee Name <span class="text-muted">(optional, display only)</span></label>
+              <input type="text" name="employee_name" class="form-control form-control-sm"
+                     placeholder="e.g. Tester Testerson">
+            </div>
+            <div class="col-12 mt-1">
+              <button type="submit" class="btn btn-sm btn-danger"
+                      {% if not offboard_settings.enabled %}disabled title="Enable offboarding first"{% endif %}>
+                <i class="bi bi-person-dash-fill me-1"></i>Run Offboarding Now
+              </button>
+              {% if not offboard_settings.enabled %}
+                <span class="text-muted small ms-2">Enable offboarding above to use this.</span>
+              {% endif %}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
     {% if stuck_offboarding %}
     <div class="alert alert-danger mb-3">
       <i class="bi bi-exclamation-triangle-fill me-1"></i>

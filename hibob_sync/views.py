@@ -811,6 +811,34 @@ def provisioning_resume(request, req_id):
 
 
 @require_POST
+def offboarding_manual_trigger(request):
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    employee_email = request.POST.get('employee_email', '').strip().lower()
+    manager_name   = request.POST.get('manager_name', '').strip()
+
+    if not employee_email:
+        messages.error(request, 'Employee email is required.')
+        return redirect('hibob_sync_dashboard')
+
+    OffboardingRequest.objects.create(
+        employee_email=employee_email,
+        employee_name=request.POST.get('employee_name', '').strip(),
+        direct_manager=manager_name,
+        scheduled_for=timezone.now(),
+        status='pending',
+    )
+    messages.success(
+        request,
+        f'Manual offboarding request created for {employee_email}. '
+        f'The agent will pick it up within 60 seconds.',
+    )
+    return redirect('hibob_sync_dashboard')
+
+
+@require_POST
 def hibob_sync_offboarding_toggle(request):
     deny = _superuser_required(request)
     if deny:
