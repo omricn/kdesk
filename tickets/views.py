@@ -1387,6 +1387,16 @@ def edit_comment(request, pk):
 # ── Email preview (superuser only) ───────────────────────────────────────────
 
 @admin_required
+def send_test_digest(request):
+    if not request.user.is_superuser:
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+    from tasks.scheduled import send_weekly_digest
+    send_weekly_digest(target_email=request.user.email)
+    messages.success(request, f'Test digest sent to {request.user.email}.')
+    return redirect('settings')
+
+
 def email_preview(request):
     if not request.user.is_superuser:
         from django.http import HttpResponseForbidden

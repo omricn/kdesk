@@ -133,11 +133,11 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
     if body_rows:
         details_block = f'''
         <tr><td>
-          <table width="100%" cellpadding="0" cellspacing="0"
+          <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f5f5f5"
                  style="background:#f5f5f5;border-left:4px solid {header_color};border-radius:4px;">
-            <tr><td style="padding:18px 22px;">
-              <table width="100%" cellpadding="5" cellspacing="0"
-                     style="font-size:14px;color:#333333;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
+            <tr><td bgcolor="#f5f5f5" style="padding:18px 22px;background:#f5f5f5;">
+              <table width="100%" cellpadding="5" cellspacing="0" bgcolor="#f5f5f5"
+                     style="background:#f5f5f5;font-size:14px;color:#333333;font-family:'Segoe UI',Calibri,Arial,sans-serif;">
                 {body_rows}
               </table>
             </td></tr>
@@ -247,12 +247,12 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
 </html>'''
 
 
-def _row(label: str, value: str, color: str = '#8205B4') -> str:
+def _row(label: str, value: str, color: str = '#000000') -> str:
     return (f'<tr>'
-            f'<td style="color:{color};font-weight:600;white-space:nowrap;width:140px;'
+            f'<td style="color:{color};font-weight:700;white-space:nowrap;width:160px;'
             f"    vertical-align:top;padding:4px 16px 4px 0;font-family:'GT Eesti Display Md','GT Eesti Display','Segoe UI',Calibri,Arial,sans-serif;"
             f'>{_esc(label)}</td>'
-            f'<td dir="auto" style="color:#333333;vertical-align:top;padding:4px 0;unicode-bidi:plaintext;">{_esc(value)}</td>'
+            f'<td dir="auto" style="color:#000000;vertical-align:top;padding:4px 0;unicode-bidi:plaintext;">{_esc(value)}</td>'
             f'</tr>')
 
 
@@ -1446,73 +1446,129 @@ def _send_change_reminder(change, reminder_type: str):
 
 # ── Weekly digest ────────────────────────────────────────────────────────────
 
+def _digest_stat_row(stats):
+    """Render a row of stat cards. stats = list of (number, label, warn_if_nonzero)."""
+    cells = ''
+    for i, (num, label, warn) in enumerate(stats):
+        num_color = '#BE0078' if warn and num > 0 else '#1a1a1a'
+        spacer = '<td style="width:12px;"></td>' if i < len(stats) - 1 else ''
+        cells += (
+            f'<td style="text-align:center;vertical-align:top;padding:14px 8px;'
+            f'border-top:3px solid #8205B4;">'
+            f'<div style="font-size:30px;font-weight:700;line-height:1;color:{num_color};'
+            f"font-family:'Segoe UI',Calibri,Arial,sans-serif;\">{num}</div>"
+            f'<div style="font-size:11px;font-weight:600;color:#1a1a1a;margin-top:6px;'
+            f"text-transform:uppercase;letter-spacing:0.5px;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">"
+            f'{_esc(label)}</div>'
+            f'</td>'
+            + spacer
+        )
+    return (
+        f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">'
+        f'<tr>{cells}</tr>'
+        f'</table>'
+    )
+
+
 @shared_task(name='tasks.send_weekly_digest')
-def send_weekly_digest():
+def send_weekly_digest(target_email: str = None):
     """
     Send each admin a personal ticket digest.
     Superusers also receive the full org-wide summary.
     Runs Saturday night (scheduled via CrontabSchedule).
+    Pass target_email to send only to one recipient (useful for testing).
     """
     from tickets.models import Ticket
     from users.models import User
     from datetime import timedelta
 
-    now   = timezone.now()
+    now      = timezone.now()
     week_ago = now - timedelta(days=7)
 
     admins = User.objects.filter(is_admin=True, is_active=True)
+    if target_email:
+        admins = admins.filter(email=target_email)
 
     for admin in admins:
         my_qs = Ticket.objects.filter(assignee=admin)
 
-        open_count    = my_qs.exclude(status__in=Ticket.TERMINAL_STATUSES).count()
-        closed_week   = my_qs.filter(status__in=Ticket.TERMINAL_STATUSES, updated_at__gte=week_ago).count()
-        breached      = my_qs.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES).count()
-        open_tickets  = (
+        open_count   = my_qs.exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+        new_week     = my_qs.filter(created_at__gte=week_ago).count()
+        closed_week  = my_qs.filter(status__in=Ticket.TERMINAL_STATUSES, updated_at__gte=week_ago).count()
+        breached     = my_qs.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+
+        # ── Stat cards ─────────────────────────────────────────────────────────
+        personal_stats_html = _digest_stat_row([
+            (open_count,  'Open',           False),
+            (new_week,    'New This Week',  False),
+            (closed_week, 'Closed',         False),
+            (breached,    'SLA Breached',   True),
+        ])
+
+        org_stats_html = ''
+        if admin.is_superuser:
+            total_open     = Ticket.objects.exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+            total_new      = Ticket.objects.filter(created_at__gte=week_ago).count()
+            total_closed   = Ticket.objects.filter(status__in=Ticket.TERMINAL_STATUSES, updated_at__gte=week_ago).count()
+            total_breached = Ticket.objects.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES).count()
+            org_stats_html = (
+                f'<p style="font-size:12px;font-weight:700;color:#1a1a1a;margin:20px 0 8px;'
+                f"text-transform:uppercase;letter-spacing:0.5px;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">"
+                f'Org-Wide</p>'
+                + _digest_stat_row([
+                    (total_open,     'Total Open',     False),
+                    (total_new,      'New This Week',  False),
+                    (total_closed,   'Closed',         False),
+                    (total_breached, 'SLA Breached',   True),
+                ])
+            )
+
+        # ── Open tickets table ─────────────────────────────────────────────────
+        open_tickets = (
             my_qs.exclude(status__in=Ticket.TERMINAL_STATUSES)
             .order_by('sla_deadline')[:10]
         )
-
         ticket_rows = ''
         for t in open_tickets:
-            url = f'{settings.SITE_URL}/tickets/{t.pk}/'
+            url     = f'{settings.SITE_URL}/tickets/{t.pk}/'
             sla_str = t.sla_deadline.strftime('%d %b %H:%M') if t.sla_deadline else '—'
-            status_label = t.get_status_display()
             ticket_rows += (
-                f'<tr>'
-                f'<td style="padding:4px 8px;"><a href="{url}" style="color:#8205B4;font-weight:600;">#{t.pk:04d}</a></td>'
-                f'<td style="padding:4px 8px;">{_esc(t.title[:60])}</td>'
-                f'<td style="padding:4px 8px;">{_esc(status_label)}</td>'
-                f'<td style="padding:4px 8px;">{_esc(sla_str)}</td>'
+                f'<tr style="border-bottom:1px solid #dddddd;">'
+                f'<td style="padding:6px 8px;white-space:nowrap;vertical-align:top;">'
+                f'<a href="{url}" style="color:#8205B4;font-weight:700;text-decoration:none;'
+                f"font-family:'Segoe UI',Calibri,Arial,sans-serif;\">#{t.pk:04d}</a></td>"
+                f'<td style="padding:6px 8px;font-size:13px;color:#1a1a1a;vertical-align:top;'
+                f"font-family:'Segoe UI',Calibri,Arial,sans-serif;\">{_esc(t.title[:55])}</td>"
+                f'<td style="padding:6px 8px;font-size:12px;color:#1a1a1a;white-space:nowrap;vertical-align:top;'
+                f"font-family:'Segoe UI',Calibri,Arial,sans-serif;\">{_esc(t.get_status_display())}</td>"
+                f'<td style="padding:6px 8px;font-size:12px;color:#555555;white-space:nowrap;vertical-align:top;'
+                f"font-family:'Segoe UI',Calibri,Arial,sans-serif;\">{_esc(sla_str)}</td>"
                 f'</tr>'
             )
 
-        tickets_table = ''
         if ticket_rows:
-            tickets_table = (
-                '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#333;">'
-                '<tr style="background:#f0f0f0;">'
-                '<th style="padding:6px 8px;text-align:left;">#</th>'
-                '<th style="padding:6px 8px;text-align:left;">Subject</th>'
-                '<th style="padding:6px 8px;text-align:left;">Status</th>'
-                '<th style="padding:6px 8px;text-align:left;">SLA</th>'
-                '</tr>'
+            tickets_section = (
+                f'<p style="font-size:12px;font-weight:700;color:#1a1a1a;margin:20px 0 8px;'
+                f"text-transform:uppercase;letter-spacing:0.5px;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">"
+                f'Your Open Tickets</p>'
+                f'<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-top:2px solid #8205B4;">'
+                f'<tr>'
+                f'<th style="padding:6px 8px;text-align:left;font-size:11px;color:#1a1a1a;font-weight:700;'
+                f"text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dddddd;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">#</th>"
+                f'<th style="padding:6px 8px;text-align:left;font-size:11px;color:#1a1a1a;font-weight:700;'
+                f"text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dddddd;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">Subject</th>"
+                f'<th style="padding:6px 8px;text-align:left;font-size:11px;color:#1a1a1a;font-weight:700;'
+                f"text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dddddd;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">Status</th>"
+                f'<th style="padding:6px 8px;text-align:left;font-size:11px;color:#1a1a1a;font-weight:700;'
+                f"text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dddddd;font-family:'Segoe UI',Calibri,Arial,sans-serif;\">SLA Due</th>"
+                f'</tr>'
                 + ticket_rows +
-                '</table>'
+                f'</table>'
             )
         else:
-            tickets_table = '<p style="color:#888;font-size:13px;">No open tickets — great work! 🎉</p>'
-
-        extra_section = ''
-        if admin.is_superuser:
-            total_open    = Ticket.objects.exclude(status__in=Ticket.TERMINAL_STATUSES).count()
-            total_closed  = Ticket.objects.filter(status__in=Ticket.TERMINAL_STATUSES, updated_at__gte=week_ago).count()
-            total_breached = Ticket.objects.filter(sla_breached=True).exclude(status__in=Ticket.TERMINAL_STATUSES).count()
-            extra_section = (
-                '<br>'
-                + _row('Org — Total Open', str(total_open))
-                + _row('Org — Closed This Week', str(total_closed))
-                + _row('Org — SLA Breached', str(total_breached))
+            tickets_section = (
+                f'<p style="color:#1a1a1a;font-size:13px;margin:16px 0;'
+                f"font-family:'Segoe UI',Calibri,Arial,sans-serif;\">No open tickets — great work! 🎉</p>"
             )
 
         admin_name = _esc(admin.display_name or admin.email)
@@ -1523,24 +1579,15 @@ def send_weekly_digest():
             header_subtitle=f'Week ending {now.strftime("%d %b %Y")}',
             greeting=(
                 f'Hi <strong>{admin_name}</strong>,<br><br>'
-                f'Here is your weekly summary of tickets assigned to you.'
+                f'Here is your weekly ticket summary.'
+                f'<br><br>'
+                + personal_stats_html
+                + org_stats_html
+                + tickets_section
             ),
-            body_rows=(
-                _row('Open Tickets', str(open_count)) +
-                _row('Closed This Week', str(closed_week)) +
-                _row('SLA Breached (open)', str(breached)) +
-                extra_section
-            ),
+            body_rows='',
             cta_url=kdesk_url,
             cta_label='View All Tickets',
-        )
-
-        # Append open tickets table after the standard template
-        body = body.replace(
-            '</body>',
-            f'<div style="max-width:600px;margin:0 auto 24px;padding:0 24px;">'
-            f'<p style="font-size:14px;color:#333;font-weight:600;margin-bottom:8px;">Your Open Tickets</p>'
-            f'{tickets_table}</div></body>'
         )
 
         _send_notification_email(
