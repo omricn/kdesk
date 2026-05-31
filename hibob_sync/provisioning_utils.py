@@ -247,6 +247,7 @@ COUNTRY_TIMEZONE = {
     'israel':                       'Asia/Jerusalem',
     'united states':                'America/New_York',
     'usa':                          'America/New_York',
+    'us':                           'America/New_York',
     'united kingdom':               'Europe/London',
     'uk':                           'Europe/London',
     'germany':                      'Europe/Berlin',
