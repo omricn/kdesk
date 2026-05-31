@@ -284,6 +284,7 @@ _TERMINATION_FIELD_MAP = {
     'country origin':      'country_origin',
     'date of termination': 'termination_date_raw',
     'employee email':      'employee_email',
+    'email':               'employee_email',
     'status':              'termination_status',
 }
 
