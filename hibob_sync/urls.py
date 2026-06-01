@@ -32,4 +32,5 @@ urlpatterns = [
     path('hibob-sync/offboarding/<int:req_id>/cancel/', views.offboarding_cancel, name='hibob_sync_offboarding_cancel'),
     path('hibob-sync/offboarding/<int:req_id>/log/', views.offboarding_log, name='hibob_sync_offboarding_log'),
     path('hibob-sync/api/offboarding/statuses/', views.api_offboarding_statuses, name='hibob_sync_api_offboarding_statuses'),
+    path('hibob-sync/offboarding/preview-manager-email/', views.offboarding_manager_email_preview, name='hibob_sync_offboarding_preview_manager_email'),
 ]

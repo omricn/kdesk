@@ -948,6 +948,7 @@ def api_offboarding_report(request):
             _post_offboarding_ticket_comment(req, outcome='success')
             _send_offboarding_notification(req, outcome='success')
             _create_offboarding_system_tickets(req)
+            _send_manager_onedrive_notification(req)
         else:
             _post_offboarding_ticket_comment(req, outcome='failed')
             _send_offboarding_notification(req, outcome='failed', result_log=result_log)
@@ -1177,3 +1178,161 @@ def _send_offboarding_notification(req, outcome='success', result_log=''):
         logger.info('[Offboarding] Notification sent for req #%s (outcome=%s)', req.id, outcome)
     except Exception as exc:
         logger.warning('[Offboarding] Could not send notification: %s', exc)
+
+
+def _onedrive_url_for(employee_email: str) -> str:
+    slug = employee_email.lower().replace('@', '_').replace('.', '_')
+    return f'https://kramer365-my.sharepoint.com/personal/{slug}/'
+
+
+def _lookup_manager_email(manager_display_name: str) -> str | None:
+    """Return the UPN/email for a manager given their display name, via Graph."""
+    try:
+        import urllib.parse
+        from integrations.graph_client import get_client
+        from django.conf import settings as _s
+        import requests as _req
+
+        token_url = f"https://login.microsoftonline.com/{_s.AZURE_TENANT_ID}/oauth2/v2.0/token"
+        resp = _req.post(token_url, data={
+            'client_id':     _s.AZURE_CLIENT_ID,
+            'client_secret': _s.AZURE_CLIENT_SECRET,
+            'scope':         'https://graph.microsoft.com/.default',
+            'grant_type':    'client_credentials',
+        }, timeout=15)
+        token = resp.json()['access_token']
+        name_q = urllib.parse.quote(manager_display_name)
+        users = _req.get(
+            f"https://graph.microsoft.com/v1.0/users"
+            f"?$filter=displayName eq '{name_q}'"
+            f"&$select=userPrincipalName,displayName",
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=15,
+        ).json().get('value', [])
+        if users:
+            return users[0]['userPrincipalName']
+    except Exception as exc:
+        logger.warning('[Offboarding] Manager email lookup failed for "%s": %s', manager_display_name, exc)
+    return None
+
+
+def _build_manager_onedrive_email_html(employee_name, employee_email, manager_name, onedrive_url):
+    termination_deadline = '93 days from the date of offboarding'
+    return (
+        '<div style="font-family:Arial,Helvetica,sans-serif;max-width:660px;margin:0 auto;">'
+
+        # Header
+        '<div style="background:#e67e22;color:#fff;padding:16px 22px;border-radius:6px 6px 0 0;">'
+        '<h2 style="margin:0;font-size:17px;font-weight:600;">Action Required — OneDrive Access Window</h2>'
+        '</div>'
+
+        # Body
+        '<div style="border:1px solid #ddd;border-top:none;padding:22px 22px 18px;'
+        'border-radius:0 0 6px 6px;background:#fafafa;">'
+
+        # Intro
+        f'<p style="margin:0 0 14px;font-size:14px;color:#333;">'
+        f'Hi {manager_name},</p>'
+        f'<p style="margin:0 0 16px;font-size:14px;color:#333;">'
+        f'The offboarding of <strong>{employee_name}</strong> ({employee_email}) has been completed. '
+        f'As the direct manager, you have been granted access to their OneDrive.'
+        f'</p>'
+
+        # Action box
+        '<div style="background:#fff8e1;border-left:4px solid #e67e22;border-radius:4px;'
+        'padding:14px 18px;margin:0 0 20px;">'
+        '<p style="margin:0 0 8px;font-size:14px;font-weight:bold;color:#b7570a;">'
+        '⚠️  Important: You have a limited time window to retrieve data.</p>'
+        '<p style="margin:0;font-size:13px;color:#5d4037;line-height:1.6;">'
+        f'Microsoft automatically <strong>permanently deletes</strong> a departed employee\'s OneDrive '
+        f'<strong>{termination_deadline}</strong>. '
+        f'After that point, the data is <strong>unrecoverable</strong>.<br><br>'
+        '<strong>Please copy any files or folders you need to your own OneDrive before this deadline.</strong>'
+        '</p>'
+        '</div>'
+
+        # Employee row
+        '<table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #eee;'
+        'border-radius:4px;margin-bottom:20px;">'
+        '<tr><td style="padding:7px 14px;font-weight:bold;color:#555;white-space:nowrap;'
+        'vertical-align:top;font-size:13px;">Employee</td>'
+        f'<td style="padding:7px 14px;font-size:13px;">{employee_name}</td></tr>'
+        '<tr style="background:#f9f9f9;"><td style="padding:7px 14px;font-weight:bold;color:#555;'
+        'white-space:nowrap;vertical-align:top;font-size:13px;">Email</td>'
+        f'<td style="padding:7px 14px;font-size:13px;">{employee_email}</td></tr>'
+        '</table>'
+
+        # OneDrive button
+        '<p style="margin:0 0 8px;font-size:13px;color:#555;">Access the OneDrive here:</p>'
+        f'<a href="{onedrive_url}" style="display:inline-block;background:#0078d4;color:#fff;'
+        'text-decoration:none;padding:10px 22px;border-radius:4px;font-size:13px;font-weight:bold;">'
+        f'Open OneDrive →</a>'
+
+        # Footer note
+        '<p style="margin:18px 0 0;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:12px;">'
+        'This notification was sent automatically by Kdesk upon completion of the offboarding process. '
+        'If you believe you received this in error, please contact the IT department.'
+        '</p>'
+
+        '</div></div>'
+    )
+
+
+def _send_manager_onedrive_notification(req):
+    """Send the 93-day OneDrive access window email to the direct manager."""
+    try:
+        if not req.direct_manager:
+            logger.info('[Offboarding] No manager on req #%s — skipping OneDrive notification.', req.id)
+            return
+
+        manager_email = _lookup_manager_email(req.direct_manager)
+        if not manager_email:
+            logger.warning('[Offboarding] Could not resolve manager email for "%s" — skipping OneDrive notification.', req.direct_manager)
+            return
+
+        employee_name = req.employee_name or req.employee_email
+        onedrive_url  = _onedrive_url_for(req.employee_email)
+        body_html     = _build_manager_onedrive_email_html(
+            employee_name, req.employee_email, req.direct_manager, onedrive_url,
+        )
+
+        from integrations.graph_client import get_client
+        from django.conf import settings as _s
+        get_client().send_email(
+            from_mailbox=_s.SERVICEDESK_EMAIL,
+            to_email=manager_email,
+            subject=f'Action Required — OneDrive Access Window for {employee_name}',
+            body_html=body_html,
+        )
+        logger.info('[Offboarding] OneDrive manager notification sent to %s for req #%s', manager_email, req.id)
+    except Exception as exc:
+        logger.warning('[Offboarding] Could not send OneDrive manager notification: %s', exc)
+
+
+def offboarding_manager_email_preview(request):
+    """Send a preview of the manager OneDrive notification to the logged-in user."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    req = OffboardingRequest.objects.filter(status='completed').order_by('-completed_at').first()
+    if not req:
+        from django.http import HttpResponse
+        return HttpResponse('No completed offboarding requests found.', status=404)
+
+    employee_name = req.employee_name or req.employee_email
+    onedrive_url  = _onedrive_url_for(req.employee_email)
+    body_html     = _build_manager_onedrive_email_html(
+        employee_name, req.employee_email, req.direct_manager or 'Manager', onedrive_url,
+    )
+
+    from integrations.graph_client import get_client
+    from django.conf import settings as _s
+    get_client().send_email(
+        from_mailbox=_s.SERVICEDESK_EMAIL,
+        to_email=request.user.email,
+        subject=f'[PREVIEW] Action Required — OneDrive Access Window for {employee_name}',
+        body_html=body_html,
+    )
+    from django.http import HttpResponse
+    return HttpResponse(f'Preview sent to {request.user.email}. Check your inbox.', status=200)
