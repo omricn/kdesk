@@ -143,6 +143,9 @@ if _azure_storage_account:
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Offboarding script posts log content as JSON body; raise limit to avoid RequestDataTooBig
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+
 # ── Crispy Forms ──────────────────────────────────────────────────────────────
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
 CRISPY_TEMPLATE_PACK = 'bootstrap5'
