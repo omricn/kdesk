@@ -1231,7 +1231,7 @@ def _build_manager_onedrive_email_html(employee_name, employee_email, manager_na
         'border-radius:0 0 6px 6px;background:#fafafa;">'
 
         # Intro
-        f'<p style="margin:0 0 14px;font-size:14px;color:#333;">'
+        f'<p style="margin:12px 0 14px;font-size:14px;color:#333;">'
         f'Hi {manager_name},</p>'
         f'<p style="margin:0 0 16px;font-size:14px;color:#333;">'
         f'The offboarding of <strong>{employee_name}</strong> ({employee_email}) has been completed. '
