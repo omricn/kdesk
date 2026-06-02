@@ -479,18 +479,26 @@ def _create_system_tickets(req, work_email):
 
     systems = []
     if req.create_priority_ticket:
+        extra_rows = []
+        if req.priority_permissions_as:
+            extra_rows.append(f'Priority Permissions as: {req.priority_permissions_as}')
+        if req.salesforce_country_permission:
+            extra_rows.append(f'Country Permission: {req.salesforce_country_permission}')
         systems.append({
-            'system':    'Priority',
-            'subcat':    'Priority',
-            'item':      'New User',
-            'extra_row': f'Priority Permissions as: {req.priority_permissions_as}' if req.priority_permissions_as else '',
+            'system':     'Priority',
+            'subcat':     'Priority',
+            'item':       'New User',
+            'extra_rows': extra_rows,
         })
     if req.create_salesforce_ticket:
+        extra_rows = []
+        if req.salesforce_permissions_as:
+            extra_rows.append(f'Salesforce Permissions as: {req.salesforce_permissions_as}')
         systems.append({
-            'system':    'Salesforce',
-            'subcat':    'Salesforce',
-            'item':      'New User',
-            'extra_row': f'Country Permission: {req.salesforce_country_permission}' if req.salesforce_country_permission else '',
+            'system':     'Salesforce',
+            'subcat':     'Salesforce',
+            'item':       'New User',
+            'extra_rows': extra_rows,
         })
 
     for s in systems:
@@ -505,8 +513,8 @@ def _create_system_tickets(req, work_email):
                 f'Last name: {req.last_name}\n'
                 f'Email: {work_email}\n'
             )
-            if s['extra_row']:
-                description += f'{s["extra_row"]}\n'
+            for row in s.get('extra_rows', []):
+                description += f'{row}\n'
 
             ticket = Ticket(
                 title=f'NEW USER – {s["system"]} – {full_name}',

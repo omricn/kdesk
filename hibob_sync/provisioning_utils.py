@@ -163,6 +163,8 @@ _FIELD_MAP = {
     'priority permissions as': 'priority_permissions_as',
     'salesforce':              'salesforce_raw',
     'country permission':      'country_permission',
+    'salesforce permissions as': 'salesforce_permissions_as',
+    'sfdc permissions as':       'salesforce_permissions_as',
 }
 
 _HIBOB_SUBJECT_RE = re.compile(
@@ -233,8 +235,9 @@ def parse_hibob_email_body(body: str, is_html: bool) -> dict:
         'start_date':                  start_date,
         'create_priority_ticket':      fields.get('priority_raw', '').strip().lower() == 'yes',
         'priority_permissions_as':     fields.get('priority_permissions_as', ''),
-        'create_salesforce_ticket':    fields.get('salesforce_raw', '').strip().lower() == 'yes',
+        'create_salesforce_ticket':      fields.get('salesforce_raw', '').strip().lower() == 'yes',
         'salesforce_country_permission': fields.get('country_permission', ''),
+        'salesforce_permissions_as':     fields.get('salesforce_permissions_as', ''),
     }
 
 
@@ -342,7 +345,17 @@ def parse_hibob_termination_body(body: str, is_html: bool) -> dict:
     raw_date = fields.pop('termination_date_raw', '')
     if raw_date:
         raw_date = raw_date.split()[0]
-        for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y'):
+        # HiBob formats dates using the recipient mailbox locale, not a fixed format.
+        # US-locale mailboxes (servicedesk) receive MM/DD/YYYY for US employees.
+        # Use country_origin to decide which format to try first, avoiding ambiguity
+        # when day <= 12 (e.g. 04/05/2026 is April 5 in US but May 4 in EU/IL).
+        country = fields.get('country_origin', '').strip().upper()
+        us_format_countries = {'US', 'USA', 'UNITED STATES', 'CA', 'CANADA'}
+        if country in us_format_countries:
+            date_formats = ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y')
+        else:
+            date_formats = ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y')
+        for fmt in date_formats:
             try:
                 termination_date = datetime.strptime(raw_date, fmt).date()
                 break

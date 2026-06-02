@@ -51,6 +51,7 @@ class ProvisioningRequest(models.Model):
     priority_permissions_as = models.CharField(max_length=200, blank=True)
     create_salesforce_ticket = models.BooleanField(default=False)
     salesforce_country_permission = models.CharField(max_length=200, blank=True)
+    salesforce_permissions_as = models.CharField(max_length=200, blank=True)
 
     # Review / active-user-conflict fields
     force_create = models.BooleanField(default=False)    # set True to skip active-account check on re-queue

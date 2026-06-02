@@ -541,6 +541,7 @@ def _create_ticket_from_message(msg, client, mailbox):
                     priority_permissions_as=d.get('priority_permissions_as', ''),
                     create_salesforce_ticket=d.get('create_salesforce_ticket', False),
                     salesforce_country_permission=d.get('salesforce_country_permission', ''),
+                    salesforce_permissions_as=d.get('salesforce_permissions_as', ''),
                     status='pending',
                 )
                 logger.info(
