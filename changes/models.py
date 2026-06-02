@@ -45,6 +45,7 @@ class Change(models.Model):
         ('qv', 'Qlikview'),
         ('sf', 'SalesForce'),
         ('kdesk', 'KDESK'),
+        ('bi', 'BI'),
         ('servers', 'Servers - Network connectivity'),
         ('other', 'Other'),
     ]
