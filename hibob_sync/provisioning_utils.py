@@ -207,12 +207,18 @@ def parse_hibob_email_body(body: str, is_html: bool) -> dict:
             if dest not in fields:  # first occurrence wins — ignore quoted/repeated lines
                 fields[dest] = value
 
-    # Parse start date (DD/MM/YYYY or YYYY-MM-DD, with optional time component)
+    # Parse start date — use country to resolve MM/DD vs DD/MM ambiguity
     start_date = None
     raw = fields.pop('start_date_raw', '')
     if raw:
         raw_date = raw.split()[0]  # strip any trailing time component (e.g. "01/06/2025 00:00:00")
-        for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y'):
+        country = fields.get('country', '').strip().upper()
+        _MM_DD_COUNTRIES = {'US', 'USA', 'UNITED STATES', 'CA', 'CANADA'}
+        if country in _MM_DD_COUNTRIES:
+            date_formats = ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y')
+        else:
+            date_formats = ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y')
+        for fmt in date_formats:
             try:
                 start_date = datetime.strptime(raw_date, fmt).date()
                 break
