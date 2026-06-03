@@ -739,6 +739,7 @@ document.getElementById('bulk-status-btn').addEventListener('click', function() 
         afterId = data.latest_pk;
         flashScreen();
         playSound(data.sound);
+        window.softRefresh();
       })
       .catch(function() {});
   }

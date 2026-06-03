@@ -402,7 +402,7 @@ def send_requester_closed(ticket_pk: int):
         return
     import base64, mimetypes
     name = _esc(ticket.requester_name or ticket.requester_email)
-    closed = ticket.resolved_at.strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
+    closed = timezone.localtime(ticket.resolved_at).strftime('%d %b %Y %H:%M') if ticket.resolved_at else 'N/A'
     solution_row = _row('Resolution', ticket.solution) if ticket.solution else ''
     # Embed solution images inline as base64 so they render without auth
     sol_imgs = ticket.attachments.filter(is_solution_image=True)
