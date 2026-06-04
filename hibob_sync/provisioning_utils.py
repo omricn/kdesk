@@ -215,9 +215,9 @@ def parse_hibob_email_body(body: str, is_html: bool) -> dict:
         country = fields.get('country', '').strip().upper()
         _MM_DD_COUNTRIES = {'US', 'USA', 'UNITED STATES', 'CA', 'CANADA'}
         if country in _MM_DD_COUNTRIES:
-            date_formats = ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y')
+            date_formats = ('%b-%d-%Y', '%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y')
         else:
-            date_formats = ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y')
+            date_formats = ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y')
         for fmt in date_formats:
             try:
                 start_date = datetime.strptime(raw_date, fmt).date()
@@ -358,9 +358,9 @@ def parse_hibob_termination_body(body: str, is_html: bool) -> dict:
         country = fields.get('country_origin', '').strip().upper()
         us_format_countries = {'US', 'USA', 'UNITED STATES', 'CA', 'CANADA'}
         if country in us_format_countries:
-            date_formats = ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y')
+            date_formats = ('%b-%d-%Y', '%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y')
         else:
-            date_formats = ('%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y')
+            date_formats = ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y')
         for fmt in date_formats:
             try:
                 termination_date = datetime.strptime(raw_date, fmt).date()
