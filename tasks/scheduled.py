@@ -1014,12 +1014,15 @@ def notify_change(change_pk: int, event: str):
                     cta_label='View in Kdesk',
                 ),
             )
-        # Broadcast maintenance announcement only if the window hasn't ended yet
-        window_end = _change_window_end(change)
-        if window_end is None or timezone.now() < window_end:
-            _send_maintenance_announcement(change)
+        # Broadcast maintenance announcement only if enabled and the window hasn't ended yet
+        if change.notify_employees:
+            window_end = _change_window_end(change)
+            if window_end is None or timezone.now() < window_end:
+                _send_maintenance_announcement(change)
+            else:
+                logger.info(f'[Change] Skipping approval broadcast for #{change.pk} — approved after maintenance window.')
         else:
-            logger.info(f'[Change] Skipping approval broadcast for #{change.pk} — approved after maintenance window.')
+            logger.info(f'[Change] Skipping approval broadcast for #{change.pk} — employee notification disabled.')
         # Add calendar event to every GLOBAL_OPT_IT member's calendar
         create_change_calendar_events.delay(change_pk)
 
@@ -1117,13 +1120,16 @@ def notify_change(change_pk: int, event: str):
                     body_rows=done_rows,
                 ),
             )
-        # Broadcast completion only if done within 3 hours of the window ending
-        from datetime import timedelta
-        window_end = _change_window_end(change)
-        if window_end is None or timezone.now() < window_end + timedelta(hours=3):
-            _send_maintenance_complete_announcement(change)
+        # Broadcast completion only if enabled and done within 3 hours of the window ending
+        if change.notify_employees:
+            from datetime import timedelta
+            window_end = _change_window_end(change)
+            if window_end is None or timezone.now() < window_end + timedelta(hours=3):
+                _send_maintenance_complete_announcement(change)
+            else:
+                logger.info(f'[Change] Skipping completion broadcast for #{change.pk} — marked done 3h+ after maintenance window.')
         else:
-            logger.info(f'[Change] Skipping completion broadcast for #{change.pk} — marked done 3h+ after maintenance window.')
+            logger.info(f'[Change] Skipping completion broadcast for #{change.pk} — employee notification disabled.')
 
     logger.info(f'[Change] Notification sent for change #{change_pk}, event={event}')
 
@@ -1328,10 +1334,13 @@ def check_change_reminders():
         start_dt = datetime.combine(change.planned_date, change.planned_from)
         start_dt_aware = timezone.make_aware(start_dt)
         if now >= start_dt_aware - timedelta(hours=3) and now < start_dt_aware:
-            _send_upcoming_maintenance_broadcast(change)
+            if change.notify_employees:
+                _send_upcoming_maintenance_broadcast(change)
+            else:
+                logger.info(f'[Change] Skipping upcoming broadcast for #{change.pk} — employee notification disabled.')
             change.reminded_upcoming = True
             change.save(update_fields=['reminded_upcoming'])
-            logger.info(f'[Change] Upcoming (3 h) broadcast sent for change #{change.pk}.')
+            logger.info(f'[Change] Upcoming (3 h) broadcast processed for change #{change.pk}.')
 
 
 def _send_change_reminder(change, reminder_type: str):

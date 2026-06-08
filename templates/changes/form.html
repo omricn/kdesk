@@ -87,6 +87,18 @@
           </div>
 
           <div class="mb-4">
+            <div class="form-check form-switch">
+              {{ form.notify_employees }}
+              <label class="form-check-label" for="{{ form.notify_employees.id_for_label }}">
+                Notify employees when approved
+              </label>
+            </div>
+            <div class="form-text text-muted">
+              When enabled, a "Planned Maintenance" broadcast email will be sent to the affected region's employees upon approval, and a "Maintenance Completed" email when the change is marked as Done.
+            </div>
+          </div>
+
+          <div class="mb-4">
             <label class="form-label">Attachments <span class="text-muted">(optional, max 3 MB each)</span></label>
             <input type="file" name="attachments" class="form-control" multiple accept="*/*">
             {% if attachments %}

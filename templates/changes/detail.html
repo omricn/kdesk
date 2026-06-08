@@ -56,6 +56,15 @@
 
           <dt class="col-4">Created</dt>
           <dd class="col-8">{{ change.created_at|date:"d M Y H:i" }}</dd>
+
+          <dt class="col-4">Employee Notification</dt>
+          <dd class="col-8">
+            {% if change.notify_employees %}
+              <span class="badge bg-success"><i class="bi bi-bell me-1"></i>Enabled</span>
+            {% else %}
+              <span class="badge bg-secondary"><i class="bi bi-bell-slash me-1"></i>Disabled</span>
+            {% endif %}
+          </dd>
         </dl>
       </div>
     </div>
@@ -196,13 +205,9 @@
 
         {% elif change.status == 'pending_approval' %}
         {% if is_manager %}
-        <form method="post" action="{% url 'change_transition' change.pk %}">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="approve">
-          <button type="submit" class="btn btn-success w-100">
-            <i class="bi bi-check-lg me-1"></i>Approve
-          </button>
-        </form>
+        <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#approveModal">
+          <i class="bi bi-check-lg me-1"></i>Approve
+        </button>
         <button type="button" class="btn btn-warning w-100 text-dark"
                 data-bs-toggle="modal" data-bs-target="#requestChangesModal">
           <i class="bi bi-pencil-square me-1"></i>Request Changes
@@ -316,6 +321,53 @@
     </div>
   </div>
 </div>
+
+<!-- Approve Modal -->
+{% if is_manager %}
+<div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'change_transition' change.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="approve">
+        <div class="modal-header">
+          <h5 class="modal-title" id="approveModalLabel">
+            <i class="bi bi-check-circle me-2 text-success"></i>Approve Change
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-3">You are about to approve <strong>#{{ change.pk|stringformat:"04d" }} — {{ change.title }}</strong>.</p>
+          <div class="border rounded p-3" style="background:var(--bs-body-bg);">
+            <p class="fw-semibold mb-2"><i class="bi bi-bell me-1"></i>Employee notification</p>
+            <p class="text-muted small mb-3">Choose whether to send a "Planned Maintenance" broadcast email to <strong>{{ change.get_affected_region_display }}</strong> employees upon approval.</p>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="notify_employees" id="notifyYes" value="1" {% if change.notify_employees %}checked{% endif %}>
+                <label class="form-check-label" for="notifyYes">
+                  <i class="bi bi-bell text-success me-1"></i>Send notification
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="notify_employees" id="notifyNo" value="0" {% if not change.notify_employees %}checked{% endif %}>
+                <label class="form-check-label" for="notifyNo">
+                  <i class="bi bi-bell-slash text-muted me-1"></i>Don't send notification
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-lg me-1"></i>Approve Change
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Request Changes Modal -->
 {% if is_manager %}

@@ -190,8 +190,11 @@ def change_transition(request, pk):
             return redirect('change_detail', pk=pk)
         change.manager_remarks = remarks
 
+    if action == 'approve':
+        change.notify_employees = request.POST.get('notify_employees', '1') == '1'
+
     change.status = new_status
-    change.save(update_fields=['status', 'manager_remarks', 'updated_at'])
+    change.save(update_fields=['status', 'manager_remarks', 'notify_employees', 'updated_at'])
 
     # Trigger notifications
     if action == 'submit':

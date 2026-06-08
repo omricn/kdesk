@@ -75,6 +75,8 @@ class Change(models.Model):
         related_name='linked_changes',
     )
 
+    notify_employees = models.BooleanField(default=True)
+
     reminded_start = models.BooleanField(default=False)
     reminded_done = models.BooleanField(default=False)
     reminded_done_followup = models.BooleanField(default=False)

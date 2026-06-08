@@ -31,7 +31,7 @@ class ChangeForm(forms.ModelForm):
             'title', 'description', 'risk_level',
             'planned_date', 'planned_from', 'planned_to', 'rollback_plan',
             'affected_system', 'affected_system_other',
-            'affected_region', 'notes',
+            'affected_region', 'notes', 'notify_employees',
         ]
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control'}),
@@ -46,6 +46,7 @@ class ChangeForm(forms.ModelForm):
             'affected_system_other': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Specify system…'}),
             'affected_region': forms.Select(attrs={'class': 'form-select'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'notify_employees': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
         }
 
     def __init__(self, *args, **kwargs):
