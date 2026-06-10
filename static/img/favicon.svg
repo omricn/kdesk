@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Kramer purple rounded-square background -->
+  <rect width="32" height="32" rx="7" fill="#8205B4"/>
+  <!-- Kramer mint headset (Bootstrap bi-headset, 16x16 → scaled 1.5x, centered with 4px padding) -->
+  <path transform="translate(4,4) scale(1.5)" fill="#69FFC3"
+    d="M8 1a5 5 0 0 0-5 5v1h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a6 6 0 1 1 12 0v6a4.5 4.5 0 0 1-4.5 4.5H9a1.5 1.5 0 1 1 0-3h.5a3 3 0 0 0 3-3V7a1 1 0 0 1 1-1h1V6a5 5 0 0 0-5-5z"/>
+</svg>
