@@ -140,15 +140,9 @@ def resolve_m365_groups(region: str, country: str, division: str, department: st
         elif fallback_row is None:
             fallback_row = row
 
-    # For IL employees whose HiBob region is EMEA (or any non-HQ region):
-    # combine the exact-match row with the HQ row so they get both
-    # EMEA-specific and HQ/IL-specific distribution lists.
     if exact_row is not None:
-        combined = list(dict.fromkeys(
-            [v for v in exact_row[4:10] if v and str(v).strip()] +
-            ([v for v in hq_row[4:10] if v and str(v).strip()] if hq_row else [])
-        ))
-        return combined, False
+        groups = [v for v in exact_row[4:10] if v and str(v).strip()]
+        return groups, False
 
     # No exact region match — use HQ row if available, then any other row
     best_row = hq_row or fallback_row
