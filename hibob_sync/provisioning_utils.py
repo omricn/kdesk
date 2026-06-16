@@ -117,6 +117,7 @@ def resolve_m365_groups(region: str, country: str, division: str, department: st
     division_norm = division.strip()
     department_norm = department.strip()
 
+    region_fallback_row = None
     for row in rows:
         if len(row) < 10:
             continue
@@ -126,12 +127,25 @@ def resolve_m365_groups(region: str, country: str, division: str, department: st
             (row[2] or '').strip(),
             (row[3] or '').strip(),
         )
-        if (r_country == country_code
-                and r_region.lower() == region_norm.lower()
-                and r_division.lower() == division_norm.lower()
-                and r_dept.lower() == department_norm.lower()):
+        if r_country != country_code:
+            continue
+        country_div_dept_match = (
+            r_division.lower() == division_norm.lower()
+            and r_dept.lower() == department_norm.lower()
+        )
+        if country_div_dept_match and r_region.lower() == region_norm.lower():
             groups = [v for v in row[4:10] if v and str(v).strip()]
             return groups, False
+        if country_div_dept_match and region_fallback_row is None:
+            region_fallback_row = row
+
+    if region_fallback_row is not None:
+        logger.warning(
+            '[Provisioning] No exact region match for region=%r country=%r division=%r dept=%r — using fallback row',
+            region, country_code, division, department,
+        )
+        groups = [v for v in region_fallback_row[4:10] if v and str(v).strip()]
+        return groups, False
 
     logger.warning(
         '[Provisioning] No Excel match for region=%r country=%r division=%r dept=%r',
