@@ -117,7 +117,9 @@ def resolve_m365_groups(region: str, country: str, division: str, department: st
     division_norm = division.strip()
     department_norm = department.strip()
 
-    region_fallback_row = None
+    exact_row = None
+    hq_row = None
+    fallback_row = None
     for row in rows:
         if len(row) < 10:
             continue
@@ -129,22 +131,33 @@ def resolve_m365_groups(region: str, country: str, division: str, department: st
         )
         if r_country != country_code:
             continue
-        country_div_dept_match = (
-            r_division.lower() == division_norm.lower()
-            and r_dept.lower() == department_norm.lower()
-        )
-        if country_div_dept_match and r_region.lower() == region_norm.lower():
-            groups = [v for v in row[4:10] if v and str(v).strip()]
-            return groups, False
-        if country_div_dept_match and region_fallback_row is None:
-            region_fallback_row = row
+        if r_division.lower() != division_norm.lower() or r_dept.lower() != department_norm.lower():
+            continue
+        if r_region.lower() == region_norm.lower():
+            exact_row = row
+        elif r_region.lower() == 'hq':
+            hq_row = row
+        elif fallback_row is None:
+            fallback_row = row
 
-    if region_fallback_row is not None:
+    # For IL employees whose HiBob region is EMEA (or any non-HQ region):
+    # combine the exact-match row with the HQ row so they get both
+    # EMEA-specific and HQ/IL-specific distribution lists.
+    if exact_row is not None:
+        combined = list(dict.fromkeys(
+            [v for v in exact_row[4:10] if v and str(v).strip()] +
+            ([v for v in hq_row[4:10] if v and str(v).strip()] if hq_row else [])
+        ))
+        return combined, False
+
+    # No exact region match — use HQ row if available, then any other row
+    best_row = hq_row or fallback_row
+    if best_row is not None:
         logger.warning(
             '[Provisioning] No exact region match for region=%r country=%r division=%r dept=%r — using fallback row',
             region, country_code, division, department,
         )
-        groups = [v for v in region_fallback_row[4:10] if v and str(v).strip()]
+        groups = [v for v in best_row[4:10] if v and str(v).strip()]
         return groups, False
 
     logger.warning(
