@@ -108,14 +108,12 @@
                 <i class="bi bi-paperclip text-muted"></i>
                 <a href="{{ att.file.url }}" target="_blank">{{ att.filename }}</a>
                 <span class="text-muted">({{ att.file_size|filesizeformat }})</span>
-                <form method="post" action="{% url 'change_detail' change.pk %}" class="d-inline ms-auto" onsubmit="return confirm('Remove this attachment?');">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="delete_attachment">
-                  <input type="hidden" name="attachment_id" value="{{ att.pk }}">
-                  <button type="submit" class="btn btn-link btn-sm text-danger p-0">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
+                <button type="button" class="btn btn-link btn-sm text-danger p-0 ms-auto delete-att-btn"
+                        data-att-id="{{ att.pk }}"
+                        data-delete-url="{% url 'change_detail' change.pk %}"
+                        data-csrf="{{ csrf_token }}">
+                  <i class="bi bi-trash"></i>
+                </button>
               </div>
               {% endfor %}
             </div>
@@ -192,6 +190,20 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" id="flatpickr-dark-theme" disabled>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.querySelectorAll('.delete-att-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    if (!confirm('Remove this attachment?')) return;
+    var row = btn.closest('div.d-flex');
+    var fd = new FormData();
+    fd.append('action', 'delete_attachment');
+    fd.append('attachment_id', btn.dataset.attId);
+    fd.append('csrfmiddlewaretoken', btn.dataset.csrf);
+    fetch(btn.dataset.deleteUrl, { method: 'POST', body: fd })
+      .then(function () { row.remove(); });
+  });
+});
+</script>
 <script>
 (function () {
   // Affected system toggle
