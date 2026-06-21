@@ -1172,7 +1172,7 @@ def create_change_calendar_events(change_pk: int):
         f'{start_dt.strftime("%H:%M")} – {end_dt.strftime("%H:%M")}'
         if planned_from else 'TBD'
     )
-    submitter   = change.submitted_by.get_full_name() if change.submitted_by else '—'
+    submitter   = change.submitted_by.display_name if change.submitted_by else '—'
     created_str = change.created_at.strftime('%d %B %Y %H:%M') if change.created_at else '—'
     risk_str    = change.get_risk_level_display()
     change_url  = f'{settings.SITE_URL}/changes/{change.pk}/'
