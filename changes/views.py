@@ -116,16 +116,26 @@ def change_edit(request, pk):
         messages.error(request, 'Only New, Pending, or Pending Changes requests can be edited.')
         return redirect('change_detail', pk=pk)
 
+    is_pending_changes = change.status == Change.STATUS_PENDING_CHANGES
     form = ChangeForm(instance=change)
     if request.method == 'POST':
         form = ChangeForm(request.POST, instance=change)
         if form.is_valid():
             form.save()
             _save_attachments(request, change)
-            messages.success(request, 'Change updated.')
+            if is_pending_changes:
+                change.status = Change.STATUS_PENDING
+                change.save(update_fields=['status', 'updated_at'])
+                from tasks.scheduled import notify_change
+                notify_change.delay(pk, 'resubmitted')
+                messages.success(request, 'Change resubmitted for approval. The IT Manager has been notified.')
+            else:
+                messages.success(request, 'Change updated.')
             return redirect('change_detail', pk=pk)
     return render(request, 'changes/form.html', {
-        'form': form, 'action': 'Edit', 'change': change,
+        'form': form,
+        'action': 'Save & Resubmit for Approval' if is_pending_changes else 'Edit',
+        'change': change,
         'attachments': change.attachments.all(),
         'linked_tickets': change.tickets.order_by('-pk'),
     })
