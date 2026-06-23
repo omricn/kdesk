@@ -728,12 +728,39 @@ def ticket_bulk_action(request):
         if assignee_id:
             try:
                 assignee = User.objects.get(pk=assignee_id, is_admin=True, is_active=True)
-                qs.update(assignee=assignee)
+                from tasks.scheduled import send_ticket_notification
+                for ticket in qs.select_related('assignee'):
+                    old_assignee = ticket.assignee
+                    if old_assignee == assignee:
+                        continue
+                    ticket.assignee = assignee
+                    ticket.save(update_fields=['assignee', 'updated_at'])
+                    TicketHistory.objects.create(
+                        ticket=ticket,
+                        changed_by=request.user,
+                        field='Assignee',
+                        old_value=str(old_assignee) if old_assignee else 'Unassigned',
+                        new_value=str(assignee),
+                    )
+                    if assignee.notify_on_assign:
+                        send_ticket_notification.delay('assign', ticket.pk, request.user.pk)
                 messages.success(request, f'{count} ticket(s) assigned to {assignee}.')
             except User.DoesNotExist:
                 messages.error(request, 'Selected admin not found.')
         else:
-            qs.update(assignee=None)
+            for ticket in qs.select_related('assignee'):
+                old_assignee = ticket.assignee
+                if not old_assignee:
+                    continue
+                ticket.assignee = None
+                ticket.save(update_fields=['assignee', 'updated_at'])
+                TicketHistory.objects.create(
+                    ticket=ticket,
+                    changed_by=request.user,
+                    field='Assignee',
+                    old_value=str(old_assignee),
+                    new_value='Unassigned',
+                )
             messages.success(request, f'{count} ticket(s) unassigned.')
 
     elif action == 'status':
