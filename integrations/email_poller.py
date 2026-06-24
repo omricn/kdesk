@@ -519,35 +519,52 @@ def _create_ticket_from_message(msg, client, mailbox):
         if _hibob_provisioning_data:
             try:
                 from hibob_sync.models import ProvisioningRequest
+                from django.utils import timezone as _tz
+                import datetime as _dt
                 d = _hibob_provisioning_data
-                ProvisioningRequest.objects.create(
-                    ticket_id=_ticket_pk,
-                    first_name=d['first_name'],
-                    last_name=d['last_name'],
-                    middle_name=d.get('middle_name', ''),
-                    department=d['department'],
-                    division=d['division'],
-                    country=d['country'],
-                    region=d['region'],
-                    start_date=d.get('start_date'),
-                    personal_mobile=d.get('personal_mobile', ''),
-                    reports_to=d.get('reports_to', ''),
-                    job_title=d.get('job_title', ''),
-                    employment_type=d.get('employment_type', ''),
-                    employee_id=d.get('employee_id', ''),
-                    m365_groups=d['m365_groups'],
-                    groups_fallback=d['groups_fallback'],
-                    create_priority_ticket=d.get('create_priority_ticket', False),
-                    priority_permissions_as=d.get('priority_permissions_as', ''),
-                    create_salesforce_ticket=d.get('create_salesforce_ticket', False),
-                    salesforce_country_permission=d.get('salesforce_country_permission', ''),
-                    salesforce_permissions_as=d.get('salesforce_permissions_as', ''),
-                    status='pending',
-                )
-                logger.info(
-                    '[EmailPoller] ProvisioningRequest created for %s %s (ticket #%s)',
-                    d['first_name'], d['last_name'], _ticket_pk,
-                )
+                _cutoff = _tz.now() - _dt.timedelta(days=90)
+                _existing = ProvisioningRequest.objects.filter(
+                    first_name__iexact=d['first_name'],
+                    last_name__iexact=d['last_name'],
+                    created_at__gte=_cutoff,
+                ).exclude(status__in=['failed', 'cancelled']).first()
+                if _existing:
+                    logger.warning(
+                        '[EmailPoller] Duplicate provisioning email ignored — %s %s already has a '
+                        'non-terminal request (pk=%s, status=%s) created on %s.',
+                        d['first_name'], d['last_name'],
+                        _existing.pk, _existing.status,
+                        _existing.created_at.strftime('%d %b %H:%M'),
+                    )
+                else:
+                    ProvisioningRequest.objects.create(
+                        ticket_id=_ticket_pk,
+                        first_name=d['first_name'],
+                        last_name=d['last_name'],
+                        middle_name=d.get('middle_name', ''),
+                        department=d['department'],
+                        division=d['division'],
+                        country=d['country'],
+                        region=d['region'],
+                        start_date=d.get('start_date'),
+                        personal_mobile=d.get('personal_mobile', ''),
+                        reports_to=d.get('reports_to', ''),
+                        job_title=d.get('job_title', ''),
+                        employment_type=d.get('employment_type', ''),
+                        employee_id=d.get('employee_id', ''),
+                        m365_groups=d['m365_groups'],
+                        groups_fallback=d['groups_fallback'],
+                        create_priority_ticket=d.get('create_priority_ticket', False),
+                        priority_permissions_as=d.get('priority_permissions_as', ''),
+                        create_salesforce_ticket=d.get('create_salesforce_ticket', False),
+                        salesforce_country_permission=d.get('salesforce_country_permission', ''),
+                        salesforce_permissions_as=d.get('salesforce_permissions_as', ''),
+                        status='pending',
+                    )
+                    logger.info(
+                        '[EmailPoller] ProvisioningRequest created for %s %s (ticket #%s)',
+                        d['first_name'], d['last_name'], _ticket_pk,
+                    )
             except Exception as exc:
                 logger.error('[EmailPoller] Failed to create ProvisioningRequest: %s', exc)
 
