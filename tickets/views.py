@@ -518,6 +518,9 @@ def ticket_detail(request, pk):
 
         elif action == 'upload':
             file_obj = request.FILES.get('file')
+            if not file_obj:
+                messages.error(request, 'No file selected.')
+                return redirect('ticket_detail', pk=pk)
             if file_obj:
                 from kdesk.upload_utils import allowed_upload
                 err = allowed_upload(file_obj.name)

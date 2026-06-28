@@ -289,15 +289,34 @@
           {% endfor %}
         </div>
         {% endif %}
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="att-upload-form">
           {% csrf_token %}
           <input type="hidden" name="action" value="upload">
-          <div class="d-flex gap-2">
-            <input type="file" name="file" class="form-control form-control-sm">
-            <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Upload</button>
+          <input type="file" name="file" id="att-file-input" class="d-none">
+          <div class="d-flex gap-2 align-items-center">
+            <button type="button" id="att-upload-btn" class="btn btn-sm btn-outline-secondary text-nowrap">
+              <i class="bi bi-upload me-1"></i>Upload
+            </button>
+            <span id="att-file-label" class="text-muted small"></span>
             <button type="button" id="paste-att-btn" class="btn btn-sm btn-outline-secondary text-nowrap" title="Click then Ctrl+V to paste a screenshot"><i class="bi bi-clipboard me-1"></i>Paste</button>
           </div>
         </form>
+        <script>
+        (function () {
+          var btn   = document.getElementById('att-upload-btn');
+          var input = document.getElementById('att-file-input');
+          var label = document.getElementById('att-file-label');
+          var form  = document.getElementById('att-upload-form');
+          btn.addEventListener('click', function () { input.click(); });
+          input.addEventListener('change', function () {
+            if (!input.files.length) return;
+            label.textContent = input.files[0].name;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Uploading…';
+            form.submit();
+          });
+        })();
+        </script>
         <div id="paste-att-hint" class="text-muted mt-1 d-none" style="font-size:11px;"><i class="bi bi-clipboard me-1"></i>Press Ctrl+V to paste screenshot…</div>
       </div>
     </div>
