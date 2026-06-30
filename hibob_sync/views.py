@@ -1318,14 +1318,25 @@ def _send_manager_credentials_email(req):
             f'<p style="margin:0 0 30px;font-size:14px;color:#333333;font-family:{font};text-align:left;">'
             f'The Kramer account for <strong>{full_name}</strong> has been created and is ready to use.</p>'
 
-            # Bulletproof button (table-based so Outlook renders the background correctly)
-            '<table cellspacing="0" cellpadding="0" style="margin:0 auto 28px;">'
-            '<tr><td style="background:#8200B4;border-radius:6px;'
-            'box-shadow:0 3px 8px rgba(130,0,180,.35);">'
-            f'<a href="{credentials_url}" style="display:inline-block;padding:15px 38px;'
-            f'color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;'
-            f'font-family:{font};letter-spacing:.02em;border-radius:6px;">'
-            f'&#128274;&nbsp; See {full_name}\'s credentials</a>'
+            # Button — VML for Outlook (renders proper rounded rect),
+            # CSS <a> for Gmail / Apple Mail / web clients.
+            '<table cellspacing="0" cellpadding="0" style="margin:0 auto 28px;"><tr><td align="center">'
+            '<!--[if mso]>'
+            f'<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" '
+            f'xmlns:w="urn:schemas-microsoft-com:office:word" href="{credentials_url}" '
+            f'style="height:52px;v-text-anchor:middle;width:340px;" arcsize="11%" stroke="f" fillcolor="#8200B4">'
+            f'<w:anchorlock/>'
+            f'<center style="color:#ffffff;font-family:\'Segoe UI\',Calibri,Arial,sans-serif;'
+            f'font-size:15px;font-weight:700;">See {full_name}\'s credentials &rarr;</center>'
+            f'</v:roundrect>'
+            '<![endif]-->'
+            '<!--[if !mso]><!-->'
+            f'<a href="{credentials_url}" style="background-color:#8200B4;border-radius:6px;'
+            f'color:#ffffff;display:inline-block;font-family:{font};font-size:15px;font-weight:700;'
+            f'line-height:52px;text-align:center;text-decoration:none;width:340px;'
+            f'-webkit-text-size-adjust:none;mso-hide:all;">'
+            f'See {full_name}\'s credentials &rarr;</a>'
+            '<!--<![endif]-->'
             '</td></tr></table>'
 
             # Footer
