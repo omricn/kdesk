@@ -33,4 +33,8 @@ urlpatterns = [
     path('hibob-sync/offboarding/<int:req_id>/log/', views.offboarding_log, name='hibob_sync_offboarding_log'),
     path('hibob-sync/api/offboarding/statuses/', views.api_offboarding_statuses, name='hibob_sync_api_offboarding_statuses'),
     path('hibob-sync/offboarding/preview-manager-email/', views.offboarding_manager_email_preview, name='hibob_sync_offboarding_preview_manager_email'),
+    # Credentials sharing
+    path('hibob-sync/api/provisioning/<int:req_id>/store-credentials/', views.api_store_credentials, name='hibob_sync_api_store_credentials'),
+    path('hibob-sync/credentials/<int:req_id>/', views.provisioning_credentials, name='provisioning_credentials'),
+    path('hibob-sync/credentials/<int:req_id>/viewed/', views.provisioning_credentials_viewed, name='provisioning_credentials_viewed'),
 ]

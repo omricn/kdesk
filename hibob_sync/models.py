@@ -69,6 +69,11 @@ class ProvisioningRequest(models.Model):
     result_log = models.TextField(blank=True)
     result_message = models.TextField(blank=True)
 
+    # Credentials sharing — populated by the PS script after E5 + Joiners are assigned
+    temp_password = models.CharField(max_length=128, blank=True, default='')
+    manager_email = models.EmailField(blank=True, default='')
+    credentials_viewed = models.BooleanField(default=False)
+
     class Meta:
         ordering = ['-created_at']
 

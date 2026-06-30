@@ -1286,6 +1286,60 @@ def _build_manager_onedrive_email_html(employee_name, employee_email, manager_na
     )
 
 
+def _send_manager_credentials_email(req):
+    """Send a 'credentials ready' notification to the new employee's manager."""
+    try:
+        from integrations.graph_client import get_client
+
+        full_name = f'{req.first_name} {req.last_name}'.strip()
+        credentials_url = f'https://kdesk.kramerav.com/hibob-sync/credentials/{req.id}/'
+        manager_greeting = req.reports_to or 'Manager'
+
+        body_html = (
+            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;">'
+            '<div style="background:#28a745;color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
+            '<h2 style="margin:0;font-size:17px;font-weight:600;">New Employee Account Ready</h2>'
+            '</div>'
+            '<div style="border:1px solid #ddd;border-top:none;padding:22px 22px 18px;'
+            'border-radius:0 0 6px 6px;background:#fafafa;">'
+            f'<p style="margin:0 0 16px;font-size:14px;color:#333;">Hi {manager_greeting},</p>'
+            f'<p style="margin:0 0 20px;font-size:14px;color:#333;">'
+            f'A new Microsoft 365 account has been created for <strong>{full_name}</strong> '
+            f'and is ready to use.</p>'
+            '<table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #eee;'
+            'border-radius:4px;margin-bottom:24px;">'
+            '<tr><td style="padding:8px 14px;font-weight:bold;color:#555;white-space:nowrap;font-size:13px;">'
+            f'Employee</td><td style="padding:8px 14px;font-size:13px;"><strong>{full_name}</strong></td></tr>'
+            '<tr style="background:#f9f9f9;">'
+            '<td style="padding:8px 14px;font-weight:bold;color:#555;white-space:nowrap;font-size:13px;">'
+            'Email / Username</td>'
+            f'<td style="padding:8px 14px;font-size:13px;">'
+            f'<a href="mailto:{req.work_email}" style="color:#0078d4;">{req.work_email}</a></td></tr>'
+            '</table>'
+            f'<a href="{credentials_url}" style="display:inline-block;background:#0078d4;color:#fff;'
+            'text-decoration:none;padding:11px 24px;border-radius:4px;font-size:14px;font-weight:bold;'
+            'margin-bottom:20px;">View Temporary Password →</a>'
+            '<p style="margin:0;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:14px;">'
+            'You will need to sign in with your Kramer company account to view the temporary password. '
+            'This link is intended for the direct manager only.'
+            '</p>'
+            '</div></div>'
+        )
+
+        client = get_client()
+        client.send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email=req.manager_email,
+            subject=f'New employee account ready — {full_name}',
+            body_html=body_html,
+        )
+        logger.info(
+            '[Provisioning] Credentials email sent to %s for req #%s', req.manager_email, req.id
+        )
+    except Exception as exc:
+        logger.warning('[Provisioning] Could not send credentials email: %s', exc)
+
+
 def _send_manager_onedrive_notification(req):
     """Send the 93-day OneDrive access window email to the direct manager."""
     try:
@@ -1344,3 +1398,82 @@ def offboarding_manager_email_preview(request):
     )
     from django.http import HttpResponse
     return HttpResponse(f'Preview sent to {request.user.email}. Check your inbox.', status=200)
+
+
+# ── Credentials sharing ───────────────────────────────────────────────────────
+
+@csrf_exempt
+def api_store_credentials(request, req_id):
+    """Called by the PS script after E5 and Joiners groups are confirmed assigned.
+    Stores the temp password + manager email, then sends the manager notification email.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    if not _check_api_key(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    password = data.get('password', '').strip()
+    manager_email = data.get('manager_email', '').strip()
+
+    if not password or not manager_email:
+        return JsonResponse({'error': 'password and manager_email are required'}, status=400)
+
+    req = ProvisioningRequest.objects.filter(id=req_id, status='claimed').first()
+    if not req:
+        return JsonResponse({'error': 'Request not found or not in claimed state'}, status=404)
+
+    req.temp_password = password
+    req.manager_email = manager_email
+    req.save(update_fields=['temp_password', 'manager_email'])
+
+    _send_manager_credentials_email(req)
+
+    return JsonResponse({'ok': True})
+
+
+def provisioning_credentials(request, req_id):
+    """SSO-protected page that shows a new employee's temporary password to their manager."""
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    req = get_object_or_404(ProvisioningRequest, id=req_id)
+
+    is_authorized = (
+        request.user.is_superuser or
+        (request.user.email and req.manager_email and
+         request.user.email.lower() == req.manager_email.lower())
+    )
+    if not is_authorized:
+        messages.error(request, 'Access denied — this link is only accessible to the assigned manager.')
+        return redirect('dashboard')
+
+    return render(request, 'hibob_sync/credentials.html', {'req': req})
+
+
+def provisioning_credentials_viewed(request, req_id):
+    """AJAX endpoint — marks credentials as viewed when the manager ticks the checkbox."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    req = get_object_or_404(ProvisioningRequest, id=req_id)
+
+    is_authorized = (
+        request.user.is_superuser or
+        (request.user.email and req.manager_email and
+         request.user.email.lower() == req.manager_email.lower())
+    )
+    if not is_authorized:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    if not req.credentials_viewed:
+        ProvisioningRequest.objects.filter(id=req_id).update(credentials_viewed=True)
+
+    return JsonResponse({'ok': True})
