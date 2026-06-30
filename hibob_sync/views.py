@@ -1485,7 +1485,6 @@ def test_credentials_email(request):
     if deny:
         return deny
 
-    full_name = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.email
     req = ProvisioningRequest.objects.create(
         first_name='Test',
         last_name='NewUser',
@@ -1493,7 +1492,7 @@ def test_credentials_email(request):
         division='Technology',
         country='Israel',
         region='HQ',
-        reports_to=full_name,
+        reports_to=request.user.email,
         job_title='Test Account — delete me',
         status='completed',
         work_email='test.newuser@kramerav.com',
