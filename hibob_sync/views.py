@@ -1477,3 +1477,36 @@ def provisioning_credentials_viewed(request, req_id):
         ProvisioningRequest.objects.filter(id=req_id).update(credentials_viewed=True)
 
     return JsonResponse({'ok': True})
+
+
+def test_credentials_email(request):
+    """Superuser-only: create a mock provisioning record and fire the credentials email to yourself."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    full_name = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.email
+    req = ProvisioningRequest.objects.create(
+        first_name='Test',
+        last_name='NewUser',
+        department='IT',
+        division='Technology',
+        country='Israel',
+        region='HQ',
+        reports_to=full_name,
+        job_title='Test Account — delete me',
+        status='completed',
+        work_email='test.newuser@kramerav.com',
+        temp_password='Tu12341234!@',
+        manager_email=request.user.email,
+    )
+    _send_manager_credentials_email(req)
+
+    from django.http import HttpResponse
+    creds_url = f'https://kdesk.kramerav.com/hibob-sync/credentials/{req.id}/'
+    return HttpResponse(
+        f'Done. Email sent to {request.user.email}.<br>'
+        f'req_id={req.id}<br>'
+        f'<a href="{creds_url}">{creds_url}</a>',
+        content_type='text/html',
+    )

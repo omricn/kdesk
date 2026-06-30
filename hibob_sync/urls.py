@@ -37,4 +37,5 @@ urlpatterns = [
     path('hibob-sync/api/provisioning/<int:req_id>/store-credentials/', views.api_store_credentials, name='hibob_sync_api_store_credentials'),
     path('hibob-sync/credentials/<int:req_id>/', views.provisioning_credentials, name='provisioning_credentials'),
     path('hibob-sync/credentials/<int:req_id>/viewed/', views.provisioning_credentials_viewed, name='provisioning_credentials_viewed'),
+    path('hibob-sync/test-credentials-email/', views.test_credentials_email, name='hibob_sync_test_credentials_email'),
 ]
