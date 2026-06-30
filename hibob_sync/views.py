@@ -1294,36 +1294,60 @@ def _send_manager_credentials_email(req):
         full_name = f'{req.first_name} {req.last_name}'.strip()
         credentials_url = f'https://kdesk.kramerav.com/hibob-sync/credentials/{req.id}/'
         manager_greeting = req.reports_to or 'Manager'
+        font = "'Segoe UI', Calibri, Arial, Helvetica, sans-serif"
 
         body_html = (
-            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;">'
-            '<div style="background:#28a745;color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
-            '<h2 style="margin:0;font-size:17px;font-weight:600;">New Employee Account Ready</h2>'
+            f'<div style="font-family:{font};max-width:620px;margin:0 auto;background:#f2f2f2;padding:24px;">'
+
+            # Card
+            '<div style="background:#ffffff;border-radius:8px;overflow:hidden;'
+            'box-shadow:0 2px 10px rgba(0,0,0,.09);">'
+
+            # Header
+            '<div style="background:#28a745;padding:20px 28px;">'
+            f'<h2 style="margin:0;font-size:18px;font-weight:600;color:#ffffff;font-family:{font};">'
+            'New Employee Account Ready</h2>'
             '</div>'
-            '<div style="border:1px solid #ddd;border-top:none;padding:22px 22px 18px;'
-            'border-radius:0 0 6px 6px;background:#fafafa;">'
-            f'<p style="margin:0 0 16px;font-size:14px;color:#333;">Hi {manager_greeting},</p>'
-            f'<p style="margin:0 0 20px;font-size:14px;color:#333;">'
-            f'A new Microsoft 365 account has been created for <strong>{full_name}</strong> '
-            f'and is ready to use.</p>'
-            '<table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #eee;'
-            'border-radius:4px;margin-bottom:24px;">'
-            '<tr><td style="padding:8px 14px;font-weight:bold;color:#555;white-space:nowrap;font-size:13px;">'
-            f'Employee</td><td style="padding:8px 14px;font-size:13px;"><strong>{full_name}</strong></td></tr>'
-            '<tr style="background:#f9f9f9;">'
-            '<td style="padding:8px 14px;font-weight:bold;color:#555;white-space:nowrap;font-size:13px;">'
-            'Email / Username</td>'
-            f'<td style="padding:8px 14px;font-size:13px;">'
-            f'<a href="mailto:{req.work_email}" style="color:#0078d4;">{req.work_email}</a></td></tr>'
+
+            # Body
+            '<div style="padding:28px 28px 26px;">'
+
+            f'<p style="margin:0 0 14px;font-size:14px;color:#333333;font-family:{font};">'
+            f'Hi {manager_greeting},</p>'
+
+            f'<p style="margin:0 0 24px;font-size:14px;color:#333333;font-family:{font};">'
+            f'The Kramer account for <strong>{full_name}</strong> has been created and is ready to use.</p>'
+
+            # Info table
+            '<table style="border-collapse:collapse;width:100%;border:1px solid #e4e4e4;'
+            'border-radius:6px;overflow:hidden;margin-bottom:30px;">'
+            f'<tr style="background:#f8f8f8;"><td style="padding:11px 16px;font-weight:600;color:#555;'
+            f'white-space:nowrap;font-size:13px;font-family:{font};border-bottom:1px solid #e4e4e4;">'
+            f'Employee</td><td style="padding:11px 16px;font-size:13px;font-family:{font};'
+            f'border-bottom:1px solid #e4e4e4;"><strong>{full_name}</strong></td></tr>'
+            f'<tr><td style="padding:11px 16px;font-weight:600;color:#555;white-space:nowrap;'
+            f'font-size:13px;font-family:{font};">Email / Username</td>'
+            f'<td style="padding:11px 16px;font-size:13px;font-family:{font};">'
+            f'<a href="mailto:{req.work_email}" style="color:#0078d4;text-decoration:none;">'
+            f'{req.work_email}</a></td></tr>'
             '</table>'
-            f'<a href="{credentials_url}" style="display:inline-block;background:#0078d4;color:#fff;'
-            'text-decoration:none;padding:11px 24px;border-radius:4px;font-size:14px;font-weight:bold;'
-            'margin-bottom:20px;">View Temporary Password →</a>'
-            '<p style="margin:0;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:14px;">'
+
+            # Centered prominent button
+            '<div style="text-align:center;margin:0 0 28px;">'
+            f'<a href="{credentials_url}" style="display:inline-block;background:#8200B4;color:#ffffff;'
+            f'text-decoration:none;padding:15px 36px;border-radius:6px;font-size:15px;font-weight:600;'
+            f'font-family:{font};letter-spacing:.01em;">'
+            f'Click here to see {full_name}\'s credentials</a>'
+            '</div>'
+
+            # Footer
+            f'<p style="margin:0;font-size:12px;color:#999999;border-top:1px solid #eeeeee;'
+            f'padding-top:16px;font-family:{font};">'
             'You will need to sign in with your Kramer company account to view the temporary password. '
             'This link is intended for the direct manager only.'
             '</p>'
-            '</div></div>'
+
+            '</div></div></div>'
         )
 
         client = get_client()
