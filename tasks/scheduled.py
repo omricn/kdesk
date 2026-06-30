@@ -106,11 +106,14 @@ def check_sla():
 
 def _email_html(header_title: str, header_subtitle: str, greeting: str, body_rows: str,
                 cta_url: str = None, cta_label: str = None,
-                header_color: str = '#8205B4', header_text_color: str = '#ffffff') -> str:
+                header_color: str = '#8205B4', header_text_color: str = '#ffffff',
+                cta_raw: str = None, extra_html: str = '') -> str:
     """
     Render a fully branded Kramer email.
     body_rows: HTML rows for the details table (tr elements).
     header_text_color: '#ffffff' for dark headers, '#1a1a2e' for light headers (e.g. green).
+    cta_raw: optional raw HTML block used as the CTA (overrides cta_url/cta_label).
+    extra_html: optional raw HTML appended inside the body after the CTA block.
     """
     logo_url = f'{settings.SITE_URL}/static/img/kramer_logo.png'
     logo_footer_url = f'{settings.SITE_URL}/static/img/kramer_logo_footer.png'
@@ -118,7 +121,9 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
     logo_filter = 'brightness(0)' if header_text_color != '#ffffff' else 'brightness(0) invert(1)'
 
     cta_block = ''
-    if cta_url and cta_label:
+    if cta_raw:
+        cta_block = f'<tr><td style="padding:24px 0 8px;">{cta_raw}</td></tr>'
+    elif cta_url and cta_label:
         cta_block = f'''
         <tr><td style="padding:24px 0 8px;">
           <a href="{cta_url}"
@@ -214,6 +219,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
         </td></tr>
         {details_block}
         {cta_block}
+        {f'<tr><td style="padding-top:8px;">{extra_html}</td></tr>' if extra_html else ''}
       </table>
     </td>
   </tr>

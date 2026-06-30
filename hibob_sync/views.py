@@ -589,7 +589,9 @@ def _send_provisioning_result_notification(req, outcome='success', work_email=''
     result_log: full PS log text (included in failure emails as a highlighted tail).
     """
     try:
+        from tasks.scheduled import _email_html, _row
         from integrations.graph_client import get_client
+        from django.utils.html import escape
 
         full_name = f'{req.first_name} {req.last_name}'.strip()
         dashboard_url = 'https://kdesk.kramerav.com/hibob-sync/#tab-prov'
@@ -606,90 +608,81 @@ def _send_provisioning_result_notification(req, outcome='success', work_email=''
             subject      = f'✅ Provisioned — {full_name}'
             header_color = '#28a745'
             header_title = 'New Employee Provisioned'
-            extra_label  = 'Work Email'
-            extra_value  = f'<a href="mailto:{work_email}" style="color:#0078d4;">{work_email}</a>'
+            greeting     = (f'Hi Kdesk Team,<br><br>The account for <strong>{escape(full_name)}</strong> '
+                            f'has been successfully provisioned.')
         elif outcome == 'failed':
             subject      = f'❌ Provisioning FAILED — {full_name}'
             header_color = '#dc3545'
             header_title = 'Provisioning Failed'
-            extra_label  = 'Failure Reason'
-            extra_value  = (failure_reason or 'See log below.').replace('<', '&lt;').replace('>', '&gt;')
+            greeting     = (f'Hi Kdesk Team,<br><br>The provisioning script encountered an error '
+                            f'while creating the account for <strong>{escape(full_name)}</strong>.')
         else:  # disabled
             subject      = f'⚠️ Disabled Account Found — {full_name}'
             header_color = '#fd7e14'
             header_title = 'Returning Employee — Manual Re-activation Required'
-            extra_label  = 'Disabled Account'
-            extra_value  = blocked_upn
+            greeting     = (f'Hi Kdesk Team,<br><br>A disabled AD account was found for '
+                            f'<strong>{escape(full_name)}</strong>. Manual re-activation is required.')
 
-        td_k = 'style="padding:6px 12px;font-weight:bold;color:#555;white-space:nowrap;vertical-align:top;"'
-        td_v = 'style="padding:6px 12px;"'
-        rows = [
-            ('Employee',   f'<strong>{full_name}</strong>'),
-            ('Job Title',  req.job_title or '—'),
-            ('Department', dept_str),
-            ('Country',    req.country or '—'),
-            ('Start Date', str(req.start_date) if req.start_date else '—'),
-            (extra_label,  extra_value),
-        ]
-        rows_html = ''
-        for i, (label, value) in enumerate(rows):
-            row_style = ' style="background:#f9f9f9;"' if i % 2 else ''
-            rows_html += f'<tr{row_style}><td {td_k}>{label}</td><td {td_v}>{value}</td></tr>'
+        rows_html = (
+            _row('Employee',   full_name, header_color) +
+            _row('Job Title',  req.job_title or '—') +
+            _row('Department', dept_str) +
+            _row('Country',    req.country or '—') +
+            _row('Start Date', str(req.start_date) if req.start_date else '—')
+        )
+        if outcome == 'success':
+            rows_html += _row('Work Email', work_email)
+        elif outcome == 'failed':
+            rows_html += _row('Failure Reason', failure_reason or 'See log below.')
+        else:
+            rows_html += _row('Disabled Account', blocked_upn)
 
-        links_html = f'<a href="{dashboard_url}" style="color:#0078d4;text-decoration:none;">View Dashboard</a>'
-        if ticket_url:
-            links_html += (
-                f' &nbsp;&middot;&nbsp; '
-                f'<a href="{ticket_url}" style="color:#0078d4;text-decoration:none;">View Ticket</a>'
-            )
-
-        # For failure emails: include a highlighted log tail (last 50 lines,
-        # with ERROR lines in red and WARN lines in orange).
-        log_html = ''
+        extra_html = ''
         if outcome == 'failed' and result_log:
             all_lines = result_log.splitlines()
             tail = all_lines[-50:] if len(all_lines) > 50 else all_lines
             line_parts = []
             for line in tail:
-                escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                esc = escape(line)
                 if '[ERROR]' in line:
-                    line_parts.append(
-                        f'<span style="color:#dc3545;font-weight:bold;">{escaped}</span>'
-                    )
+                    line_parts.append(f'<span style="color:#dc3545;font-weight:bold;">{esc}</span>')
                 elif '[WARN]' in line:
-                    line_parts.append(
-                        f'<span style="color:#fd7e14;">{escaped}</span>'
-                    )
+                    line_parts.append(f'<span style="color:#fd7e14;">{esc}</span>')
                 else:
-                    line_parts.append(escaped)
-            log_block = '\n'.join(line_parts)
+                    line_parts.append(esc)
             omitted = len(all_lines) - len(tail)
             omitted_note = (
                 f'<div style="color:#888;font-size:11px;margin-bottom:4px;">'
-                f'(first {omitted} lines omitted — <a href="{dashboard_url}" style="color:#0078d4;">view full log in dashboard</a>)'
+                f'(first {omitted} lines omitted — '
+                f'<a href="{dashboard_url}" style="color:#8205B4;">view full log in dashboard</a>)'
                 f'</div>'
             ) if omitted else ''
-            log_html = (
-                f'<div style="margin-top:16px;">'
+            extra_html = (
+                f'<div style="margin-top:8px;">'
                 f'<div style="font-weight:bold;color:#555;margin-bottom:6px;font-size:13px;">Script Log</div>'
                 f'{omitted_note}'
                 f'<pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;'
                 f'font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;'
-                f'word-break:break-all;margin:0;">{log_block}</pre>'
+                f'word-break:break-all;margin:0;">{chr(10).join(line_parts)}</pre>'
                 f'</div>'
             )
 
-        body_html = (
-            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;">'
-            f'<div style="background:{header_color};color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
-            f'<h2 style="margin:0;font-size:17px;font-weight:600;">{header_title}</h2></div>'
-            '<div style="border:1px solid #ddd;border-top:none;padding:20px 20px 16px;'
-            'border-radius:0 0 6px 6px;background:#fafafa;">'
-            '<table style="border-collapse:collapse;width:100%;background:#fff;'
-            f'border:1px solid #eee;border-radius:4px;">{rows_html}</table>'
-            f'{log_html}'
-            f'<p style="margin:14px 0 0;font-size:13px;color:#555;">{links_html}</p>'
-            '</div></div>'
+        if ticket_url:
+            extra_html += (
+                f'<p style="margin:12px 0 0;font-size:13px;">'
+                f'<a href="{ticket_url}" style="color:#8205B4;text-decoration:none;">View related ticket →</a>'
+                f'</p>'
+            )
+
+        body_html = _email_html(
+            header_title=header_title,
+            header_subtitle=full_name,
+            header_color=header_color,
+            greeting=greeting,
+            body_rows=rows_html,
+            cta_url=dashboard_url,
+            cta_label='View Dashboard',
+            extra_html=extra_html,
         )
 
         client = get_client()
@@ -1079,101 +1072,98 @@ def _post_offboarding_ticket_comment(req, outcome='success'):
 
 def _send_offboarding_notification(req, outcome='success', result_log=''):
     try:
+        from tasks.scheduled import _email_html, _row
         from integrations.graph_client import get_client
+        from django.utils.html import escape
 
         dashboard_url = 'https://kdesk.kramerav.com/hibob-sync/#tab-offboard'
         ticket_url = (
             f'https://kdesk.kramerav.com/tickets/{req.ticket.pk}/'
             if req.ticket else None
         )
+        display_name = escape(req.employee_name or req.employee_email)
 
         if outcome == 'success':
             subject      = f'Offboarded — {req.employee_name or req.employee_email}'
             header_color = '#28a745'
             header_title = 'Employee Offboarding Completed'
+            greeting     = f'Hi Kdesk Team,<br><br>The offboarding of <strong>{display_name}</strong> has been completed successfully.'
         elif outcome == 'not_found':
             subject      = f'Offboarding Blocked — Employee Not Found in AD ({req.employee_email})'
             header_color = '#fd7e14'
             header_title = 'Offboarding Blocked — Employee Not Found'
+            greeting     = (f'Hi Kdesk Team,<br><br>The AD account for <strong>{display_name}</strong> '
+                            f'was not found by email address. Manual action may be required.')
         else:
             subject      = f'Offboarding FAILED — {req.employee_name or req.employee_email}'
             header_color = '#dc3545'
             header_title = 'Employee Offboarding Failed'
+            greeting     = (f'Hi Kdesk Team,<br><br>The offboarding script encountered an error '
+                            f'while processing <strong>{display_name}</strong>.')
 
-        td_k = 'style="padding:6px 12px;font-weight:bold;color:#555;white-space:nowrap;vertical-align:top;"'
-        td_v = 'style="padding:6px 12px;"'
-        rows = [
-            ('Employee',         req.employee_name or '—'),
-            ('Email',            req.employee_email),
-            ('Department',       req.department or '—'),
-            ('Manager',          req.direct_manager or '—'),
-            ('Country',          req.country_origin or '—'),
-            ('Termination Date', str(req.termination_date) if req.termination_date else '—'),
-        ]
-        rows_html = ''
-        for i, (label, value) in enumerate(rows):
-            row_style = ' style="background:#f9f9f9;"' if i % 2 else ''
-            rows_html += f'<tr{row_style}><td {td_k}>{label}</td><td {td_v}>{value}</td></tr>'
+        rows_html = (
+            _row('Employee',         req.employee_name or '—', header_color) +
+            _row('Email',            req.employee_email) +
+            _row('Department',       req.department or '—') +
+            _row('Manager',          req.direct_manager or '—') +
+            _row('Country',          req.country_origin or '—') +
+            _row('Termination Date', str(req.termination_date) if req.termination_date else '—')
+        )
 
+        extra_html = ''
         if outcome == 'not_found':
-            note_html = (
-                '<p style="color:#856404;background:#fff3cd;border:1px solid #ffc107;'
-                'border-radius:4px;padding:10px 14px;margin-top:16px;font-size:13px;">'
-                '<strong>Action required:</strong> The employee\'s AD account was not found by email address. '
-                'Please verify the account exists in AD and handle offboarding steps manually if needed.'
-                '</p>'
+            extra_html = (
+                '<div style="background:#fff3cd;border-left:4px solid #ffc107;border-radius:4px;'
+                'padding:12px 16px;margin-top:8px;font-size:13px;color:#856404;">'
+                '<strong>Action required:</strong> Please verify the account exists in AD and '
+                'handle offboarding steps manually if needed.'
+                '</div>'
             )
-        else:
-            note_html = ''
-
-        log_html = ''
-        if outcome == 'failed' and result_log:
+        elif outcome == 'failed' and result_log:
             all_lines = result_log.splitlines()
             tail = all_lines[-50:] if len(all_lines) > 50 else all_lines
             line_parts = []
             for line in tail:
-                escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                esc = escape(line)
                 if '[ERROR]' in line:
-                    line_parts.append(f'<span style="color:#dc3545;font-weight:bold;">{escaped}</span>')
+                    line_parts.append(f'<span style="color:#dc3545;font-weight:bold;">{esc}</span>')
                 elif '[WARN]' in line:
-                    line_parts.append(f'<span style="color:#fd7e14;">{escaped}</span>')
+                    line_parts.append(f'<span style="color:#fd7e14;">{esc}</span>')
                 else:
-                    line_parts.append(escaped)
+                    line_parts.append(esc)
             omitted = len(all_lines) - len(tail)
             omitted_note = (
                 f'<div style="color:#888;font-size:11px;margin-bottom:4px;">'
-                f'(first {omitted} lines omitted — <a href="{dashboard_url}" style="color:#0078d4;">view full log in dashboard</a>)'
+                f'(first {omitted} lines omitted — '
+                f'<a href="{dashboard_url}" style="color:#8205B4;">view full log in dashboard</a>)'
                 f'</div>'
             ) if omitted else ''
-            log_block = '\n'.join(line_parts)
-            log_html = (
-                f'<div style="margin-top:16px;">'
+            extra_html = (
+                f'<div style="margin-top:8px;">'
                 f'<div style="font-weight:bold;color:#555;margin-bottom:6px;font-size:13px;">Script Log</div>'
                 f'{omitted_note}'
                 f'<pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;'
                 f'font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;'
-                f'word-break:break-all;margin:0;">{log_block}</pre>'
+                f'word-break:break-all;margin:0;">{chr(10).join(line_parts)}</pre>'
                 f'</div>'
             )
 
-        links_html = f'<a href="{dashboard_url}" style="color:#0078d4;text-decoration:none;">View Dashboard</a>'
         if ticket_url:
-            links_html += (
-                f' &nbsp;&middot;&nbsp; '
-                f'<a href="{ticket_url}" style="color:#0078d4;text-decoration:none;">View Ticket</a>'
+            extra_html += (
+                f'<p style="margin:12px 0 0;font-size:13px;">'
+                f'<a href="{ticket_url}" style="color:#8205B4;text-decoration:none;">View related ticket →</a>'
+                f'</p>'
             )
 
-        body_html = (
-            '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;">'
-            f'<div style="background:{header_color};color:#fff;padding:14px 20px;border-radius:6px 6px 0 0;">'
-            f'<h2 style="margin:0;font-size:17px;font-weight:600;">{header_title}</h2></div>'
-            '<div style="border:1px solid #ddd;border-top:none;padding:20px 20px 16px;'
-            'border-radius:0 0 6px 6px;background:#fafafa;">'
-            '<table style="border-collapse:collapse;width:100%;background:#fff;'
-            f'border:1px solid #eee;border-radius:4px;">{rows_html}</table>'
-            f'{note_html}{log_html}'
-            f'<p style="margin:14px 0 0;font-size:13px;color:#555;">{links_html}</p>'
-            '</div></div>'
+        body_html = _email_html(
+            header_title=header_title,
+            header_subtitle=req.employee_name or req.employee_email,
+            header_color=header_color,
+            greeting=greeting,
+            body_rows=rows_html,
+            cta_url=dashboard_url,
+            cta_label='View Dashboard',
+            extra_html=extra_html,
         )
 
         client = get_client()
@@ -1225,128 +1215,114 @@ def _lookup_manager_email(manager_display_name: str) -> str | None:
 
 
 def _build_manager_onedrive_email_html(employee_name, employee_email, manager_name, onedrive_url):
-    termination_deadline = '93 days from the date of offboarding'
-    return (
-        '<div style="font-family:Arial,Helvetica,sans-serif;max-width:660px;margin:0 auto;">'
+    from tasks.scheduled import _email_html, _row
+    from django.utils.html import escape
 
-        # Header
-        '<div style="background:#e67e22;color:#fff;padding:16px 22px;border-radius:6px 6px 0 0;">'
-        '<h2 style="margin:0;font-size:17px;font-weight:600;">Action Required — OneDrive Access Window</h2>'
-        '</div>'
+    font = "'Segoe UI', Calibri, Arial, Helvetica, sans-serif"
+    onedrive_button = (
+        '<table cellspacing="0" cellpadding="0" style="margin:0;"><tr><td align="left">'
+        '<!--[if mso]>'
+        f'<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" '
+        f'xmlns:w="urn:schemas-microsoft-com:office:word" href="{onedrive_url}" '
+        f'style="height:44px;v-text-anchor:middle;width:220px;" arcsize="11%" stroke="f" fillcolor="#0078d4">'
+        f'<w:anchorlock/>'
+        f'<center style="color:#ffffff;font-family:\'Segoe UI\',Calibri,Arial,sans-serif;'
+        f'font-size:14px;font-weight:700;">Open OneDrive &rarr;</center>'
+        f'</v:roundrect>'
+        '<![endif]-->'
+        '<!--[if !mso]><!-->'
+        f'<a href="{onedrive_url}" style="background-color:#0078d4;border-radius:6px;'
+        f'color:#ffffff;display:inline-block;font-family:{font};font-size:14px;font-weight:700;'
+        f'line-height:44px;text-align:center;text-decoration:none;width:220px;'
+        f'-webkit-text-size-adjust:none;mso-hide:all;">'
+        f'Open OneDrive &rarr;</a>'
+        '<!--<![endif]-->'
+        '</td></tr></table>'
+    )
 
-        # Body
-        '<div style="border:1px solid #ddd;border-top:none;padding:22px 22px 18px;'
-        'border-radius:0 0 6px 6px;background:#fafafa;">'
-
-        # Intro
-        f'<p style="margin:12px 0 14px;font-size:14px;color:#333;">'
-        f'Hi {manager_name},</p>'
-        f'<p style="margin:0 0 16px;font-size:14px;color:#333;">'
-        f'The offboarding of <strong>{employee_name}</strong> ({employee_email}) has been completed. '
-        f'As the direct manager, you have been granted access to their OneDrive.'
-        f'</p>'
-
-        # Action box
-        '<div style="background:#fff8e1;border-left:4px solid #e67e22;border-radius:4px;'
-        'padding:14px 18px;margin:0 0 20px;">'
-        '<p style="margin:0 0 8px;font-size:14px;font-weight:bold;color:#b7570a;">'
-        '⚠️  Important: You have a limited time window to retrieve data.</p>'
-        '<p style="margin:0;font-size:13px;color:#5d4037;line-height:1.6;">'
+    greeting = (
+        f'Hi <strong>{escape(manager_name)}</strong>,<br><br>'
+        f'The offboarding of <strong>{escape(employee_name)}</strong> ({escape(employee_email)}) '
+        f'has been completed. As the direct manager, you have been granted access to their OneDrive.'
+        f'<br><br>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" style="background:#fff8e1;'
+        f'border-left:4px solid #e67e22;border-radius:4px;margin:0 0 8px;">'
+        f'<tr><td style="padding:14px 18px;">'
+        f'<p style="margin:0 0 8px;font-size:14px;font-weight:bold;color:#b7570a;">'
+        f'&#9888;&#65039;  Important: You have a limited time window to retrieve data.</p>'
+        f'<p style="margin:0;font-size:13px;color:#5d4037;line-height:1.6;">'
         f'Microsoft automatically <strong>permanently deletes</strong> a departed employee\'s OneDrive '
-        f'<strong>{termination_deadline}</strong>. '
+        f'<strong>93 days from the date of offboarding</strong>. '
         f'After that point, the data is <strong>unrecoverable</strong>.<br><br>'
-        '<strong>Please copy any files or folders you need to your own OneDrive before this deadline.</strong>'
-        '</p>'
-        '</div>'
+        f'<strong>Please copy any files or folders you need to your own OneDrive before this deadline.</strong>'
+        f'</p></td></tr></table>'
+    )
 
-        # Employee row
-        '<table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #eee;'
-        'border-radius:4px;margin-bottom:20px;">'
-        '<tr><td style="padding:7px 14px;font-weight:bold;color:#555;white-space:nowrap;'
-        'vertical-align:top;font-size:13px;">Employee</td>'
-        f'<td style="padding:7px 14px;font-size:13px;">{employee_name}</td></tr>'
-        '<tr style="background:#f9f9f9;"><td style="padding:7px 14px;font-weight:bold;color:#555;'
-        'white-space:nowrap;vertical-align:top;font-size:13px;">Email</td>'
-        f'<td style="padding:7px 14px;font-size:13px;">{employee_email}</td></tr>'
-        '</table>'
+    rows_html = (
+        _row('Employee', employee_name, '#8205B4') +
+        _row('Email',    employee_email)
+    )
 
-        # OneDrive button
-        '<p style="margin:0 0 8px;font-size:13px;color:#555;">Access the OneDrive here:</p>'
-        f'<a href="{onedrive_url}" style="display:inline-block;background:#0078d4;color:#fff;'
-        'text-decoration:none;padding:10px 22px;border-radius:4px;font-size:13px;font-weight:bold;">'
-        f'Open OneDrive →</a>'
-
-        # Footer note
-        '<p style="margin:18px 0 0;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:12px;">'
-        'This notification was sent automatically by Kdesk upon completion of the offboarding process. '
-        'If you believe you received this in error, please contact the IT department.'
-        '</p>'
-
-        '</div></div>'
+    return _email_html(
+        header_title='Action Required — OneDrive Access Window',
+        header_subtitle=f'{employee_name} — 93-day data retrieval window',
+        header_color='#8205B4',
+        greeting=greeting,
+        body_rows=rows_html,
+        cta_raw=onedrive_button,
     )
 
 
 def _send_manager_credentials_email(req):
     """Send a 'credentials ready' notification to the new employee's manager."""
     try:
+        from tasks.scheduled import _email_html
         from integrations.graph_client import get_client
+        from django.utils.html import escape
 
         full_name = f'{req.first_name} {req.last_name}'.strip()
         credentials_url = f'https://kdesk.kramerav.com/hibob-sync/credentials/{req.id}/'
-        manager_greeting = req.reports_to or 'Manager'
+        manager_greeting = escape(req.reports_to or 'Manager')
         font = "'Segoe UI', Calibri, Arial, Helvetica, sans-serif"
 
-        body_html = (
-            f'<div style="font-family:{font};max-width:580px;margin:0 auto;background:#f2f2f2;padding:24px;">'
-
-            # Card
-            '<div style="background:#ffffff;border-radius:8px;overflow:hidden;'
-            'box-shadow:0 2px 10px rgba(0,0,0,.09);">'
-
-            # Header
-            '<div style="background:#28a745;padding:20px 28px;">'
-            f'<h2 style="margin:0;font-size:18px;font-weight:600;color:#ffffff;font-family:{font};">'
-            'New Employee Account Ready</h2>'
-            '</div>'
-
-            # Body
-            '<div style="padding:30px 32px 28px;text-align:center;">'
-
-            f'<p style="margin:0 0 8px;font-size:14px;color:#333333;font-family:{font};text-align:left;">'
-            f'Hi {manager_greeting},</p>'
-
-            f'<p style="margin:0 0 30px;font-size:14px;color:#333333;font-family:{font};text-align:left;">'
-            f'The Kramer account for <strong>{full_name}</strong> has been created and is ready to use.</p>'
-
-            # Button — VML for Outlook (renders proper rounded rect),
-            # CSS <a> for Gmail / Apple Mail / web clients.
-            '<table cellspacing="0" cellpadding="0" style="margin:0 auto 28px;"><tr><td align="center">'
+        # VML button for Outlook + CSS for all other clients
+        vml_button = (
+            '<table cellspacing="0" cellpadding="0" style="margin:0 auto;"><tr><td align="center">'
             '<!--[if mso]>'
             f'<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" '
             f'xmlns:w="urn:schemas-microsoft-com:office:word" href="{credentials_url}" '
-            f'style="height:52px;v-text-anchor:middle;width:340px;" arcsize="11%" stroke="f" fillcolor="#8200B4">'
+            f'style="height:52px;v-text-anchor:middle;width:340px;" arcsize="11%" stroke="f" fillcolor="#8205B4">'
             f'<w:anchorlock/>'
             f'<center style="color:#ffffff;font-family:\'Segoe UI\',Calibri,Arial,sans-serif;'
-            f'font-size:15px;font-weight:700;">See {full_name}\'s credentials &rarr;</center>'
+            f'font-size:15px;font-weight:700;">See {escape(full_name)}\'s credentials &rarr;</center>'
             f'</v:roundrect>'
             '<![endif]-->'
             '<!--[if !mso]><!-->'
-            f'<a href="{credentials_url}" style="background-color:#8200B4;border-radius:6px;'
+            f'<a href="{credentials_url}" style="background-color:#8205B4;border-radius:6px;'
             f'color:#ffffff;display:inline-block;font-family:{font};font-size:15px;font-weight:700;'
             f'line-height:52px;text-align:center;text-decoration:none;width:340px;'
             f'-webkit-text-size-adjust:none;mso-hide:all;">'
-            f'See {full_name}\'s credentials &rarr;</a>'
+            f'See {escape(full_name)}\'s credentials &rarr;</a>'
             '<!--<![endif]-->'
             '</td></tr></table>'
+        )
 
-            # Footer
-            f'<p style="margin:0;font-size:12px;color:#999999;border-top:1px solid #eeeeee;'
-            f'padding-top:16px;font-family:{font};text-align:left;">'
-            'You will need to sign in with your Kramer company account to view the password. '
-            'This link is intended for the direct manager only.'
-            '</p>'
-
-            '</div></div></div>'
+        body_html = _email_html(
+            header_title='New Employee Account Ready',
+            header_subtitle=full_name,
+            greeting=(
+                f'Hi <strong>{manager_greeting}</strong>,<br><br>'
+                f'The Kramer account for <strong>{escape(full_name)}</strong> '
+                f'has been created and is ready to use.'
+            ),
+            body_rows='',
+            cta_raw=vml_button,
+            extra_html=(
+                '<p style="font-size:12px;color:#888;margin:0;">'
+                'You will need to sign in with your Kramer company account to view the password. '
+                'This link is intended for the direct manager only.'
+                '</p>'
+            ),
         )
 
         client = get_client()
