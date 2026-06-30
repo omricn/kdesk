@@ -1297,7 +1297,7 @@ def _send_manager_credentials_email(req):
         font = "'Segoe UI', Calibri, Arial, Helvetica, sans-serif"
 
         body_html = (
-            f'<div style="font-family:{font};max-width:620px;margin:0 auto;background:#f2f2f2;padding:24px;">'
+            f'<div style="font-family:{font};max-width:580px;margin:0 auto;background:#f2f2f2;padding:24px;">'
 
             # Card
             '<div style="background:#ffffff;border-radius:8px;overflow:hidden;'
@@ -1310,40 +1310,28 @@ def _send_manager_credentials_email(req):
             '</div>'
 
             # Body
-            '<div style="padding:28px 28px 26px;">'
+            '<div style="padding:30px 32px 28px;text-align:center;">'
 
-            f'<p style="margin:0 0 14px;font-size:14px;color:#333333;font-family:{font};">'
+            f'<p style="margin:0 0 8px;font-size:14px;color:#333333;font-family:{font};text-align:left;">'
             f'Hi {manager_greeting},</p>'
 
-            f'<p style="margin:0 0 24px;font-size:14px;color:#333333;font-family:{font};">'
+            f'<p style="margin:0 0 30px;font-size:14px;color:#333333;font-family:{font};text-align:left;">'
             f'The Kramer account for <strong>{full_name}</strong> has been created and is ready to use.</p>'
 
-            # Info table
-            '<table style="border-collapse:collapse;width:100%;border:1px solid #e4e4e4;'
-            'border-radius:6px;overflow:hidden;margin-bottom:30px;">'
-            f'<tr style="background:#f8f8f8;"><td style="padding:11px 16px;font-weight:600;color:#555;'
-            f'white-space:nowrap;font-size:13px;font-family:{font};border-bottom:1px solid #e4e4e4;">'
-            f'Employee</td><td style="padding:11px 16px;font-size:13px;font-family:{font};'
-            f'border-bottom:1px solid #e4e4e4;"><strong>{full_name}</strong></td></tr>'
-            f'<tr><td style="padding:11px 16px;font-weight:600;color:#555;white-space:nowrap;'
-            f'font-size:13px;font-family:{font};">Email / Username</td>'
-            f'<td style="padding:11px 16px;font-size:13px;font-family:{font};">'
-            f'<a href="mailto:{req.work_email}" style="color:#0078d4;text-decoration:none;">'
-            f'{req.work_email}</a></td></tr>'
-            '</table>'
-
-            # Centered prominent button
-            '<div style="text-align:center;margin:0 0 28px;">'
-            f'<a href="{credentials_url}" style="display:inline-block;background:#8200B4;color:#ffffff;'
-            f'text-decoration:none;padding:15px 36px;border-radius:6px;font-size:15px;font-weight:600;'
-            f'font-family:{font};letter-spacing:.01em;">'
-            f'Click here to see {full_name}\'s credentials</a>'
-            '</div>'
+            # Bulletproof button (table-based so Outlook renders the background correctly)
+            '<table cellspacing="0" cellpadding="0" style="margin:0 auto 28px;">'
+            '<tr><td style="background:#8200B4;border-radius:6px;'
+            'box-shadow:0 3px 8px rgba(130,0,180,.35);">'
+            f'<a href="{credentials_url}" style="display:inline-block;padding:15px 38px;'
+            f'color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;'
+            f'font-family:{font};letter-spacing:.02em;border-radius:6px;">'
+            f'&#128274;&nbsp; See {full_name}\'s credentials</a>'
+            '</td></tr></table>'
 
             # Footer
             f'<p style="margin:0;font-size:12px;color:#999999;border-top:1px solid #eeeeee;'
-            f'padding-top:16px;font-family:{font};">'
-            'You will need to sign in with your Kramer company account to view the temporary password. '
+            f'padding-top:16px;font-family:{font};text-align:left;">'
+            'You will need to sign in with your Kramer company account to view the password. '
             'This link is intended for the direct manager only.'
             '</p>'
 
