@@ -27,6 +27,7 @@ urlpatterns = [
     path('reports/export/', views.export_tickets_csv, name='export_csv'),
     path('settings/', views.settings_view, name='settings'),
     path('dev/email-preview/', views.email_preview, name='email_preview'),
+    path('broadcast/', views.broadcast_email, name='broadcast_email'),
     path('dev/test-digest/', views.send_test_digest, name='send_test_digest'),
     path('settings/categories/api/', views.categories_api, name='categories_api'),
     path('settings/statuses/api/', views.statuses_api, name='statuses_api'),
