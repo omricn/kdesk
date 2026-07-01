@@ -448,8 +448,8 @@ class SentBroadcast(models.Model):
     header_title = models.CharField(max_length=300)
     sub_line = models.CharField(max_length=300, blank=True)
     body = models.TextField()
-    # Comma-joined addresses as actually sent (To includes the servicedesk
-    # default for Bcc-only blasts).
+    # Comma-joined recipients as the sender entered them (To is blank for a
+    # Bcc-only blast — the servicedesk To-default is not recorded here).
     to_recipients = models.TextField(blank=True)
     bcc_recipients = models.TextField(blank=True)
     recipient_count = models.PositiveIntegerField(default=0)

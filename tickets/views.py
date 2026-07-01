@@ -1795,9 +1795,12 @@ def broadcast_email(request):
                 messages.error(request, e)
             return render(request, 'tickets/broadcast.html', _context(form))
 
-        # Count the intended human recipients BEFORE defaulting To to the sender
-        # for Bcc-only sends, so the phantom servicedesk address is not counted.
+        # Snapshot the recipients as the user intended them BEFORE defaulting To
+        # to the sender for Bcc-only sends — so the history record and count
+        # reflect the real audience, not the phantom servicedesk address.
         recipient_count = len(set(a.lower() for a in to_list + bcc_list))
+        to_saved = ', '.join(to_list)
+        bcc_saved = ', '.join(bcc_list)
 
         # Bcc-only support: if To is empty, default it to the sender so the
         # message is valid and Bcc recipients stay hidden from each other. The
@@ -1832,8 +1835,8 @@ def broadcast_email(request):
             header_title=header_title,
             sub_line=sub_line,
             body=body_text,
-            to_recipients=', '.join(to_list),
-            bcc_recipients=', '.join(bcc_list),
+            to_recipients=to_saved,
+            bcc_recipients=bcc_saved,
             recipient_count=recipient_count,
             sent_by=request.user if request.user.is_authenticated else None,
         )
