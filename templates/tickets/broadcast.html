@@ -29,6 +29,15 @@
 }
 .recipient-ac .ac-name { font-weight: 600; }
 .recipient-ac .ac-email { opacity: 0.7; font-size: 11px; }
+
+/* Contenteditable body: show placeholder when empty, keep pasted images in bounds. */
+#bodyEditor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--bs-secondary-color, #888);
+  pointer-events: none;
+}
+#bodyEditor:focus { outline: none; }
+#bodyEditor img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; }
 </style>
 {% endblock %}
 
@@ -111,9 +120,11 @@
 
               <div class="mb-3">
                 <label class="form-label">Body</label>
-                <textarea name="body" class="form-control" dir="auto" rows="10"
-                          placeholder="Write your message. Leave a blank line between paragraphs." required>{{ form.body|default:'' }}</textarea>
-                <div class="form-text">Plain text. Blank lines become paragraphs; single line breaks are kept.</div>
+                <div id="bodyEditor" class="form-control" contenteditable="true" dir="auto"
+                     style="min-height:220px;overflow-y:auto;white-space:pre-wrap;"
+                     data-placeholder="Write your message. Paste screenshots (Ctrl+V) to embed them inline.">{{ form.body_html|safe }}</div>
+                <input type="hidden" name="body_html" id="bodyHtmlInput">
+                <div class="form-text"><i class="bi bi-clipboard-image me-1"></i>Paste a screenshot (Ctrl+V) to embed it inline. Blank lines become paragraphs.</div>
               </div>
 
               <button type="submit" class="btn btn-primary">
@@ -207,9 +218,11 @@
 
 <script>
 (function () {
-  const form  = document.getElementById('broadcastForm');
-  const frame = document.getElementById('previewFrame');
-  const csrf  = form.querySelector('[name=csrfmiddlewaretoken]').value;
+  const form   = document.getElementById('broadcastForm');
+  const frame  = document.getElementById('previewFrame');
+  const editor = document.getElementById('bodyEditor');
+  const bodyHtmlInput = document.getElementById('bodyHtmlInput');
+  const csrf   = form.querySelector('[name=csrfmiddlewaretoken]').value;
   const previewUrl = '{% url 'broadcast_email' %}?preview=1';
   let timer = null;
 
@@ -217,7 +230,7 @@
     const fd = new FormData();
     fd.append('header_title', form.header_title.value);
     fd.append('sub_line', form.sub_line.value);
-    fd.append('body', form.body.value);
+    fd.append('body_html', editor.innerHTML);
     fetch(previewUrl, { method: 'POST', headers: { 'X-CSRFToken': csrf }, body: fd })
       .then(function (r) { return r.text(); })
       .then(function (html) { frame.srcdoc = html; })
@@ -226,8 +239,53 @@
 
   function debounced() { clearTimeout(timer); timer = setTimeout(refresh, 400); }
 
-  ['header_title', 'sub_line', 'body'].forEach(function (name) {
+  ['header_title', 'sub_line'].forEach(function (name) {
     form[name].addEventListener('input', debounced);
+  });
+  editor.addEventListener('input', debounced);
+
+  // Paste an image from the clipboard → embed it inline at the caret as a
+  // data: URI. It becomes a CID inline attachment server-side at send time.
+  editor.addEventListener('paste', function (e) {
+    if (!e.clipboardData) return;
+    const imgItem = Array.from(e.clipboardData.items || [])
+      .find(function (i) { return i.type && i.type.indexOf('image/') === 0; });
+    if (!imgItem) return;  // let normal text paste through
+    e.preventDefault();
+    const blob = imgItem.getAsFile();
+    if (!blob) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      const img = document.createElement('img');
+      img.src = reader.result;                 // data:image/...;base64,...
+      img.style.maxWidth = '100%';
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(img);
+        range.setStartAfter(img);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editor.appendChild(img);
+      }
+      debounced();
+    };
+    reader.readAsDataURL(blob);
+  });
+
+  // Serialize the editor into the hidden field before submit, and block empty sends.
+  form.addEventListener('submit', function (e) {
+    bodyHtmlInput.value = editor.innerHTML;
+    const hasText = editor.textContent.trim().length > 0;
+    const hasImg  = editor.querySelector('img') !== null;
+    if (!hasText && !hasImg) {
+      e.preventDefault();
+      editor.focus();
+      alert('Body is required.');
+    }
   });
 
   // Quick-pick chips: append the address to the target field (To or Bcc).

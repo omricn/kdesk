@@ -1736,6 +1736,7 @@ def broadcast_email(request):
     from tasks.scheduled import _email_html
     from .broadcast_utils import (
         BROADCAST_QUICK_RECIPIENTS, parse_recipients, invalid_emails, body_to_html,
+        sanitize_broadcast_html, html_text_content, extract_inline_images,
     )
 
     def _context(form):
@@ -1745,14 +1746,24 @@ def broadcast_email(request):
             'history': SentBroadcast.objects.all()[:200],
         }
 
+    def _render_body_html(post):
+        """The rich editor posts sanitized-able HTML in `body_html`; older clients
+        may still post plain `body`. Prefer the rich body when present."""
+        raw_html = post.get('body_html', '')
+        if raw_html.strip():
+            return sanitize_broadcast_html(raw_html)
+        return body_to_html(post.get('body', ''))
+
     # ── Live preview: return ONLY the rendered branded email HTML ──
     # The JS on the page POSTs the current field values here and drops the
     # response into an iframe, so the preview is byte-for-byte the sent email.
+    # Pasted images ride along as inline data: URIs, which render fine in the
+    # preview iframe (they become CID inline attachments only at send time).
     if request.method == 'POST' and request.GET.get('preview') == '1':
         html_out = _email_html(
             header_title=(request.POST.get('header_title', '').strip() or 'Announcement'),
             header_subtitle=request.POST.get('sub_line', '').strip(),
-            greeting=(body_to_html(request.POST.get('body', '')) or '&nbsp;'),
+            greeting=(_render_body_html(request.POST) or '&nbsp;'),
             body_rows='',
         )
         resp = HttpResponse(html_out)
@@ -1764,22 +1775,28 @@ def broadcast_email(request):
         subject = request.POST.get('subject', '').strip()
         header_title = request.POST.get('header_title', '').strip()
         sub_line = request.POST.get('sub_line', '').strip()
-        body_text = request.POST.get('body', '').strip()
+        # Rich body from the contenteditable editor (sanitized), with a plain-text
+        # fallback for older/plain submissions.
+        body_html = sanitize_broadcast_html(request.POST.get('body_html', ''))
+        body_text = html_text_content(body_html) if body_html else request.POST.get('body', '').strip()
         to_list = parse_recipients(request.POST.get('to', ''))
         bcc_list = parse_recipients(request.POST.get('bcc', ''))
 
         form = {
             'subject': subject, 'header_title': header_title, 'sub_line': sub_line,
-            'body': body_text, 'to': request.POST.get('to', ''),
+            'body': body_text, 'body_html': body_html, 'to': request.POST.get('to', ''),
             'bcc': request.POST.get('bcc', ''),
         }
+
+        # A body counts as present if it has visible text or at least one image.
+        has_body = bool(body_text) or ('<img' in body_html.lower())
 
         errors = []
         if not subject:
             errors.append('Subject is required.')
         if not header_title:
             errors.append('Header title is required.')
-        if not body_text:
+        if not has_body:
             errors.append('Body is required.')
         bad = invalid_emails(to_list + bcc_list)
         if bad:
@@ -1808,10 +1825,18 @@ def broadcast_email(request):
         if not to_list:
             to_list = [settings.SERVICEDESK_EMAIL]
 
+        # Rich body → convert inline data: images to CID attachments so they
+        # render in email clients (Outlook strips data: URIs). Plain-text
+        # fallback goes through body_to_html as before.
+        if body_html:
+            greeting_html, inline_images = extract_inline_images(body_html)
+        else:
+            greeting_html, inline_images = body_to_html(body_text), []
+
         html_out = _email_html(
             header_title=header_title,
             header_subtitle=sub_line,
-            greeting=body_to_html(body_text),
+            greeting=greeting_html,
             body_rows='',
         )
 
@@ -1824,6 +1849,7 @@ def broadcast_email(request):
                 bcc_email=bcc_list or None,
                 subject=subject,
                 body_html=html_out,
+                inline_images=inline_images or None,
             )
         except Exception as exc:
             messages.error(request, f'Failed to send: {exc}')
@@ -1835,6 +1861,7 @@ def broadcast_email(request):
             header_title=header_title,
             sub_line=sub_line,
             body=body_text,
+            body_html=body_html,
             to_recipients=to_saved,
             bcc_recipients=bcc_saved,
             recipient_count=recipient_count,
@@ -1854,13 +1881,19 @@ def broadcast_view(request, pk):
         return HttpResponseForbidden()
 
     from tasks.scheduled import _email_html
-    from .broadcast_utils import body_to_html
+    from .broadcast_utils import body_to_html, sanitize_broadcast_html
 
     bc = get_object_or_404(SentBroadcast, pk=pk)
+    # Rich broadcasts re-render from the stored (data:-URI) HTML; older plain-text
+    # records fall back to body_to_html. Re-sanitize defensively on render.
+    if bc.body_html:
+        greeting = sanitize_broadcast_html(bc.body_html) or '&nbsp;'
+    else:
+        greeting = body_to_html(bc.body) or '&nbsp;'
     html_out = _email_html(
         header_title=bc.header_title,
         header_subtitle=bc.sub_line,
-        greeting=(body_to_html(bc.body) or '&nbsp;'),
+        greeting=greeting,
         body_rows='',
     )
     resp = HttpResponse(html_out)

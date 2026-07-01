@@ -448,6 +448,11 @@ class SentBroadcast(models.Model):
     header_title = models.CharField(max_length=300)
     sub_line = models.CharField(max_length=300, blank=True)
     body = models.TextField()
+    # Rich HTML body (sanitized, with pasted images kept as inline data: URIs) for
+    # broadcasts composed in the rich editor. Blank on older plain-text records,
+    # which re-render from `body` via body_to_html(). `body` holds the plain-text
+    # fallback/summary either way.
+    body_html = models.TextField(blank=True)
     # Comma-joined recipients as the sender entered them (To is blank for a
     # Bcc-only blast — the servicedesk To-default is not recorded here).
     to_recipients = models.TextField(blank=True)
