@@ -1,6 +1,37 @@
 {% extends 'base.html' %}
 {% block title %}Broadcast Email{% endblock %}
 
+{% block extra_css %}
+<style>
+.recipient-ac {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: 100%;
+  z-index: 1050;
+  background: var(--kramer-surface);
+  border: 1px solid var(--kramer-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.recipient-ac .ac-item {
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.recipient-ac .ac-item:hover,
+.recipient-ac .ac-item.ac-active {
+  background: var(--kramer-purple);
+  color: #fff;
+}
+.recipient-ac .ac-name { font-weight: 600; }
+.recipient-ac .ac-email { opacity: 0.7; font-size: 11px; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <nav aria-label="breadcrumb">
@@ -135,6 +166,85 @@
       }
     });
   });
+
+  // User autocomplete for the comma-separated To/Bcc fields. Operates on the
+  // last typed token; picking a user appends their email so more can follow.
+  function escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function attachRecipientAutocomplete(input) {
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'recipient-ac';
+    dropdown.style.display = 'none';
+    wrap.appendChild(dropdown);
+
+    let acTimer = null, activeIdx = -1, results = [];
+
+    function close() { dropdown.style.display = 'none'; dropdown.innerHTML = ''; activeIdx = -1; results = []; }
+
+    function lastCut() { return Math.max(input.value.lastIndexOf(','), input.value.lastIndexOf(';')); }
+    function fragment() { return input.value.slice(lastCut() + 1).trim(); }
+
+    function choose(u) {
+      const cut = lastCut();
+      const prefix = cut >= 0 ? input.value.slice(0, cut + 1) + ' ' : '';
+      input.value = prefix + u.email + ', ';
+      close();
+      input.focus();
+    }
+
+    function setActive(idx) {
+      dropdown.querySelectorAll('.ac-item').forEach(function (el, i) { el.classList.toggle('ac-active', i === idx); });
+      activeIdx = idx;
+    }
+
+    function render(users) {
+      results = users; activeIdx = -1; dropdown.innerHTML = '';
+      if (!users.length) { close(); return; }
+      users.forEach(function (u) {
+        const item = document.createElement('div');
+        item.className = 'ac-item';
+        item.innerHTML = '<span class="ac-name">' + escHtml(u.name) + '</span>' +
+                         '&nbsp;<span class="ac-email">' + escHtml(u.email) + '</span>';
+        item.addEventListener('mousedown', function (e) { e.preventDefault(); choose(u); });
+        dropdown.appendChild(item);
+      });
+      dropdown.style.display = 'block';
+    }
+
+    input.addEventListener('input', function () {
+      const q = fragment();
+      clearTimeout(acTimer);
+      if (q.length < 2) { close(); return; }
+      acTimer = setTimeout(function () {
+        fetch('/tickets/user-search/?q=' + encodeURIComponent(q))
+          .then(function (r) { return r.json(); })
+          .then(function (data) { render(data.users || []); })
+          .catch(function () { close(); });
+      }, 180);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      const items = dropdown.querySelectorAll('.ac-item');
+      if (!items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(activeIdx + 1, items.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(activeIdx - 1, 0)); }
+      else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); choose(results[activeIdx]); }
+      else if (e.key === 'Escape') { close(); }
+    });
+
+    input.addEventListener('blur', function () { setTimeout(close, 150); });
+    document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) close(); });
+  }
+
+  attachRecipientAutocomplete(form.to);
+  attachRecipientAutocomplete(form.bcc);
 
   refresh();  // initial render
 })();
