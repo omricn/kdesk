@@ -399,7 +399,8 @@
               <div id="cc-pills" class="d-flex flex-wrap gap-1 mb-1"></div>
               <input type="text" id="cc-search" class="form-control form-control-sm"
                      placeholder="CC… type a name or email" autocomplete="off">
-              <input type="hidden" name="cc_emails" id="cc-emails-input" value="">
+              <input type="hidden" name="cc_emails" id="cc-emails-input" value=""
+                     data-seed="{% if ticket.source == 'manual' %}{{ ticket.email_cc }}{% endif %}">
             </div>
 
             <div class="d-flex gap-2">
@@ -1271,6 +1272,10 @@ if (INIT_CAT) {
   searchInput.addEventListener('blur', () => setTimeout(closeDropdown, 150));
   window.addEventListener('scroll', positionDropdown, true);
   window.addEventListener('resize', positionDropdown);
+
+  // Pre-fill CC (e.g. the new user's direct manager on provisioning tickets).
+  const seed = hiddenInput.getAttribute('data-seed') || '';
+  seed.split(',').forEach(e => { e = e.trim(); if (e) addPill(e, e); });
 })();
 
 // ── Edit comment ─────────────────────────────────────────────────────────────

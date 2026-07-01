@@ -500,6 +500,19 @@ def _create_system_tickets(req, work_email):
     from tickets.models import Ticket, TicketCategory, TicketSubCategory, TicketItem
     full_name = f'{req.first_name} {req.last_name}'.strip()
 
+    # Resolve the new user's direct manager so admins' questions to the requester
+    # also reach the manager. Prefer the email captured during provisioning; fall
+    # back to a Graph lookup by display name. Never block ticket creation on this.
+    manager_cc = (req.manager_email or '').strip()
+    if not manager_cc and req.reports_to:
+        manager_cc = _lookup_manager_email(req.reports_to) or ''
+    if not manager_cc:
+        logger.warning(
+            '[Provisioning] Could not resolve direct-manager email for req #%s '
+            '(reports_to=%r); system tickets created without manager CC.',
+            req.id, req.reports_to,
+        )
+
     systems = []
     if req.create_priority_ticket:
         extra_rows = []
@@ -550,6 +563,7 @@ def _create_system_tickets(req, work_email):
                 subcategory=subcat,
                 ticket_item=item,
                 assignee=subcat.assignee,
+                email_cc=manager_cc,
             )
             ticket.save()
             logger.info('[Provisioning] Created %s ticket #%s for %s', s['system'], ticket.pk, work_email)
