@@ -136,6 +136,49 @@ class OffboardingStageTests(unittest.TestCase):
         self.assertEqual(r.overall, 'warning')
 
 
+# Real-world shape: the KAPPIT agent reported the log as a PowerShell object, so
+# it was stored as an object-repr string with the log under 'value', escaped \r\n
+# line breaks, and trailing PS cruft. The parser must still find the entries.
+MALFORMED_PROVISION = (
+    "{'value': '"
+    "[2026-07-01 07:09:18] [INFO] === Provisioning request #15 started  ===\\r\\n"
+    "[2026-07-01 07:09:18] [INFO] Employee: Ratna Sinha | Sales Manager - Delhi\\r\\n"
+    "[2026-07-01 07:09:18] [INFO] Searching AD for existing account for Ratna Sinha...\\r\\n"
+    "[2026-07-01 07:09:18] [INFO] Manager DN: CN=Antriksh Verma (India)\\r\\n"
+    "[2026-07-01 07:09:20] [INFO] AD user created: rsinha@kramerav.com\\r\\n"
+    "[2026-07-01 07:09:20] [INFO] Added to India Users\\r\\n"
+    "[2026-07-01 07:09:20] [INFO] Triggering AD Connect delta sync on KADSYNC...\\r\\n"
+    "[2026-07-01 07:10:22] [INFO] M365 user found (attempt 3): 219b7aad\\r\\n"
+    "[2026-07-01 07:10:22] [INFO] Adding user to 8 M365 groups...\\r\\n"
+    "[2026-07-01 07:10:23] [INFO] Added to: Joiners\\r\\n"
+    "[2026-07-01 07:10:49] [INFO] === Provisioning complete for rsinha@kramerav.com ===\\r\\n"
+    "', 'PSPath': 'C:\\\\Scripts\\\\HiBob_To_AD\\\\logs\\\\Provision_15.log', 'PSDrive': {'Name': 'C'}}"
+)
+
+
+class MalformedLogTests(unittest.TestCase):
+    def test_parses_log_wrapped_in_ps_object_with_escaped_newlines(self):
+        r = parse_provisioning_flow(MALFORMED_PROVISION)
+        st = _statuses(r)
+        self.assertEqual(st['received'], 'done')
+        self.assertEqual(st['manager'], 'done')
+        self.assertEqual(st['ad_account'], 'done')
+        self.assertEqual(st['m365_groups'], 'done')
+        self.assertEqual(st['completed'], 'done')
+        self.assertEqual(r.overall, 'ok')
+
+    def test_message_detail_has_no_trailing_escaped_newline(self):
+        log = (
+            "junk {'value': '"
+            "[2026-07-01 07:00:00] [WARN] 1 group(s) could not be assigned  -  check log.\\r\\n"
+            "', 'PSPath': 'x'}"
+        )
+        issues = parse_provisioning_flow(log).issues
+        self.assertEqual(len(issues), 1)
+        self.assertFalse(issues[0].message.endswith('\\r\\n'),
+                         'trailing escaped newline should be trimmed')
+
+
 class EdgeCaseTests(unittest.TestCase):
     def test_empty_log_is_unknown(self):
         r = parse_provisioning_flow('')

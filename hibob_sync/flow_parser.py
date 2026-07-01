@@ -21,9 +21,20 @@ stage label drifts. `overall` is driven by issues as well as stage statuses.
 import re
 from dataclasses import dataclass, field
 
-_LINE_RE = re.compile(
-    r'^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[(INFO|WARN|ERROR)\] (.*)$'
+# Match a log ENTRY anywhere in the text: a "[ts] [LEVEL] " marker, then the
+# message up to the next such marker (or end). Unanchored + DOTALL so it works
+# whether the log arrives as clean newline-separated text, or wrapped in a
+# serialized PowerShell object with escaped "\r\n" line breaks and trailing cruft
+# (as the KAPPIT agent has sometimes stored it in result_log).
+_TS = r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[(?:INFO|WARN|ERROR)\] '
+_ENTRY_RE = re.compile(
+    r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[(INFO|WARN|ERROR)\] (.*?)(?=' + _TS + r'|$)',
+    re.DOTALL,
 )
+# A Write-Log message is always a single line, so cut a captured message at the
+# first newline (real or escaped). This also drops any trailing serialized-object
+# cruft that follows the final log line.
+_MSG_CUT = re.compile(r'\\r|\\n|\r|\n')
 
 # Each entry: (key, label, [substring patterns identifying lines for this stage])
 _PROVISIONING_STAGES = [
@@ -96,12 +107,12 @@ class FlowResult:
 
 
 def _parse_lines(log_text):
-    """Return list of (level, message) for each recognized log line."""
+    """Return list of (level, message) for each recognized log entry, scanning
+    the whole text so it is robust to escaped newlines / serialized-object wrappers."""
     out = []
-    for raw in (log_text or '').splitlines():
-        m = _LINE_RE.match(raw)
-        if m:
-            out.append((m.group(2), m.group(3)))
+    for m in _ENTRY_RE.finditer(log_text or ''):
+        msg = _MSG_CUT.split(m.group(3), 1)[0].rstrip()
+        out.append((m.group(2), msg))
     return out
 
 

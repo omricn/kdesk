@@ -1,5 +1,7 @@
-{# Renders a parsed flow (hibob_sync.flow_parser.FlowResult) as an Option-A timeline.
-   Context: `flow` (FlowResult), `log_url` (raw-log URL for the "View raw log" link). #}
+{% comment %}
+Renders a parsed flow (hibob_sync.flow_parser.FlowResult) as an Option-A timeline.
+Context: `flow` (FlowResult), `log_url` (raw-log URL for the "View raw log" link).
+{% endcomment %}
 <div class="flow-timeline">
   {% if flow.overall == 'unknown' and not flow.issues %}
     <div class="text-muted small py-1">No run log available yet.</div>
