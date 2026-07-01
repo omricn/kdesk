@@ -120,6 +120,11 @@
           </a>
         </li>
         <li>
+          <a href="{% url 'broadcast_email' %}" class="nav-link {% if request.resolver_match.url_name == 'broadcast_email' %}active{% endif %}">
+            <i class="bi bi-megaphone me-2"></i>Broadcast
+          </a>
+        </li>
+        <li>
           <a href="{% url 'budget' %}" class="nav-link {% if request.resolver_match.url_name == 'budget' %}active{% endif %}">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>Budget
           </a>
@@ -184,6 +189,11 @@
         <li>
           <a href="{% url 'hibob_sync_dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'hibob_sync_dashboard' %}active{% endif %}" data-label="HiBob Sync">
             <i class="bi bi-arrow-left-right me-2"></i><span class="sidebar-label">HiBob Sync</span>
+          </a>
+        </li>
+        <li>
+          <a href="{% url 'broadcast_email' %}" class="nav-link {% if request.resolver_match.url_name == 'broadcast_email' %}active{% endif %}" data-label="Broadcast">
+            <i class="bi bi-megaphone me-2"></i><span class="sidebar-label">Broadcast</span>
           </a>
         </li>
         <li>
