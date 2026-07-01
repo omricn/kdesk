@@ -12,10 +12,27 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from .flow_parser import parse_offboarding_flow, parse_provisioning_flow
 from .log_parser import parse_log
 from .models import OffboardingRequest, OffboardingSettings, ProvisioningRequest, ProvisioningSettings, SyncChange, SyncRun, SyncTrigger
 
 logger = logging.getLogger(__name__)
+
+
+def _attach_flow(requests, parser):
+    """Parse each request's result_log and attach `.flow` (FlowResult) and a
+    `.flow_status` badge value (ok | warning | failed | '' when no info yet)."""
+    for r in requests:
+        r.flow = parser(r.result_log or '')
+        if r.flow.overall != 'unknown':
+            r.flow_status = r.flow.overall
+        elif r.result_success is True:
+            r.flow_status = 'ok'
+        elif r.result_success is False:
+            r.flow_status = 'failed'
+        else:
+            r.flow_status = ''
+    return requests
 
 
 def _superuser_required(request):
@@ -51,7 +68,10 @@ def hibob_sync_dashboard(request):
         changes_by_user = sorted(grouped.items())
 
     prov_settings = ProvisioningSettings.get()
-    recent_provisioning = ProvisioningRequest.objects.select_related('ticket').all()[:20]
+    recent_provisioning = _attach_flow(
+        list(ProvisioningRequest.objects.select_related('ticket').all()[:20]),
+        parse_provisioning_flow,
+    )
     pending_provisioning_count = ProvisioningRequest.objects.filter(
         status__in=['pending', 'claimed', 'review_needed', 'paused']
     ).count()
@@ -65,7 +85,10 @@ def hibob_sync_dashboard(request):
     ).first()
 
     offboard_settings = OffboardingSettings.get()
-    recent_offboarding = OffboardingRequest.objects.select_related('ticket').all()[:20]
+    recent_offboarding = _attach_flow(
+        list(OffboardingRequest.objects.select_related('ticket').all()[:20]),
+        parse_offboarding_flow,
+    )
     pending_offboarding_count = OffboardingRequest.objects.filter(
         status__in=['pending', 'claimed', 'review_needed'],
     ).count()

@@ -1,0 +1,33 @@
+{# Renders a parsed flow (hibob_sync.flow_parser.FlowResult) as an Option-A timeline.
+   Context: `flow` (FlowResult), `log_url` (raw-log URL for the "View raw log" link). #}
+<div class="flow-timeline">
+  {% if flow.overall == 'unknown' and not flow.issues %}
+    <div class="text-muted small py-1">No run log available yet.</div>
+  {% else %}
+    <ul class="flow-steps">
+      {% for s in flow.stages %}
+      <li class="flow-step flow-{{ s.status }}">
+        <span class="flow-ic">
+          {% if s.status == 'done' %}<i class="bi bi-check-circle-fill text-success"></i>
+          {% elif s.status == 'warning' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
+          {% elif s.status == 'failed' %}<i class="bi bi-x-circle-fill text-danger"></i>
+          {% elif s.status == 'skipped' %}<i class="bi bi-dash-circle text-muted"></i>
+          {% else %}<i class="bi bi-circle text-muted"></i>{% endif %}
+        </span>
+        <span class="flow-lbl">
+          {{ s.label }}
+          {% if s.status == 'skipped' %}<span class="flow-note">skipped</span>
+          {% elif s.status == 'not_reached' %}<span class="flow-note">not reached</span>{% endif %}
+          {% for d in s.detail_lines %}
+            <span class="flow-log flow-log-{{ s.status }}">{{ d }}</span>
+          {% endfor %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if log_url %}
+    <a href="{{ log_url }}" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-1 mt-1"
+       style="font-size:0.7rem;"><i class="bi bi-file-text me-1"></i>View raw log</a>
+  {% endif %}
+</div>

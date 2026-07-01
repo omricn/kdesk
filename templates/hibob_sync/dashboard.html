@@ -24,6 +24,24 @@
   .prov-table th { font-size: 0.75rem; white-space: nowrap; }
   .prov-table td { font-size: 0.82rem; vertical-align: middle; }
   .btn-xs { padding: 0.1rem 0.35rem; font-size: 0.7rem; line-height: 1.4; display: inline-flex; align-items: center; gap: 2px; }
+
+  /* Flow timeline (Option A) */
+  .flow-toggle { border: 0; background: none; padding: 0; color: var(--kramer-purple); cursor: pointer; font-size: 0.8rem; line-height: 1; }
+  .flow-toggle i { transition: transform 0.12s ease; }
+  .flow-badge { font-size: 0.78rem; margin-left: 4px; vertical-align: baseline; }
+  .flow-badge.fb-ok { color: #198754; }
+  .flow-badge.fb-warn { color: #fd7e14; }
+  .flow-badge.fb-fail { color: #dc3545; }
+  .flow-detail-row > td { background: #f7f8fa; padding: 10px 16px; }
+  .flow-steps { list-style: none; margin: 0; padding: 0; }
+  .flow-step { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; font-size: 0.82rem; }
+  .flow-step .flow-ic { flex: 0 0 16px; text-align: center; }
+  .flow-step .flow-lbl { flex: 1; }
+  .flow-step.flow-skipped .flow-lbl, .flow-step.flow-not_reached .flow-lbl { color: #9aa0aa; }
+  .flow-note { color: #9aa0aa; font-size: 0.72rem; font-style: italic; margin-left: 4px; }
+  .flow-log { display: block; font-family: Consolas, monospace; font-size: 0.72rem; padding: 2px 8px; margin-top: 2px; border-radius: 3px; }
+  .flow-log-warning { color: #9a6600; background: #fdf3e0; border-left: 3px solid #e8a13a; }
+  .flow-log-failed { color: #b42318; background: #fff5f5; border-left: 3px solid #e5484d; }
 </style>
 {% endblock %}
 
@@ -421,7 +439,21 @@
             <tbody>
               {% for pr in recent_provisioning %}
               <tr data-req-id="{{ pr.id }}" data-status="{{ pr.status }}">
-                <td class="fw-semibold">{{ pr.first_name }} {{ pr.last_name }}</td>
+                <td class="fw-semibold">
+                  {% if pr.flow_status %}
+                  <button type="button" class="flow-toggle" data-flow-target="flow-pr-{{ pr.id }}" aria-label="Toggle flow details">
+                    <i class="bi bi-chevron-right"></i>
+                  </button>
+                  {% endif %}
+                  {{ pr.first_name }} {{ pr.last_name }}
+                  {% if pr.flow_status == 'warning' %}
+                    <span class="flow-badge fb-warn" title="Completed with warnings"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                  {% elif pr.flow_status == 'failed' %}
+                    <span class="flow-badge fb-fail" title="Errors during provisioning"><i class="bi bi-x-circle-fill"></i></span>
+                  {% elif pr.flow_status == 'ok' %}
+                    <span class="flow-badge fb-ok" title="All steps OK"><i class="bi bi-check-circle-fill"></i></span>
+                  {% endif %}
+                </td>
                 <td class="text-muted">{{ pr.country }} / {{ pr.division }} / {{ pr.department }}</td>
                 <td class="text-muted">{{ pr.job_title|default:"—" }}</td>
                 <td>{{ pr.start_date|default:"—" }}</td>
@@ -615,6 +647,14 @@
                 </td>
 
               </tr>
+              {% if pr.flow_status %}
+              {% url 'hibob_sync_provisioning_log' pr.id as prov_log_url %}
+              <tr class="flow-detail-row" id="flow-pr-{{ pr.id }}" style="display:none;">
+                <td colspan="9" class="flow-detail-cell">
+                  {% include 'hibob_sync/_flow_timeline.html' with flow=pr.flow log_url=prov_log_url %}
+                </td>
+              </tr>
+              {% endif %}
               {% endfor %}
             </tbody>
           </table>
@@ -744,7 +784,21 @@
               {% for ob in recent_offboarding %}
               <tr data-offboard-id="{{ ob.id }}" data-status="{{ ob.status }}">
                 <td>
-                  <div class="fw-semibold">{{ ob.employee_name|default:ob.employee_email }}</div>
+                  <div class="fw-semibold">
+                    {% if ob.flow_status %}
+                    <button type="button" class="flow-toggle" data-flow-target="flow-ob-{{ ob.id }}" aria-label="Toggle flow details">
+                      <i class="bi bi-chevron-right"></i>
+                    </button>
+                    {% endif %}
+                    {{ ob.employee_name|default:ob.employee_email }}
+                    {% if ob.flow_status == 'warning' %}
+                      <span class="flow-badge fb-warn" title="Completed with warnings"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                    {% elif ob.flow_status == 'failed' %}
+                      <span class="flow-badge fb-fail" title="Errors during offboarding"><i class="bi bi-x-circle-fill"></i></span>
+                    {% elif ob.flow_status == 'ok' %}
+                      <span class="flow-badge fb-ok" title="All steps OK"><i class="bi bi-check-circle-fill"></i></span>
+                    {% endif %}
+                  </div>
                   {% if ob.employee_name %}
                   <div class="text-muted" style="font-size:0.75rem;">{{ ob.employee_email }}</div>
                   {% endif %}
@@ -829,6 +883,14 @@
                 </td>
 
               </tr>
+              {% if ob.flow_status %}
+              {% url 'hibob_sync_offboarding_log' ob.id as ob_log_url %}
+              <tr class="flow-detail-row" id="flow-ob-{{ ob.id }}" style="display:none;">
+                <td colspan="9" class="flow-detail-cell">
+                  {% include 'hibob_sync/_flow_timeline.html' with flow=ob.flow log_url=ob_log_url %}
+                </td>
+              </tr>
+              {% endif %}
               {% endfor %}
             </tbody>
           </table>
@@ -974,6 +1036,22 @@
 
   setInterval(poll, 3000);
 })();
+</script>
+
+<script>
+  // Expand/collapse the per-request flow timeline (delegated so it survives polling).
+  (function () {
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.flow-toggle');
+      if (!btn) return;
+      var row = document.getElementById(btn.dataset.flowTarget);
+      if (!row) return;
+      var open = row.style.display !== 'none';
+      row.style.display = open ? 'none' : 'table-row';
+      var icon = btn.querySelector('i');
+      if (icon) icon.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+    });
+  })();
 </script>
 
 {% endblock %}
