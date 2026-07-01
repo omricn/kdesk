@@ -1789,6 +1789,10 @@ def broadcast_email(request):
                 'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': form,
             })
 
+        # Count the intended human recipients BEFORE defaulting To to the sender
+        # for Bcc-only sends, so the phantom servicedesk address is not counted.
+        recipient_count = len(set(a.lower() for a in to_list + bcc_list))
+
         # Bcc-only support: if To is empty, default it to the sender so the
         # message is valid and Bcc recipients stay hidden from each other. The
         # poller hard-skips emails sent FROM servicedesk, so no ticket loop.
@@ -1812,7 +1816,6 @@ def broadcast_email(request):
                 subject=subject,
                 body_html=html_out,
             )
-            recipient_count = len(set(a.lower() for a in to_list + bcc_list))
             messages.success(request, f'Email sent to {recipient_count} recipient(s).')
         except Exception as exc:
             messages.error(request, f'Failed to send: {exc}')
