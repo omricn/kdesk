@@ -104,8 +104,8 @@ class GraphClient:
         )
         r.raise_for_status()
 
-    def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str,
-                   bcc_email: str = None, attachments: list = None, cc_emails: list = None,
+    def send_email(self, from_mailbox: str, to_email: 'str | list[str]', subject: str, body_html: str,
+                   bcc_email: 'str | list[str] | None' = None, attachments: list = None, cc_emails: list = None,
                    inline_images: list = None):
         """Send an email from the servicedesk mailbox.
 
