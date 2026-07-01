@@ -195,7 +195,7 @@ def _email_html(header_title: str, header_subtitle: str, greeting: str, body_row
             </p>
             <h1 style="margin:4px 0 0;color:{header_text_color};font-size:22px;font-weight:700;
                        font-family:{font_stack_md};line-height:1.3;">
-              {header_title}
+              {_esc(header_title)}
             </h1>
             {f'<p dir="auto" style="margin:4px 0 0;color:{header_text_color};opacity:{subtitle_opacity};font-size:13px;font-family:{font_stack};">{_esc(header_subtitle)}</p>' if header_subtitle else ''}
           </td>

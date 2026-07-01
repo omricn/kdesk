@@ -1725,6 +1725,111 @@ def email_preview(request):
     })
 
 
+def broadcast_email(request):
+    """Superuser-only tool: compose and send a fully branded Kramer email to
+    arbitrary To/Bcc recipients, with a live preview. Sends from the servicedesk
+    mailbox — the poller's self-email guard prevents any ticket loop."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden()
+
+    from tasks.scheduled import _email_html
+    from .broadcast_utils import (
+        BROADCAST_QUICK_RECIPIENTS, parse_recipients, invalid_emails, body_to_html,
+    )
+
+    # ── Live preview: return ONLY the rendered branded email HTML ──
+    # The JS on the page POSTs the current field values here and drops the
+    # response into an iframe, so the preview is byte-for-byte the sent email.
+    if request.method == 'POST' and request.GET.get('preview') == '1':
+        html_out = _email_html(
+            header_title=(request.POST.get('header_title', '').strip() or 'Announcement'),
+            header_subtitle=request.POST.get('sub_line', '').strip(),
+            greeting=(body_to_html(request.POST.get('body', '')) or '&nbsp;'),
+            body_rows='',
+        )
+        resp = HttpResponse(html_out)
+        resp['X-Frame-Options'] = 'SAMEORIGIN'
+        return resp
+
+    # ── Send ──
+    if request.method == 'POST':
+        subject = request.POST.get('subject', '').strip()
+        header_title = request.POST.get('header_title', '').strip()
+        sub_line = request.POST.get('sub_line', '').strip()
+        body_text = request.POST.get('body', '').strip()
+        to_list = parse_recipients(request.POST.get('to', ''))
+        bcc_list = parse_recipients(request.POST.get('bcc', ''))
+
+        form = {
+            'subject': subject, 'header_title': header_title, 'sub_line': sub_line,
+            'body': body_text, 'to': request.POST.get('to', ''),
+            'bcc': request.POST.get('bcc', ''),
+        }
+
+        errors = []
+        if not subject:
+            errors.append('Subject is required.')
+        if not header_title:
+            errors.append('Header title is required.')
+        if not body_text:
+            errors.append('Body is required.')
+        bad = invalid_emails(to_list + bcc_list)
+        if bad:
+            errors.append('Invalid email address(es): ' + ', '.join(bad))
+        if not to_list and not bcc_list:
+            errors.append('Enter at least one To or Bcc recipient.')
+
+        if SystemSetting.get('emails_enabled', '1') != '1':
+            errors.append('Email sending is currently disabled. Re-enable it in Settings.')
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+            return render(request, 'tickets/broadcast.html', {
+                'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': form,
+            })
+
+        # Count the intended human recipients BEFORE defaulting To to the sender
+        # for Bcc-only sends, so the phantom servicedesk address is not counted.
+        recipient_count = len(set(a.lower() for a in to_list + bcc_list))
+
+        # Bcc-only support: if To is empty, default it to the sender so the
+        # message is valid and Bcc recipients stay hidden from each other. The
+        # poller hard-skips emails sent FROM servicedesk, so no ticket loop.
+        if not to_list:
+            to_list = [settings.SERVICEDESK_EMAIL]
+
+        html_out = _email_html(
+            header_title=header_title,
+            header_subtitle=sub_line,
+            greeting=body_to_html(body_text),
+            body_rows='',
+        )
+
+        try:
+            from integrations.graph_client import get_client
+            client = get_client()
+            client.send_email(
+                from_mailbox=settings.SERVICEDESK_EMAIL,
+                to_email=to_list,
+                bcc_email=bcc_list or None,
+                subject=subject,
+                body_html=html_out,
+            )
+            messages.success(request, f'Email sent to {recipient_count} recipient(s).')
+        except Exception as exc:
+            messages.error(request, f'Failed to send: {exc}')
+            return render(request, 'tickets/broadcast.html', {
+                'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': form,
+            })
+        return redirect('broadcast_email')
+
+    # ── GET → empty form ──
+    return render(request, 'tickets/broadcast.html', {
+        'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': {},
+    })
+
+
 # ── Categories API ────────────────────────────────────────────────────────────
 
 @admin_required

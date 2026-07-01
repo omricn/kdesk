@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 
 
+def _as_recipients(value):
+    """Normalize a recipient value (a string or a list of strings) into the
+    Graph `recipient` dict shape. Empty/falsey entries are dropped."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    return [{'emailAddress': {'address': addr}} for addr in value if addr]
+
+
 class GraphClient:
     def __init__(self):
         self._token = None
@@ -94,8 +104,8 @@ class GraphClient:
         )
         r.raise_for_status()
 
-    def send_email(self, from_mailbox: str, to_email: str, subject: str, body_html: str,
-                   bcc_email: str = None, attachments: list = None, cc_emails: list = None,
+    def send_email(self, from_mailbox: str, to_email: 'str | list[str]', subject: str, body_html: str,
+                   bcc_email: 'str | list[str] | None' = None, attachments: list = None, cc_emails: list = None,
                    inline_images: list = None):
         """Send an email from the servicedesk mailbox.
 
@@ -109,10 +119,11 @@ class GraphClient:
         message = {
             'subject': subject,
             'body': {'contentType': 'HTML', 'content': body_html},
-            'toRecipients': [{'emailAddress': {'address': to_email}}],
+            'toRecipients': _as_recipients(to_email),
         }
-        if bcc_email:
-            message['bccRecipients'] = [{'emailAddress': {'address': bcc_email}}]
+        bcc_recipients = _as_recipients(bcc_email)
+        if bcc_recipients:
+            message['bccRecipients'] = bcc_recipients
         if cc_emails:
             message['ccRecipients'] = [{'emailAddress': {'address': e}} for e in cc_emails]
 
