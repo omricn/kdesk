@@ -42,6 +42,7 @@ def portal_required(view_func):
 from .models import (
     SystemSetting, Ticket, TicketAttachment, TicketComment,
     TicketCategory, TicketSubCategory, TicketItem, TicketHistory, TicketEmail, TicketStatus,
+    SentBroadcast,
 )
 
 from users.models import User
@@ -1737,6 +1738,13 @@ def broadcast_email(request):
         BROADCAST_QUICK_RECIPIENTS, parse_recipients, invalid_emails, body_to_html,
     )
 
+    def _context(form):
+        return {
+            'quick_recipients': BROADCAST_QUICK_RECIPIENTS,
+            'form': form,
+            'history': SentBroadcast.objects.all()[:200],
+        }
+
     # ── Live preview: return ONLY the rendered branded email HTML ──
     # The JS on the page POSTs the current field values here and drops the
     # response into an iframe, so the preview is byte-for-byte the sent email.
@@ -1785,9 +1793,7 @@ def broadcast_email(request):
         if errors:
             for e in errors:
                 messages.error(request, e)
-            return render(request, 'tickets/broadcast.html', {
-                'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': form,
-            })
+            return render(request, 'tickets/broadcast.html', _context(form))
 
         # Count the intended human recipients BEFORE defaulting To to the sender
         # for Bcc-only sends, so the phantom servicedesk address is not counted.
@@ -1816,18 +1822,47 @@ def broadcast_email(request):
                 subject=subject,
                 body_html=html_out,
             )
-            messages.success(request, f'Email sent to {recipient_count} recipient(s).')
         except Exception as exc:
             messages.error(request, f'Failed to send: {exc}')
-            return render(request, 'tickets/broadcast.html', {
-                'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': form,
-            })
+            return render(request, 'tickets/broadcast.html', _context(form))
+
+        # Record the successful send so it can be browsed in the History tab.
+        SentBroadcast.objects.create(
+            subject=subject,
+            header_title=header_title,
+            sub_line=sub_line,
+            body=body_text,
+            to_recipients=', '.join(to_list),
+            bcc_recipients=', '.join(bcc_list),
+            recipient_count=recipient_count,
+            sent_by=request.user if request.user.is_authenticated else None,
+        )
+        messages.success(request, f'Email sent to {recipient_count} recipient(s).')
         return redirect('broadcast_email')
 
     # ── GET → empty form ──
-    return render(request, 'tickets/broadcast.html', {
-        'quick_recipients': BROADCAST_QUICK_RECIPIENTS, 'form': {},
-    })
+    return render(request, 'tickets/broadcast.html', _context({}))
+
+
+def broadcast_view(request, pk):
+    """Superuser-only: render the branded HTML of a previously sent broadcast,
+    for display inside the History tab's preview iframe."""
+    if not request.user.is_superuser:
+        return HttpResponseForbidden()
+
+    from tasks.scheduled import _email_html
+    from .broadcast_utils import body_to_html
+
+    bc = get_object_or_404(SentBroadcast, pk=pk)
+    html_out = _email_html(
+        header_title=bc.header_title,
+        header_subtitle=bc.sub_line,
+        greeting=(body_to_html(bc.body) or '&nbsp;'),
+        body_rows='',
+    )
+    resp = HttpResponse(html_out)
+    resp['X-Frame-Options'] = 'SAMEORIGIN'
+    return resp
 
 
 # ── Categories API ────────────────────────────────────────────────────────────

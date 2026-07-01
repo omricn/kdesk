@@ -436,3 +436,33 @@ class TicketStatus(models.Model):
             cls._badge_cache = {s.key: s.badge_class for s in cls.objects.filter(is_active=True)}
             cls._badge_cache_ts = now
         return cls._badge_cache
+
+
+class SentBroadcast(models.Model):
+    """A record of a broadcast email sent from the superuser Broadcast tool.
+
+    Stores the composed fields (not the rendered HTML) so the detail view can
+    re-render the branded email on demand via the shared `_email_html` helper.
+    """
+    subject = models.CharField(max_length=500)
+    header_title = models.CharField(max_length=300)
+    sub_line = models.CharField(max_length=300, blank=True)
+    body = models.TextField()
+    # Comma-joined addresses as actually sent (To includes the servicedesk
+    # default for Bcc-only blasts).
+    to_recipients = models.TextField(blank=True)
+    bcc_recipients = models.TextField(blank=True)
+    recipient_count = models.PositiveIntegerField(default=0)
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='+',
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f'{self.subject} ({self.sent_at:%Y-%m-%d %H:%M})'

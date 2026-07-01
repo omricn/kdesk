@@ -43,85 +43,163 @@
   <span class="badge bg-primary fs-6"><i class="bi bi-megaphone me-1"></i>Superuser</span>
 </div>
 
-<div class="row g-4">
-  <!-- Compose form -->
-  <div class="col-lg-6">
-    <div class="card mb-3">
-      <div class="card-header"><i class="bi bi-pencil-square me-1"></i>Compose</div>
-      <div class="card-body">
-        <form id="broadcastForm" method="post" action="{% url 'broadcast_email' %}">
-          {% csrf_token %}
+<ul class="nav nav-tabs mb-3" id="broadcastTabs">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-compose" type="button">
+      <i class="bi bi-pencil-square me-1"></i>Compose
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-history" type="button">
+      <i class="bi bi-clock-history me-1"></i>History <span class="badge bg-secondary ms-1">{{ history|length }}</span>
+    </button>
+  </li>
+</ul>
 
-          <div class="mb-3">
-            <label class="form-label">To</label>
-            <input type="text" name="to" class="form-control" dir="auto"
-                   value="{{ form.to|default:'' }}" placeholder="name@kramerav.com, name2@kramerav.com">
-            <div class="form-text">
-              Comma-separated. Leave empty to send Bcc-only — To defaults to servicedesk@kramerav.com so recipients stay hidden.
-            </div>
-            <div class="mt-2 d-flex flex-wrap gap-2">
-              {% for addr in quick_recipients %}
-              <button type="button" class="btn btn-sm btn-outline-secondary quick-chip" data-target="to" data-addr="{{ addr }}">
-                <i class="bi bi-plus-lg me-1"></i>{{ addr }}
+<div class="tab-content">
+  <!-- ── Compose tab ── -->
+  <div class="tab-pane fade show active" id="tab-compose">
+    <div class="row g-4">
+      <!-- Compose form -->
+      <div class="col-lg-6">
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-pencil-square me-1"></i>Compose</div>
+          <div class="card-body">
+            <form id="broadcastForm" method="post" action="{% url 'broadcast_email' %}">
+              {% csrf_token %}
+
+              <div class="mb-3">
+                <label class="form-label">To</label>
+                <input type="text" name="to" class="form-control" dir="auto"
+                       value="{{ form.to|default:'' }}" placeholder="name@kramerav.com, name2@kramerav.com">
+                <div class="form-text">
+                  Comma-separated. Leave empty to send Bcc-only — To defaults to servicedesk@kramerav.com so recipients stay hidden.
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Bcc</label>
+                <input type="text" name="bcc" class="form-control" dir="auto"
+                       value="{{ form.bcc|default:'' }}" placeholder="Optional">
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                  {% for addr in quick_recipients %}
+                  <button type="button" class="btn btn-sm btn-outline-secondary quick-chip" data-target="bcc" data-addr="{{ addr }}">
+                    <i class="bi bi-plus-lg me-1"></i>{{ addr }}
+                  </button>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Subject</label>
+                <input type="text" name="subject" class="form-control" dir="auto"
+                       value="{{ form.subject|default:'' }}" required>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Header title</label>
+                <input type="text" name="header_title" class="form-control" dir="auto"
+                       value="{{ form.header_title|default:'' }}" placeholder="e.g. Salesforce Login Issue" required>
+                <div class="form-text">The large heading in the purple email header.</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Sub-line <span class="text-muted">(optional)</span></label>
+                <input type="text" name="sub_line" class="form-control" dir="auto"
+                       value="{{ form.sub_line|default:'' }}" placeholder="Small text under the title">
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Body</label>
+                <textarea name="body" class="form-control" dir="auto" rows="10"
+                          placeholder="Write your message. Leave a blank line between paragraphs." required>{{ form.body|default:'' }}</textarea>
+                <div class="form-text">Plain text. Blank lines become paragraphs; single line breaks are kept.</div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-send me-1"></i>Send
               </button>
-              {% endfor %}
-            </div>
+            </form>
           </div>
+        </div>
+      </div>
 
-          <div class="mb-3">
-            <label class="form-label">Bcc</label>
-            <input type="text" name="bcc" class="form-control" dir="auto"
-                   value="{{ form.bcc|default:'' }}" placeholder="Optional">
-            <div class="mt-2 d-flex flex-wrap gap-2">
-              {% for addr in quick_recipients %}
-              <button type="button" class="btn btn-sm btn-outline-secondary quick-chip" data-target="bcc" data-addr="{{ addr }}">
-                <i class="bi bi-plus-lg me-1"></i>{{ addr }}
-              </button>
-              {% endfor %}
-            </div>
+      <!-- Live preview -->
+      <div class="col-lg-6">
+        <div class="card mb-3" style="position:sticky;top:1rem;">
+          <div class="card-header"><i class="bi bi-eye me-1"></i>Live Preview</div>
+          <div class="card-body p-0">
+            <iframe id="previewFrame" title="Email preview"
+                    style="width:100%;border:none;display:block;min-height:640px;background:#f0f0f0;border-radius:0 0 10px 10px;"></iframe>
           </div>
-
-          <div class="mb-3">
-            <label class="form-label">Subject</label>
-            <input type="text" name="subject" class="form-control" dir="auto"
-                   value="{{ form.subject|default:'' }}" required>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Header title</label>
-            <input type="text" name="header_title" class="form-control" dir="auto"
-                   value="{{ form.header_title|default:'' }}" placeholder="e.g. Salesforce Login Issue" required>
-            <div class="form-text">The large heading in the purple email header.</div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Sub-line <span class="text-muted">(optional)</span></label>
-            <input type="text" name="sub_line" class="form-control" dir="auto"
-                   value="{{ form.sub_line|default:'' }}" placeholder="Small text under the title">
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Body</label>
-            <textarea name="body" class="form-control" dir="auto" rows="10"
-                      placeholder="Write your message. Leave a blank line between paragraphs." required>{{ form.body|default:'' }}</textarea>
-            <div class="form-text">Plain text. Blank lines become paragraphs; single line breaks are kept.</div>
-          </div>
-
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-send me-1"></i>Send
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Live preview -->
-  <div class="col-lg-6">
-    <div class="card mb-3" style="position:sticky;top:1rem;">
-      <div class="card-header"><i class="bi bi-eye me-1"></i>Live Preview</div>
+  <!-- ── History tab ── -->
+  <div class="tab-pane fade" id="tab-history">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-clock-history me-1"></i>Sent Broadcasts</div>
       <div class="card-body p-0">
-        <iframe id="previewFrame" title="Email preview"
-                style="width:100%;border:none;display:block;min-height:640px;background:#f0f0f0;border-radius:0 0 10px 10px;"></iframe>
+        {% if history %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Sent</th>
+                <th>Subject</th>
+                <th>Header</th>
+                <th>Recipients</th>
+                <th>By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in history %}
+              <tr class="history-row" style="cursor:pointer;"
+                  data-url="{% url 'broadcast_view' b.pk %}"
+                  data-subject="{{ b.subject }}"
+                  data-to="{{ b.to_recipients }}"
+                  data-bcc="{{ b.bcc_recipients }}"
+                  data-count="{{ b.recipient_count }}"
+                  data-sentat="{{ b.sent_at|date:'d M Y H:i' }}"
+                  data-sentby="{% if b.sent_by %}{{ b.sent_by.display_name|default:b.sent_by.email }}{% else %}—{% endif %}">
+                <td class="text-nowrap">{{ b.sent_at|date:'d M Y H:i' }}</td>
+                <td dir="auto">{{ b.subject }}</td>
+                <td dir="auto">{{ b.header_title }}</td>
+                <td><span class="badge bg-info">{{ b.recipient_count }}</span></td>
+                <td dir="auto">{% if b.sent_by %}{{ b.sent_by.display_name|default:b.sent_by.email }}{% else %}—{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-muted">No broadcasts sent yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- History detail modal -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="hmSubject" dir="auto">Broadcast</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <dl class="row mb-3">
+          <dt class="col-sm-3">Sent</dt><dd class="col-sm-9" id="hmSentAt">—</dd>
+          <dt class="col-sm-3">By</dt><dd class="col-sm-9" id="hmSentBy" dir="auto">—</dd>
+          <dt class="col-sm-3">To</dt><dd class="col-sm-9" id="hmTo" dir="auto">—</dd>
+          <dt class="col-sm-3">Bcc</dt><dd class="col-sm-9" id="hmBcc" dir="auto">—</dd>
+          <dt class="col-sm-3">Recipients</dt><dd class="col-sm-9" id="hmCount">—</dd>
+        </dl>
+        <iframe id="hmFrame" title="Broadcast preview"
+                style="width:100%;border:1px solid var(--kramer-border);border-radius:6px;display:block;min-height:520px;background:#f0f0f0;"></iframe>
       </div>
     </div>
   </div>
@@ -245,6 +323,25 @@
 
   attachRecipientAutocomplete(form.to);
   attachRecipientAutocomplete(form.bcc);
+
+  // History: clicking a row opens the detail modal with the rendered email.
+  const modalEl = document.getElementById('historyModal');
+  if (modalEl) {
+    const hmFrame = document.getElementById('hmFrame');
+    function setText(id, val) { document.getElementById(id).textContent = val && val.trim() ? val : '—'; }
+    document.querySelectorAll('.history-row').forEach(function (row) {
+      row.addEventListener('click', function () {
+        setText('hmSubject', row.dataset.subject);
+        setText('hmSentAt', row.dataset.sentat);
+        setText('hmSentBy', row.dataset.sentby);
+        setText('hmTo', row.dataset.to);
+        setText('hmBcc', row.dataset.bcc);
+        setText('hmCount', row.dataset.count);
+        hmFrame.src = row.dataset.url;
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    });
+  }
 
   refresh();  // initial render
 })();
