@@ -23,6 +23,12 @@ class ParseRecipientsTests(unittest.TestCase):
         self.assertEqual(parse_recipients('a@x.com, A@X.com, b@x.com'),
                          ['a@x.com', 'b@x.com'])
 
+    def test_splits_on_bare_carriage_return(self):
+        self.assertEqual(
+            parse_recipients('a@x.com\rb@x.com'),
+            ['a@x.com', 'b@x.com'],
+        )
+
 
 class InvalidEmailsTests(unittest.TestCase):
     def test_flags_malformed_addresses(self):

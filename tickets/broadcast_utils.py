@@ -14,7 +14,7 @@ BROADCAST_QUICK_RECIPIENTS = [
 ]
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-_SPLIT_RE = re.compile(r'[,;\n]+')
+_SPLIT_RE = re.compile(r'[,;\r\n]+')
 
 
 def parse_recipients(raw):
