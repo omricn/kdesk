@@ -37,7 +37,13 @@
   pointer-events: none;
 }
 #bodyEditor:focus { outline: none; }
-#bodyEditor img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; }
+#bodyEditor img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; cursor: pointer; }
+
+/* Overlay + corner handles for dragging an inline image to resize (Outlook-style). */
+#imgResizeOverlay { position: fixed; display: none; z-index: 1080; pointer-events: none;
+  border: 1.5px solid var(--kramer-purple, #8205B4); box-sizing: border-box; }
+#imgResizeOverlay .rh { position: absolute; width: 11px; height: 11px; background: #fff;
+  border: 1.5px solid var(--kramer-purple, #8205B4); border-radius: 2px; pointer-events: auto; }
 </style>
 {% endblock %}
 
@@ -274,6 +280,86 @@
       debounced();
     };
     reader.readAsDataURL(blob);
+  });
+
+  // ── Inline image resize: click an image, drag a corner handle (Outlook-style) ──
+  // The overlay lives on <body> (never inside the editable region) so its handles
+  // are not serialized into the sent body. Size is written as both an inline
+  // width (keeps aspect ratio via height:auto) and a width attribute (Outlook).
+  const rzOverlay = document.createElement('div');
+  rzOverlay.id = 'imgResizeOverlay';
+  // [corner, cursor, atRight, atBottom]
+  const CORNERS = [['nw', 'nwse', 0, 0], ['ne', 'nesw', 1, 0], ['sw', 'nesw', 0, 1], ['se', 'nwse', 1, 1]];
+  const rzHandles = CORNERS.map(function (c) {
+    const h = document.createElement('div');
+    h.className = 'rh';
+    h.dataset.corner = c[0];
+    h.style.cursor = c[1] + '-resize';
+    h.style.left = c[2] ? '100%' : '0';
+    h.style.top = c[3] ? '100%' : '0';
+    h.style.transform = 'translate(-50%, -50%)';
+    rzOverlay.appendChild(h);
+    return h;
+  });
+  document.body.appendChild(rzOverlay);
+
+  let rzImg = null;
+
+  function rzPlace() {
+    if (!rzImg) { rzOverlay.style.display = 'none'; return; }
+    const r = rzImg.getBoundingClientRect();
+    rzOverlay.style.left = r.left + 'px';
+    rzOverlay.style.top = r.top + 'px';
+    rzOverlay.style.width = r.width + 'px';
+    rzOverlay.style.height = r.height + 'px';
+    rzOverlay.style.display = 'block';
+  }
+
+  function rzDeselect() { rzImg = null; rzOverlay.style.display = 'none'; }
+
+  editor.addEventListener('click', function (e) {
+    if (e.target && e.target.tagName === 'IMG') { rzImg = e.target; rzPlace(); }
+    else { rzDeselect(); }
+  });
+
+  rzHandles.forEach(function (handle) {
+    handle.addEventListener('mousedown', function (e) {
+      if (!rzImg) return;
+      e.preventDefault();
+      const growsRight = handle.dataset.corner === 'ne' || handle.dataset.corner === 'se';
+      const startX = e.clientX;
+      const startW = rzImg.getBoundingClientRect().width;
+      const maxW = editor.clientWidth - 8;
+      function onMove(ev) {
+        const dx = ev.clientX - startX;
+        let w = startW + (growsRight ? dx : -dx);
+        w = Math.max(40, Math.min(w, maxW));
+        w = Math.round(w);
+        rzImg.style.width = w + 'px';
+        rzImg.style.height = 'auto';
+        rzImg.setAttribute('width', w);
+        rzImg.removeAttribute('height');
+        rzPlace();
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        debounced();  // refresh live preview with the new size
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+
+  // Keep the overlay glued to its image; clear it when editing or clicking away.
+  editor.addEventListener('input', rzDeselect);
+  editor.addEventListener('scroll', rzPlace);
+  window.addEventListener('scroll', rzPlace, true);
+  window.addEventListener('resize', rzPlace);
+  document.addEventListener('mousedown', function (e) {
+    if (!rzImg) return;
+    if (rzOverlay.contains(e.target) || e.target === rzImg) return;  // handle or same image
+    rzDeselect();
   });
 
   // Serialize the editor into the hidden field before submit, and block empty sends.
