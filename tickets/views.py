@@ -327,7 +327,6 @@ def ticket_list(request):
 
 # ── Ticket Detail ─────────────────────────────────────────────────────────────
 
-@admin_required
 def _parse_inbound_cc(ticket):
     """Parse the CC recipients captured from the inbound email into a list of
     {name, email} dicts for the compose panel's CC checkboxes.
@@ -355,6 +354,7 @@ def _parse_inbound_cc(ticket):
     return out
 
 
+@admin_required
 def ticket_detail(request, pk):
     ticket = get_object_or_404(
         Ticket.objects.select_related('assignee', 'category', 'subcategory', 'ticket_item'), pk=pk
