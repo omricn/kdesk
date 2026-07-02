@@ -396,6 +396,23 @@
 
             <!-- CC field -->
             <div class="mb-2">
+              {% if inbound_cc %}
+              <!-- CC'd on the original email — tick who to include. All on by default. -->
+              <div class="mb-2" style="font-size:12px;">
+                <div class="fw-semibold mb-1" style="color:var(--bs-secondary-color);">
+                  <i class="bi bi-people me-1"></i>CC — from original email
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  {% for r in inbound_cc %}
+                  <div class="form-check form-check-inline me-0" title="{{ r.email }}">
+                    <input class="form-check-input cc-inbound-check" type="checkbox"
+                           id="cc-inbound-{{ forloop.counter }}" value="{{ r.email }}" checked>
+                    <label class="form-check-label" for="cc-inbound-{{ forloop.counter }}">{{ r.name }}</label>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
               <div id="cc-pills" class="d-flex flex-wrap gap-1 mb-1"></div>
               <input type="text" id="cc-search" class="form-control form-control-sm"
                      placeholder="CC… type a name or email" autocomplete="off">
@@ -1200,11 +1217,30 @@ if (INIT_CAT) {
   if (!searchInput) return;
 
   const selected = new Map(); // email -> display name
+  const inboundChecks = Array.prototype.slice.call(document.querySelectorAll('.cc-inbound-check'));
   let debounceTimer;
 
+  // The outgoing CC = ticked "from original email" boxes + free-form pills,
+  // de-duplicated case-insensitively (order: inbound first, then added pills).
   function syncHidden() {
-    hiddenInput.value = Array.from(selected.keys()).join(',');
+    const seen = new Set();
+    const out = [];
+    inboundChecks.forEach(function (cb) {
+      if (!cb.checked) return;
+      const key = cb.value.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(cb.value);
+    });
+    selected.forEach(function (_name, email) {
+      const key = email.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(email);
+    });
+    hiddenInput.value = out.join(',');
   }
+  inboundChecks.forEach(function (cb) { cb.addEventListener('change', syncHidden); });
 
   function addPill(email, displayName) {
     if (selected.has(email)) return;
@@ -1276,6 +1312,10 @@ if (INIT_CAT) {
   // Pre-fill CC (e.g. the new user's direct manager on provisioning tickets).
   const seed = hiddenInput.getAttribute('data-seed') || '';
   seed.split(',').forEach(e => { e = e.trim(); if (e) addPill(e, e); });
+
+  // Seed the hidden field from the default-checked inbound CC boxes so they are
+  // included even if the admin never touches the checkboxes.
+  syncHidden();
 })();
 
 // ── Edit comment ─────────────────────────────────────────────────────────────

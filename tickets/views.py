@@ -328,6 +328,33 @@ def ticket_list(request):
 # ── Ticket Detail ─────────────────────────────────────────────────────────────
 
 @admin_required
+def _parse_inbound_cc(ticket):
+    """Parse the CC recipients captured from the inbound email into a list of
+    {name, email} dicts for the compose panel's CC checkboxes.
+
+    Only meaningful for email-sourced tickets. The servicedesk mailbox and the
+    requester's own address are filtered out as redundant noise; groups and
+    everyone else are kept. De-duplicated case-insensitively, order preserved.
+    """
+    if ticket.source != Ticket.SOURCE_EMAIL or not ticket.email_cc:
+        return []
+    from email.utils import getaddresses
+
+    skip = {(settings.SERVICEDESK_EMAIL or '').lower(), (ticket.requester_email or '').lower()}
+    seen = set()
+    out = []
+    for name, email in getaddresses([ticket.email_cc]):
+        email = (email or '').strip()
+        if not email or '@' not in email:
+            continue
+        key = email.lower()
+        if key in skip or key in seen:
+            continue
+        seen.add(key)
+        out.append({'name': (name or '').strip() or email, 'email': email})
+    return out
+
+
 def ticket_detail(request, pk):
     ticket = get_object_or_404(
         Ticket.objects.select_related('assignee', 'category', 'subcategory', 'ticket_item'), pk=pk
@@ -575,6 +602,7 @@ def ticket_detail(request, pk):
         'my_attachments': my_attachments,
         'user_attachments': user_attachments,
         'kb_prompt_eligible': kb_prompt_eligible,
+        'inbound_cc': _parse_inbound_cc(ticket),
     }
     return render(request, 'tickets/detail.html', context)
 
