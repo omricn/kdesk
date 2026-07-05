@@ -796,6 +796,30 @@ def provisioning_requeue(request, req_id):
 
 
 @require_POST
+def provisioning_retry(request, req_id):
+    """Reset a stuck 'claimed' (or 'failed') request back to 'pending' so the agent
+    re-picks it. Unlike requeue, this does NOT set force_create — the agent's
+    active-account check still guards against duplicating a partially-created
+    account, so it's safe whether or not the half-built account was cleaned up."""
+    deny = _superuser_required(request)
+    if deny:
+        return deny
+
+    updated = ProvisioningRequest.objects.filter(
+        id=req_id, status__in=('claimed', 'failed'),
+    ).update(
+        status='pending',
+        claimed_at=None,
+        completed_at=None,
+    )
+    if updated:
+        messages.success(request, 'Provisioning re-queued — the agent will retry it shortly.')
+    else:
+        messages.warning(request, 'Could not retry — request is not in a stuck/failed state.')
+    return redirect('hibob_sync_dashboard')
+
+
+@require_POST
 def provisioning_cancel(request, req_id):
     """Cancel any active provisioning request — it will not be picked up again."""
     deny = _superuser_required(request)

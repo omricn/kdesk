@@ -8,6 +8,7 @@ urlpatterns = [
     path('hibob-sync/log/<int:run_id>/', views.hibob_sync_log, name='hibob_sync_log'),
     path('hibob-sync/provisioning/toggle/', views.hibob_sync_provisioning_toggle, name='hibob_sync_provisioning_toggle'),
     path('hibob-sync/provisioning/<int:req_id>/requeue/', views.provisioning_requeue, name='hibob_sync_provisioning_requeue'),
+    path('hibob-sync/provisioning/<int:req_id>/retry/', views.provisioning_retry, name='hibob_sync_provisioning_retry'),
     path('hibob-sync/provisioning/<int:req_id>/cancel/', views.provisioning_cancel, name='hibob_sync_provisioning_cancel'),
     path('hibob-sync/provisioning/<int:req_id>/pause/', views.provisioning_pause, name='hibob_sync_provisioning_pause'),
     path('hibob-sync/provisioning/<int:req_id>/resume/', views.provisioning_resume, name='hibob_sync_provisioning_resume'),

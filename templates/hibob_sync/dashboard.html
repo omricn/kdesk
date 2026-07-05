@@ -405,8 +405,9 @@
       <strong>Possible stuck request:</strong>
       Provisioning for <strong>{{ stuck_provisioning.first_name }} {{ stuck_provisioning.last_name }}</strong>
       has been in <em>Running</em> state since {{ stuck_provisioning.claimed_at|date:"d M H:i" }}
-      — the KAPPIT agent may have crashed or lost connectivity.
-      You can <em>Cancel</em> it below to reset, then check KAPPIT logs for details.
+      — the KAPPIT agent may have crashed, timed out, or lost connectivity.
+      Check the KAPPIT logs, then <em>Retry</em> it below to re-queue (the active-account
+      check prevents a duplicate), or <em>Cancel</em> to drop it.
     </div>
     {% endif %}
 
@@ -575,6 +576,15 @@
                     </form>
 
                   {% elif pr.status == 'claimed' %}
+                    {# Retry — reset a stuck 'Running' request back to the queue #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_retry' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('Re-queue this request for the agent to retry?\n\nOnly do this if it is genuinely stuck (Running far longer than normal) and the agent is NOT actively processing it. The active-account check prevents creating a duplicate account.')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-primary py-0 px-1 me-1"
+                              style="font-size:0.7rem;" title="Re-queue a stuck request for the agent to retry">
+                        <i class="bi bi-arrow-clockwise"></i> Retry
+                      </button>
+                    </form>
                     {# Cancel while running — script may already be running, warn the user #}
                     <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
                           onsubmit="return confirm('The agent may already be processing this request. Cancel anyway? The AD changes may still have happened.')">
@@ -586,6 +596,15 @@
                     </form>
 
                   {% elif pr.status == 'failed' %}
+                    {# Retry — put a failed request back in the queue #}
+                    <form method="post" action="{% url 'hibob_sync_provisioning_retry' pr.id %}" class="d-inline"
+                          onsubmit="return confirm('Re-queue this failed request for the agent to retry?')">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs btn-outline-primary py-0 px-1 me-1"
+                              style="font-size:0.7rem;" title="Re-queue this failed request for the agent to retry">
+                        <i class="bi bi-arrow-clockwise"></i> Retry
+                      </button>
+                    </form>
                     {# Cancel a failed request to stop it from being re-tried #}
                     <form method="post" action="{% url 'hibob_sync_provisioning_cancel' pr.id %}" class="d-inline"
                           onsubmit="return confirm('Cancel this failed request? It will no longer appear as actionable.')">
