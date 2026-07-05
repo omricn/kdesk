@@ -1615,6 +1615,66 @@ def send_weekly_digest(target_email: str = None):
 
 # ── Setup scheduled tasks in the DB ──────────────────────────────────────────
 
+@shared_task(name='tasks.sweep_stuck_provisioning')
+def sweep_stuck_provisioning():
+    """Watchdog: auto-fail provisioning requests stuck in 'claimed' well past the
+    agent's max runtime (the KAPPIT task caps a run at 45 min). A request still
+    'claimed' after 60 min means the agent crashed or was killed without reporting.
+    Flip it to 'failed' so it surfaces as actionable (and Retry-able) instead of
+    sitting on 'Running' forever, and alert the superusers."""
+    from datetime import timedelta
+    from hibob_sync.models import ProvisioningRequest
+
+    threshold = timezone.now() - timedelta(minutes=60)
+    stuck = list(ProvisioningRequest.objects.filter(status='claimed', claimed_at__lt=threshold))
+    for req in stuck:
+        req.status = 'failed'
+        req.result_success = False
+        req.completed_at = timezone.now()
+        req.result_message = (
+            'Auto-failed by watchdog: no result reported within 60 minutes — the agent '
+            'likely crashed or was killed mid-run. Review the KAPPIT log and use Retry to re-queue.'
+        )
+        req.save(update_fields=['status', 'result_success', 'completed_at', 'result_message'])
+        logger.warning(
+            '[Watchdog] Provisioning #%s (%s %s) stuck in claimed since %s — marked failed.',
+            req.id, req.first_name, req.last_name, req.claimed_at,
+        )
+        _alert_stuck_provisioning(req)
+    if stuck:
+        logger.warning('[Watchdog] Marked %d stuck provisioning request(s) as failed.', len(stuck))
+    return len(stuck)
+
+
+def _alert_stuck_provisioning(req):
+    """Email the superusers that a stuck provisioning request was auto-failed."""
+    try:
+        from integrations.graph_client import get_client
+        name = _esc(f'{req.first_name} {req.last_name}'.strip())
+        since = req.claimed_at.strftime('%Y-%m-%d %H:%M UTC') if req.claimed_at else 'an unknown time'
+        body_html = _email_html(
+            header_title='Provisioning stuck — auto-failed',
+            header_subtitle=name,
+            greeting=(
+                f'Provisioning for <strong>{name}</strong> was claimed at {since} but never '
+                f'reported a result within 60 minutes, so it has been automatically marked '
+                f'<strong>failed</strong>.<br><br>'
+                f'The KAPPIT agent likely crashed or was killed mid-run. Check the provisioning '
+                f'log on KAPPIT, then use <strong>Retry</strong> on the HiBob Sync dashboard to '
+                f're-queue it.'
+            ),
+            body_rows='',
+        )
+        get_client().send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email='Kdesk_Superusers@kramerav.com',
+            subject=f'⚠️ Provisioning stuck & auto-failed — {req.first_name} {req.last_name}',
+            body_html=body_html,
+        )
+    except Exception as exc:
+        logger.warning('[Watchdog] Could not send stuck-provisioning alert for #%s: %s', req.id, exc)
+
+
 def register_periodic_tasks():
     """
     Called from a management command on first run to seed the Celery Beat schedule.
@@ -1641,6 +1701,7 @@ def register_periodic_tasks():
         ('Sync Entra Admins',    'tasks.sync_admins',          sync_interval),
         ('Check SLA',            'tasks.check_sla',            sla_interval),
         ('Check Change Reminders', 'tasks.check_change_reminders', sla_interval),
+        ('Sweep Stuck Provisioning', 'tasks.sweep_stuck_provisioning', sla_interval),
     ]
     for name, task_name, schedule in interval_tasks:
         PeriodicTask.objects.get_or_create(
