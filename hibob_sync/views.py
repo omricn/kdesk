@@ -49,6 +49,24 @@ def _check_api_key(request):
     return request.headers.get('X-Sync-Api-Key') == expected
 
 
+def _parse_json_body(request):
+    """Parse a JSON request body, tolerating non-UTF-8 encodings.
+
+    The on-prem PowerShell 5.1 agent's Invoke-WebRequest can send the body as
+    Latin-1 rather than UTF-8 — e.g. an accented name like 'Díaz' becomes byte
+    0xED, which raises UnicodeDecodeError under strict UTF-8 and 500s the
+    endpoint, leaving the provisioning run stuck. Fall back to Latin-1 so a
+    result report is never lost to an encoding mismatch. Raises
+    json.JSONDecodeError for genuinely malformed JSON (callers return 400).
+    """
+    raw = request.body
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError:
+        text = raw.decode('latin-1')
+    return json.loads(text)
+
+
 # ── UI Views ──────────────────────────────────────────────────────────────────
 
 def hibob_sync_dashboard(request):
@@ -246,7 +264,7 @@ def api_report(request):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     try:
-        data = json.loads(request.body)
+        data = _parse_json_body(request)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
@@ -402,7 +420,7 @@ def api_provisioning_report(request):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     try:
-        data = json.loads(request.body)
+        data = _parse_json_body(request)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
@@ -971,7 +989,7 @@ def api_offboarding_report(request):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     try:
-        data = json.loads(request.body)
+        data = _parse_json_body(request)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
@@ -1473,7 +1491,7 @@ def api_store_credentials(request, req_id):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
 
     try:
-        data = json.loads(request.body)
+        data = _parse_json_body(request)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
