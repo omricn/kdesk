@@ -75,3 +75,39 @@ class ProvisioningChecksTests(TestCase):
             def get_user_group_identifiers(self, upn): raise RuntimeError('graph down')
         checks = {c['key']: c for c in sentinel.verify_provisioning_checks(req, Boom())}
         self.assertEqual(checks['entra_user']['status'], 'unknown')
+
+
+from unittest.mock import patch, MagicMock
+
+
+class RunSentinelTests(TestCase):
+    def _req(self):
+        return ProvisioningRequest.objects.create(
+            first_name='A', last_name='B', department='Sales', division='Sales',
+            country='Chile', region='LATAM', status='completed', work_email='ab@kramerav.com',
+            manager_email='m@kramerav.com', m365_groups=['Joiners'],
+        )
+
+    def test_all_pass_sets_ok_no_escalation(self):
+        from tasks.scheduled import run_sentinel_verification
+        req = self._req()
+        checks = [{'key': 'k', 'label': 'K', 'status': 'pass', 'detail': ''}]
+        with patch('hibob_sync.sentinel.verify_provisioning_checks', return_value=checks), \
+             patch('tasks.scheduled._sentinel_escalate') as esc, \
+             patch('integrations.graph_client.get_client', return_value=MagicMock()):
+            run_sentinel_verification('provisioning', req.id)
+        vr = req.verifications.first()
+        self.assertEqual(vr.overall, 'ok')
+        esc.assert_not_called()
+
+    def test_fail_escalates_and_records(self):
+        from tasks.scheduled import run_sentinel_verification
+        req = self._req()
+        checks = [{'key': 'entra_user', 'label': 'x', 'status': 'fail', 'detail': 'gone'}]
+        with patch('hibob_sync.sentinel.verify_provisioning_checks', return_value=checks), \
+             patch('tasks.scheduled._sentinel_escalate') as esc, \
+             patch('integrations.graph_client.get_client', return_value=MagicMock()):
+            run_sentinel_verification('provisioning', req.id)
+        vr = req.verifications.first()
+        self.assertEqual(vr.overall, 'escalated')
+        esc.assert_called_once()

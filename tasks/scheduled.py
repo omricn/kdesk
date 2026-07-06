@@ -1713,3 +1713,104 @@ def register_periodic_tasks():
         name='Weekly Digest',
         defaults={'task': 'tasks.send_weekly_digest', 'crontab': digest_cron, 'enabled': True},
     )
+
+
+# ── Provisioning Sentinel verification ───────────────────────────────────────
+
+@shared_task(name='tasks.run_sentinel_verification')
+def run_sentinel_verification(kind, req_id):
+    """Verify one completed request, apply the Kdesk-direct remediation playbook,
+    and escalate anything unresolved. Read-only checks; safe to re-run."""
+    from hibob_sync.models import ProvisioningRequest, OffboardingRequest, VerificationResult
+    from hibob_sync import sentinel
+    from integrations.graph_client import get_client
+
+    if kind == 'provisioning':
+        req = ProvisioningRequest.objects.filter(id=req_id).first()
+    else:
+        req = OffboardingRequest.objects.filter(id=req_id).first()
+    if not req:
+        return 'request-not-found'
+
+    graph = get_client()
+    if kind == 'provisioning':
+        checks = sentinel.verify_provisioning_checks(req, graph)
+    else:
+        checks = sentinel.verify_offboarding_checks(req, graph)
+
+    vr = VerificationResult(kind=kind, checks=checks, overall='pending')
+    if kind == 'provisioning':
+        vr.provisioning_request = req
+    else:
+        vr.offboarding_request = req
+
+    remediations = []
+    if kind == 'provisioning':
+        remediations = _sentinel_kdesk_playbook(req, checks)
+        if remediations:
+            vr.attempts = 1
+            fresh = {c['key']: c for c in sentinel.verify_provisioning_checks(req, graph)}
+            checks = [fresh.get(c['key'], c) for c in checks]
+            vr.checks = checks
+    vr.remediations = remediations
+
+    statuses = {c['status'] for c in checks}
+    if 'fail' in statuses:
+        vr.overall = 'escalated'
+    elif 'unknown' in statuses:
+        vr.overall = 'remediated' if remediations else 'pending'
+    else:
+        vr.overall = 'remediated' if remediations else 'ok'
+    vr.save()
+
+    if vr.overall == 'escalated':
+        _sentinel_escalate(kind, req, vr)
+    return vr.overall
+
+
+def _sentinel_kdesk_playbook(req, checks):
+    """Apply only the safe, idempotent Kdesk-side fixes. Returns list of remediation dicts."""
+    done = []
+    failed = {c['key'] for c in checks if c['status'] == 'fail'}
+    if any(k.startswith('ticket_') for k in failed):
+        try:
+            from hibob_sync.views import _create_system_tickets
+            _create_system_tickets(req, req.work_email)
+            done.append({'action': 'create_system_tickets', 'target': req.work_email,
+                         'result': 'ok', 'at': timezone.now().isoformat()})
+        except Exception as exc:
+            done.append({'action': 'create_system_tickets', 'target': req.work_email,
+                         'result': f'error: {exc}', 'at': timezone.now().isoformat()})
+    return done
+
+
+def _sentinel_escalate(kind, req, vr):
+    """Email superusers about an unresolved verification. (P2 adds LLM diagnosis.)"""
+    try:
+        from integrations.graph_client import get_client
+        name = _esc(f'{getattr(req, "first_name", "")} {getattr(req, "last_name", "")}'.strip()
+                    or getattr(req, 'employee_name', '') or f'request #{req.id}')
+        failed = [c for c in vr.checks if c['status'] in ('fail', 'unknown')]
+        rows = ''.join(
+            f'<li><strong>{_esc(c["label"])}</strong>: {_esc(c["status"])}'
+            + (f' - {_esc(c["detail"])}' if c.get('detail') else '') + '</li>'
+            for c in failed
+        )
+        body_html = _email_html(
+            header_title='Provisioning verification needs attention',
+            header_subtitle=name,
+            greeting=(
+                f'The Sentinel verified the {kind} for <strong>{name}</strong> and found '
+                f'unresolved issues it could not safely auto-fix:<br><br><ul>{rows}</ul>'
+                f'Open the HiBob Sync dashboard to review and act.'
+            ),
+            body_rows='',
+        )
+        get_client().send_email(
+            from_mailbox=settings.SERVICEDESK_EMAIL,
+            to_email='Kdesk_Superusers@kramerav.com',
+            subject=f'⚠️ Sentinel: {kind} verification for {name} needs attention',
+            body_html=body_html,
+        )
+    except Exception as exc:
+        logger.warning('[Sentinel] Could not send escalation for %s #%s: %s', kind, req.id, exc)
