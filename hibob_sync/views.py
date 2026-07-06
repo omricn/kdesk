@@ -1444,6 +1444,8 @@ def _send_manager_onedrive_notification(req):
             subject=f'Action Required — OneDrive Access Window for {employee_name}',
             body_html=body_html,
         )
+        req.onedrive_email_sent = True
+        req.save(update_fields=['onedrive_email_sent'])
         logger.info('[Offboarding] OneDrive manager notification sent to %s for req #%s', manager_email, req.id)
     except Exception as exc:
         logger.warning('[Offboarding] Could not send OneDrive manager notification: %s', exc)

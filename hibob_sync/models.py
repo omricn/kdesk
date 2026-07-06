@@ -146,6 +146,9 @@ class OffboardingRequest(models.Model):
     result_log = models.TextField(blank=True)
     result_message = models.TextField(blank=True)
 
+    # Set True once the manager OneDrive-handover notification email is sent
+    onedrive_email_sent = models.BooleanField(default=False)
+
     class Meta:
         ordering = ['-created_at']
 
