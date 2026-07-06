@@ -33,6 +33,10 @@ jobs:
 
   deploy:
     needs: test
+    # Dormant until you opt in: set repo variable DEPLOY_ENABLED=true (after the
+    # AZURE_CREDENTIALS secret exists). Until then only the test job runs on merges,
+    # so a missing secret never red-Xes main and the CD cutover stays deliberate.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

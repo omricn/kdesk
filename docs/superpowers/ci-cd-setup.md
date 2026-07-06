@@ -12,6 +12,12 @@ The workflow authenticates to Azure with a **service principal** stored as a
 single GitHub repo secret. `deploy.sh` keeps working as a manual fallback until
 this is in place, so there's no rush and no risk.
 
+> **Requires an Azure admin.** Creating the service principal *with a role*
+> (steps 1 below) needs **Owner** or **User Access Administrator** on the
+> `kdesk-prod` resource group / KramerITapps subscription — a regular developer
+> account gets `AuthorizationFailed` on the role assignment. Have an admin run
+> step 1 and hand you the JSON blob; you do steps 2 + 4.
+
 ### 1. Create a service principal scoped to the resource group
 
 Run once (as someone with Owner/UAA on the `kdesk-prod` resource group):
@@ -45,7 +51,19 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 (Registry name, resource group, and app names are non-secret and live in the workflow's `env:` block.)
 
-### 3. (Recommended) Protect `main` so deploys go through review
+### 3. Turn the deploy job on
+
+The `deploy` job is gated by `if: ${{ vars.DEPLOY_ENABLED == 'true' }}`, so it
+stays dormant (only the `test` job runs on merges) until you opt in. Once the
+`AZURE_CREDENTIALS` secret exists, enable it:
+
+Repo → **Settings → Secrets and variables → Actions → Variables → New repository
+variable** → Name `DEPLOY_ENABLED`, Value `true`.
+
+Until this variable is `true`, merges to `main` run tests only and **never**
+auto-deploy — so the cutover is deliberate, and a missing secret can't red-X `main`.
+
+### 4. (Recommended) Protect `main` so deploys go through review
 
 Repo → **Settings → Branches → Add rule** for `main`: require a pull request
 before merging, and require 1 approval. Then the flow is: agent/you open a PR →
