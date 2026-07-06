@@ -52,8 +52,9 @@ def _call_claude(system_prompt, user_prompt):
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     resp = client.messages.create(
         model="claude-opus-4-8",
-        max_tokens=2000,
+        max_tokens=8000,
         thinking={"type": "adaptive"},
+        output_config={"effort": "low"},
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )

@@ -38,7 +38,8 @@ def open_incident_issue(kind, req, vr):
         body_lines += ["", "### AI diagnosis", vr.diagnosis]
     log = (getattr(req, 'result_log', '') or '').strip()
     if log:
-        body_lines += ["", "### KAPPIT run log (tail)", "```", log[-4000:], "```"]
+        tail = log[-4000:].replace("```", "ʼʼʼ")   # neutralize fence-breaking sequences
+        body_lines += ["", "### KAPPIT run log (tail)", "```", tail, "```"]
     body = "\n".join(body_lines)
     try:
         return _create_issue(token, repo, title, body, labels=['sentinel', kind])

@@ -71,3 +71,19 @@ the rule, a direct push to `main` also deploys — still fine, just less gated.
 - If the secret isn't set yet, the workflow run fails harmlessly (nothing
   deploys) and `deploy.sh` remains available as the manual path.
 - `deploy.sh` can stay in the repo as a break-glass manual deploy.
+
+## Rollback
+
+Every deploy tags the image with the commit SHA (`kdeskregistry.azurecr.io/kdesk:<sha>`)
+in addition to `latest`. To roll back to a previous release, point the apps at the
+prior SHA and restart them:
+
+```bash
+az webapp config container set -g kdesk-prod -n kdesk-web \
+  --container-image-name kdeskregistry.azurecr.io/kdesk:<previous-sha> > /dev/null
+az webapp restart -g kdesk-prod -n kdesk-web
+# repeat for kdesk-celery and kdesk-celery-beat
+```
+
+Find the SHA to roll back to from the git history on `main` (each merge commit's
+SHA is the tag). The image for that SHA remains in ACR, so no rebuild is needed.

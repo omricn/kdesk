@@ -1822,7 +1822,7 @@ def _sentinel_escalate(kind, req, vr):
         diagnosis = diagnose(kind, req, vr.checks, run_log)
         if diagnosis:
             vr.diagnosis = diagnosis
-            vr.save(update_fields=['diagnosis'])
+            vr.save(update_fields=['diagnosis', 'updated_at'])
         # P4 — file a trackable GitHub incident issue (deduped per request,
         # no-op without a token). Store the URL so we can link it in the email.
         from hibob_sync.sentinel_issue import open_incident_issue, already_filed
@@ -1830,7 +1830,7 @@ def _sentinel_escalate(kind, req, vr):
             issue_url = open_incident_issue(kind, req, vr)
             if issue_url:
                 vr.issue_url = issue_url
-                vr.save(update_fields=['issue_url'])
+                vr.save(update_fields=['issue_url', 'updated_at'])
         issue_html = ''
         if getattr(vr, 'issue_url', ''):
             issue_html = (

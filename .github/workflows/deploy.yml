@@ -1,29 +1,38 @@
 name: Deploy Kdesk to Azure
 
-# Continuous deployment: on every merge to main, build the image, push to ACR,
-# and restart the three Azure Web Apps — the automated replacement for deploy.sh.
-# This is what lets a fix be approved + merged from a phone and ship on its own.
-#
-# Requires one repo secret (see docs/superpowers/ci-cd-setup.md):
-#   AZURE_CREDENTIALS — service-principal JSON from `az ad sp create-for-rbac --sdk-auth`,
-#                       scoped to resource group kdesk-prod with AcrPush on kdeskregistry.
+# Continuous deployment: on every merge to main, run tests, build+push the image
+# (tagged latest AND the commit SHA for rollback), then restart the Azure Web Apps.
+# Requires repo secret AZURE_CREDENTIALS (see docs/superpowers/ci-cd-setup.md).
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}          # allows a manual run from the Actions tab / GitHub mobile
+  workflow_dispatch: {}
 
 concurrency:
   group: deploy-prod
-  cancel-in-progress: false      # never interrupt an in-flight prod deploy
+  cancel-in-progress: false
 
 env:
   REGISTRY: kdeskregistry
-  IMAGE: kdeskregistry.azurecr.io/kdesk:latest
+  IMAGE_REPO: kdeskregistry.azurecr.io/kdesk
   RG: kdesk-prod
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run test suite
+        run: python manage.py test hibob_sync integrations.test_graph_reads tickets.test_broadcast_utils --settings=kdesk.settings_test
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -37,34 +46,42 @@ jobs:
       - name: ACR login
         run: az acr login --name "$REGISTRY"
 
-      - name: Build image
-        run: docker build -t "$IMAGE" .
+      - name: Build image (latest + commit SHA)
+        run: docker build -t "$IMAGE_REPO:latest" -t "$IMAGE_REPO:${{ github.sha }}" .
 
       - name: Push image
-        run: docker push "$IMAGE"
+        run: |
+          docker push "$IMAGE_REPO:latest"
+          docker push "$IMAGE_REPO:${{ github.sha }}"
 
-      - name: Point web apps at the new image and restart
+      - name: Point web apps at the new image
         run: |
           for APP in kdesk-web kdesk-celery kdesk-celery-beat; do
             az webapp config container set \
               --resource-group "$RG" --name "$APP" \
-              --container-image-name "$IMAGE" > /dev/null
-            az webapp restart --resource-group "$RG" --name "$APP"
+              --container-image-name "$IMAGE_REPO:latest" > /dev/null
           done
+
+      - name: Restart web first (runs migrations), then workers
+        run: |
+          az webapp restart --resource-group "$RG" --name kdesk-web
+          sleep 25
+          az webapp restart --resource-group "$RG" --name kdesk-celery
+          az webapp restart --resource-group "$RG" --name kdesk-celery-beat
 
       - name: Verify services are Running
         run: |
-          sleep 30
+          sleep 20
           fail=0
           for APP in kdesk-web kdesk-celery kdesk-celery-beat; do
             STATE=$(az webapp show --resource-group "$RG" --name "$APP" --query state -o tsv 2>/dev/null)
             echo "$APP: $STATE"
             if [ "$STATE" != "Running" ]; then
               az webapp start --resource-group "$RG" --name "$APP" || true
-              fail=1
+              sleep 10
+              STATE=$(az webapp show --resource-group "$RG" --name "$APP" --query state -o tsv 2>/dev/null)
+              [ "$STATE" = "Running" ] || fail=1
             fi
           done
-          if [ "$fail" = "1" ]; then
-            echo "::warning::One or more services were not Running and were started — check logs."
-          fi
+          if [ "$fail" = "1" ]; then echo "::error::A service is not Running after deploy"; exit 1; fi
           echo "Done. Live at https://kdesk.kramerav.com"
