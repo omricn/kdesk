@@ -187,6 +187,9 @@ ENTRA_SUPPORT_ADMIN_GROUP_EMAIL = os.environ.get('ENTRA_SUPPORT_ADMIN_GROUP_EMAI
 # ── Groq AI ──────────────────────────────────────────────────────────────────
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 
+# ── Anthropic (Claude) — Sentinel P2 root-cause diagnosis ─────────────────────
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {
     'version': 1,

@@ -14,4 +14,5 @@ django-storages[azure]==1.14.2
 whitenoise==6.6.0
 gunicorn==21.2.0
 groq>=0.11.0
+anthropic>=0.40
 nh3>=0.2.14

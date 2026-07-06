@@ -1807,6 +1807,7 @@ def _sentinel_escalate(kind, req, vr):
     """Email superusers about an unresolved verification. (P2 adds LLM diagnosis.)"""
     try:
         from integrations.graph_client import get_client
+        from hibob_sync.sentinel_diagnose import diagnose
         name = _esc(f'{getattr(req, "first_name", "")} {getattr(req, "last_name", "")}'.strip()
                     or getattr(req, 'employee_name', '') or f'request #{req.id}')
         failed = [c for c in vr.checks if c['status'] in ('fail', 'unknown')]
@@ -1815,12 +1816,31 @@ def _sentinel_escalate(kind, req, vr):
             + (f' - {_esc(c["detail"])}' if c.get('detail') else '') + '</li>'
             for c in failed
         )
+        # P2 — optional LLM (Claude) root-cause diagnosis. Degrades gracefully to
+        # the templated P1 email when the API key is unset or the call fails.
+        run_log = getattr(req, 'result_log', '') or ''
+        diagnosis = diagnose(kind, req, vr.checks, run_log)
+        if diagnosis:
+            vr.diagnosis = diagnosis
+            vr.save(update_fields=['diagnosis'])
+        diagnosis_html = ''
+        if diagnosis:
+            diagnosis_html = (
+                '<br><div style="margin-top:8px;padding:16px 18px;background:#f5f5f5;'
+                'border-left:4px solid #8205B4;border-radius:4px;">'
+                '<p style="margin:0 0 8px;font-weight:700;color:#8205B4;'
+                "font-family:'GT Eesti Display Md','GT Eesti Display','Segoe UI',Calibri,Arial,sans-serif;"
+                'font-size:13px;letter-spacing:1px;text-transform:uppercase;">AI diagnosis</p>'
+                f'<p style="margin:0;color:#333333;font-size:14px;line-height:1.6;">'
+                f'{_esc(diagnosis).replace(chr(10), "<br>")}</p></div>'
+            )
         body_html = _email_html(
             header_title='Provisioning verification needs attention',
             header_subtitle=name,
             greeting=(
                 f'The Sentinel verified the {kind} for <strong>{name}</strong> and found '
                 f'unresolved issues it could not safely auto-fix:<br><br><ul>{rows}</ul>'
+                f'{diagnosis_html}'
                 f'Open the HiBob Sync dashboard to review and act.'
             ),
             body_rows='',
