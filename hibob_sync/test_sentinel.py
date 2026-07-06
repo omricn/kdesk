@@ -76,6 +76,15 @@ class ProvisioningChecksTests(TestCase):
         checks = {c['key']: c for c in sentinel.verify_provisioning_checks(req, Boom())}
         self.assertEqual(checks['entra_user']['status'], 'unknown')
 
+    def test_mailbox_not_yet_present_is_unknown_not_fail(self):
+        # Account exists+enabled but mailbox/proxyAddresses not yet synced -> unknown
+        # (retried by the sweep), never a false 'fail' that would escalate.
+        req = self._req()
+        g = FakeGraph({'accountEnabled': True, 'mail': None, 'proxyAddresses': []},
+                      ['joiners', 'microsoft 365 e5 users', 'chl_all@kramerav.com'])
+        checks = {c['key']: c for c in sentinel.verify_provisioning_checks(req, g)}
+        self.assertEqual(checks['mailbox']['status'], 'unknown')
+
 
 from unittest.mock import patch, MagicMock
 

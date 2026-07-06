@@ -48,9 +48,13 @@ def verify_provisioning_checks(req, graph):
             ))
         except Exception as exc:
             checks.append(_check('m365_groups', 'All M365 groups assigned', 'unknown', str(exc)))
+        # The account exists in Entra; the mailbox/proxyAddresses can lag a little
+        # behind provisioning. Treat "not yet present" as UNKNOWN (the sweep will
+        # re-check) rather than FAIL, so a slow mailbox never triggers a false
+        # escalation email.
         has_mail = bool(user.get('mail')) or bool(user.get('proxyAddresses'))
-        checks.append(_check('mailbox', 'Mailbox provisioned', 'pass' if has_mail else 'fail',
-                             '' if has_mail else 'no mail/proxyAddresses'))
+        checks.append(_check('mailbox', 'Mailbox provisioned', 'pass' if has_mail else 'unknown',
+                             '' if has_mail else 'no mail/proxyAddresses yet (may still be provisioning) — will re-check'))
 
     checks.append(_check(
         'creds_email', 'Credentials stored + manager notified',
