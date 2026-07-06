@@ -156,6 +156,35 @@ class GraphClient:
 
     # ── Users / Groups ────────────────────────────────────────────────────────
 
+    def get_user(self, upn: str):
+        """Return {id, accountEnabled, mail, displayName, proxyAddresses} or None if not found."""
+        import requests
+        try:
+            return self.get(
+                f'/users/{upn}',
+                params={'$select': 'id,accountEnabled,mail,displayName,proxyAddresses'},
+            )
+        except requests.exceptions.HTTPError as exc:
+            if getattr(exc.response, 'status_code', None) == 404:
+                return None
+            raise
+
+    def get_user_group_identifiers(self, upn: str) -> set:
+        """Return a lowercased set of the user's group identifiers (both mail and
+        displayName), so membership can be matched whether a group is referenced
+        by email (e.g. CHL_All@x.com) or by name (e.g. Joiners)."""
+        groups = self.get_paginated(
+            f'/users/{upn}/memberOf/microsoft.graph.group',
+            params={'$select': 'id,mail,displayName'},
+        )
+        ids = set()
+        for g in groups:
+            if g.get('mail'):
+                ids.add(g['mail'].strip().lower())
+            if g.get('displayName'):
+                ids.add(g['displayName'].strip().lower())
+        return ids
+
     def get_group_id_by_name(self, group_name: str):
         data = self.get('/groups', params={'$filter': f"displayName eq '{group_name}'", '$select': 'id,displayName'})
         groups = data.get('value', [])
