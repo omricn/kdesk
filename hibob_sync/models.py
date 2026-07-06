@@ -240,3 +240,34 @@ class SyncChange(models.Model):
 
     def __str__(self):
         return f'{self.email} / {self.field_name}'
+
+
+class VerificationResult(models.Model):
+    """Sentinel oversight record for one provisioning/offboarding request."""
+    KIND_CHOICES = [('provisioning', 'Provisioning'), ('offboarding', 'Offboarding')]
+    OVERALL_CHOICES = [
+        ('pending', 'Pending'), ('ok', 'OK'), ('remediated', 'Remediated'),
+        ('escalated', 'Escalated'), ('failed', 'Failed'),
+    ]
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    provisioning_request = models.ForeignKey(
+        'ProvisioningRequest', null=True, blank=True, on_delete=models.CASCADE,
+        related_name='verifications',
+    )
+    offboarding_request = models.ForeignKey(
+        'OffboardingRequest', null=True, blank=True, on_delete=models.CASCADE,
+        related_name='verifications',
+    )
+    overall = models.CharField(max_length=20, choices=OVERALL_CHOICES, default='pending')
+    checks = models.JSONField(default=list)        # list of {key,label,status,detail}
+    remediations = models.JSONField(default=list)  # list of {action,target,result,at}
+    attempts = models.PositiveSmallIntegerField(default=0)
+    diagnosis = models.TextField(blank=True)       # populated in P2 (LLM)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Verification({self.kind} #{self.provisioning_request_id or self.offboarding_request_id}: {self.overall})'
