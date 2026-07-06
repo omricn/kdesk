@@ -95,22 +95,25 @@ provisioning run.
 1. Request status = `completed`.
 2. Entra user exists and is enabled.
 3. **All resolved `m365_groups` present** (membership check; mail-enabled groups included).
-4. **E5 license assigned.**
+4. **E5 = membership in `Microsoft 365 E5 Users`.** Licensing is group-based, so
+   the group auto-assigns the E5 license — this is covered by check #3, not a
+   separate license query/assignment.
 5. Mailbox provisioned.
 6. Credentials stored + manager credentials email sent.
 7. Priority/Salesforce new-user tickets created *if flagged*.
 8. On-prem AD account exists + enabled (via KAPPIT `probe_ad`, P3; until then inferred from the run log).
 
 **Termination (completion + correctness):**
-Completion signal = **OneDrive-handover email sent AND Priority + Salesforce
-termination tickets created** (the last steps of the current offboarding flow —
-exact artifacts to be confirmed against code during implementation).
+Completion signal = **OneDrive-handover email sent (last step) AND the Priority +
+Salesforce termination tickets created**.
 1. Request status = `completed`.
 2. Account disabled; sign-in sessions revoked.
 3. Removed from groups / license reclaimed per offboarding policy.
 4. Mailbox handled per policy.
 5. **OneDrive-handover email sent to manager.**
-6. **Priority + Salesforce termination tickets created.**
+6. **Priority + Salesforce termination tickets created**, identified by:
+   - Subject `TERMINATE USER – Priority – <UserFullName>`, category **IT → Priority → Terminate Employee**.
+   - Subject `TERMINATE USER – Salesforce – <UserFullName>`, category **IT → SalesForce → Terminate Employee**.
 7. Linked ticket updated.
 
 A check that can't be evaluated (Graph throttling/error) is recorded `unknown`,
@@ -120,12 +123,14 @@ never `fail` — so transient errors don't cause false escalations.
 
 | Failed check | Action | Where |
 |---|---|---|
-| Missing M365 group | add member (Graph; EXO for mail-enabled) | KAPPIT `AgentJob` (P3) |
-| Missing E5 license | assign license | KAPPIT `AgentJob` (or Kdesk if granted write) (P3) |
+| Missing M365 group (incl. `Microsoft 365 E5 Users` → auto-grants E5) | add member (Graph; EXO for mail-enabled) | KAPPIT `AgentJob` (P3) |
 | Manager creds email not sent | resend | Kdesk-direct |
 | Missing Priority/SF ticket | create | Kdesk-direct (`_create_system_tickets`) |
 | Stuck / never reported | re-queue / watchdog-fail | Kdesk-direct (existing Retry) |
-| AD account absent · E5 pool exhausted · novel | **escalate** | LLM + superuser email |
+| AD account absent · novel / ambiguous | **escalate** | LLM + superuser email |
+
+There is **no separate license-assignment action** — adding the `Microsoft 365
+E5 Users` group grants the E5 license via group-based licensing.
 
 Each remediation is idempotent and capped (max 2 rounds), then escalate — no fix
 loops.
@@ -165,15 +170,19 @@ loops.
 
 ## 11. Prerequisites & constraints
 
-- **Kdesk Graph app (`4ae6b2c2-1c20-431c-b665-22430fec7e77`) needs Microsoft
-  Graph *Application* permissions** (client-credentials, headless), admin-consented:
-  `User.Read.All`, `GroupMember.Read.All`, `Directory.Read.All`,
-  `Organization.Read.All` (license visibility). (`MailboxSettings.Read` if mailbox
-  state is checked via Graph.)
-- **Mail-enabled group membership writes cannot be done from Kdesk's Graph app** →
-  those remediations route through KAPPIT (EXO cert auth), consistent with P3.
-- **`ANTHROPIC_API_KEY`** in Kdesk env for P2; models `claude-sonnet-5` /
-  `claude-opus-4-8`.
+- **Kdesk Graph app (`4ae6b2c2-1c20-431c-b665-22430fec7e77`) Microsoft Graph
+  *Application* permissions (client-credentials, headless) — DONE:** `User.Read.All`
+  and `GroupMember.Read.All` already existed; `Directory.Read.All` and
+  `Organization.Read.All` added with admin consent. (Add `MailboxSettings.Read`
+  only if mailbox state is later checked via Graph.)
+- **No license permissions needed** — E5 is granted by `Microsoft 365 E5 Users`
+  group membership (group-based licensing), so the Sentinel never touches license
+  assignment; verifying/fixing the group is sufficient.
+- **All M365 write remediations route through KAPPIT** (its Graph app + EXO cert
+  auth handle both regular and mail-enabled groups). Kdesk's app stays read-only.
+- **`ANTHROPIC_API_KEY`** in Kdesk env — needed for **P2 only** (LLM diagnosis);
+  P1 works without it (templated escalation emails). Models `claude-sonnet-5`
+  (default) / `claude-opus-4-8` (hardest).
 - New KAPPIT PS helpers must be **ASCII-only** and send **UTF-8 request bodies**
   (Windows PowerShell 5.1 lessons).
 
@@ -186,9 +195,30 @@ loops.
   in tests).
 - P3 KAPPIT helpers: parse-check under PowerShell 5.1, ASCII-only.
 
-## 13. To confirm during implementation
+## 13. Observability — how superusers see what's happening
 
-- Exact terminal artifacts of the current offboarding flow (OneDrive email +
-  which tickets) to encode the termination completion check precisely.
-- Whether to grant Kdesk's app license-write (to auto-fix E5 from Kdesk) vs.
-  routing all M365 writes through KAPPIT.
+**Terminology:** this is **one orchestrator — "the Sentinel"** — a Celery service
+in Kdesk with internal components (Verifier, Remediator, LLM diagnoser), *not* a
+swarm of agents. The only other actor is the pre-existing **KAPPIT agent**, which
+the Sentinel delegates on-prem/EXO fixes to. So: one new orchestrator + the
+existing executor.
+
+Visibility is **both GUI and email**, by design:
+
+- **Kdesk GUI (primary, always-on):**
+  - Per-request **verification badge** (✔ ok · ⟳ remediated · ⚠ escalated · ✖ failed)
+    on the HiBob Sync dashboard rows, with an expandable **checklist** (each check
+    pass/fail/unknown) and a **remediation/audit log** (what was auto-fixed, when,
+    outcome).
+  - A **Sentinel activity view** — recent verifications across requests, what was
+    auto-fixed vs escalated, and any open escalations needing a human.
+- **Email (push, low-noise):** superusers are emailed **only on escalation** (with
+  the P2 LLM root-cause + suggested fix) — not on every successful/auto-fixed run,
+  to avoid alert fatigue. Optional: fold a one-line Sentinel summary into the
+  existing weekly digest.
+
+## 14. To confirm during implementation
+
+- Exact objects the offboarding flow emits (the OneDrive email trigger + the two
+  termination tickets by subject/category above) to wire the completion check.
+- Mailbox-handling policy specifics for the termination "mailbox handled" check.
