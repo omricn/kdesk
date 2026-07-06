@@ -266,6 +266,7 @@ class VerificationResult(models.Model):
     remediations = models.JSONField(default=list)  # list of {action,target,result,at}
     attempts = models.PositiveSmallIntegerField(default=0)
     diagnosis = models.TextField(blank=True)       # populated in P2 (LLM)
+    issue_url = models.URLField(blank=True)        # populated in P4 (GitHub incident issue)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

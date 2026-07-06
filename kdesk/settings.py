@@ -190,6 +190,10 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 # ── Anthropic (Claude) — Sentinel P2 root-cause diagnosis ─────────────────────
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
+# ── GitHub — Sentinel P4 incident issue filing ───────────────────────────────
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')          # PAT/app token with issues:write
+GITHUB_REPO = os.environ.get('GITHUB_REPO', 'KramerAV/kdesk')
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {
     'version': 1,

@@ -1823,6 +1823,19 @@ def _sentinel_escalate(kind, req, vr):
         if diagnosis:
             vr.diagnosis = diagnosis
             vr.save(update_fields=['diagnosis'])
+        # P4 — file a trackable GitHub incident issue (deduped per request,
+        # no-op without a token). Store the URL so we can link it in the email.
+        from hibob_sync.sentinel_issue import open_incident_issue, already_filed
+        if not already_filed(kind, req):
+            issue_url = open_incident_issue(kind, req, vr)
+            if issue_url:
+                vr.issue_url = issue_url
+                vr.save(update_fields=['issue_url'])
+        issue_html = ''
+        if getattr(vr, 'issue_url', ''):
+            issue_html = (
+                f'<br>Tracking issue: <a href="{_esc(vr.issue_url)}">{_esc(vr.issue_url)}</a>'
+            )
         diagnosis_html = ''
         if diagnosis:
             diagnosis_html = (
@@ -1842,6 +1855,7 @@ def _sentinel_escalate(kind, req, vr):
                 f'unresolved issues it could not safely auto-fix:<br><br><ul>{rows}</ul>'
                 f'{diagnosis_html}'
                 f'Open the HiBob Sync dashboard to review and act.'
+                f'{issue_html}'
             ),
             body_rows='',
         )
