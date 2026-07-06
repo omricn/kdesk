@@ -478,6 +478,8 @@ def api_provisioning_report(request):
             _post_provisioning_ticket_comment(req, work_email, result_log)
             _create_system_tickets(req, work_email)
             _send_provisioning_result_notification(req, outcome='success', work_email=work_email)
+            from tasks.scheduled import run_sentinel_verification
+            run_sentinel_verification.apply_async(('provisioning', req.id), countdown=120)
         else:
             # Script reported failure (not a sentinel)
             _send_provisioning_result_notification(
@@ -1029,6 +1031,8 @@ def api_offboarding_report(request):
             _send_offboarding_notification(req, outcome='success')
             _create_offboarding_system_tickets(req)
             _send_manager_onedrive_notification(req)
+            from tasks.scheduled import run_sentinel_verification
+            run_sentinel_verification.apply_async(('offboarding', req.id), countdown=120)
         else:
             _post_offboarding_ticket_comment(req, outcome='failed')
             _send_offboarding_notification(req, outcome='failed', result_log=result_log)

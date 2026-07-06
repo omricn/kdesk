@@ -1675,6 +1675,23 @@ def _alert_stuck_provisioning(req):
         logger.warning('[Watchdog] Could not send stuck-provisioning alert for #%s: %s', req.id, exc)
 
 
+@shared_task(name='tasks.sentinel_sweep')
+def sentinel_sweep():
+    """Re-verify recently completed provisioning/offboarding requests that have no
+    settled (ok/remediated) verification yet — covers reports that raced or were missed."""
+    from datetime import timedelta
+    from hibob_sync.models import ProvisioningRequest, OffboardingRequest
+    cutoff = timezone.now() - timedelta(days=2)
+    n = 0
+    for req in ProvisioningRequest.objects.filter(status='completed', completed_at__gte=cutoff):
+        if not req.verifications.filter(overall__in=('ok', 'remediated')).exists():
+            run_sentinel_verification.delay('provisioning', req.id); n += 1
+    for req in OffboardingRequest.objects.filter(status='completed', completed_at__gte=cutoff):
+        if not req.verifications.filter(overall__in=('ok', 'remediated')).exists():
+            run_sentinel_verification.delay('offboarding', req.id); n += 1
+    return n
+
+
 def register_periodic_tasks():
     """
     Called from a management command on first run to seed the Celery Beat schedule.
@@ -1702,6 +1719,7 @@ def register_periodic_tasks():
         ('Check SLA',            'tasks.check_sla',            sla_interval),
         ('Check Change Reminders', 'tasks.check_change_reminders', sla_interval),
         ('Sweep Stuck Provisioning', 'tasks.sweep_stuck_provisioning', sla_interval),
+        ('Sentinel Sweep', 'tasks.sentinel_sweep', sla_interval),
     ]
     for name, task_name, schedule in interval_tasks:
         PeriodicTask.objects.get_or_create(
