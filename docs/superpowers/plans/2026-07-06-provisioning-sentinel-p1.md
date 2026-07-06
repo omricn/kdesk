@@ -29,6 +29,88 @@ A check dict is the shared contract across all tasks:
 
 ---
 
+## Task 0: Local test environment
+
+Make `python manage.py test` runnable on this workstation so the TDD steps below actually execute locally (today the app stack isn't installed and `manage.py` can't start — see the deploy memory note).
+
+**Files:**
+- Create: `kdesk/settings_test.py`
+
+- [ ] **Step 1: Create the test settings module**
+
+Create `kdesk/settings_test.py`:
+```python
+"""Kdesk — TEST settings. Standalone, no external services, for `manage.py test`.
+
+Inherits production settings, then forces SQLite, in-process Celery, blank
+external credentials, local storage, and in-memory email so the suite runs on a
+workstation with no Azure/Redis/Graph access. Keeps the normal URLconf.
+
+Run:  python manage.py test --settings=kdesk.settings_test
+"""
+from pathlib import Path
+from .settings import *  # noqa: F401,F403
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+DEBUG = False
+SECRET_KEY = 'test-insecure-key-000000000000000000000000'  # noqa: S105
+ALLOWED_HOSTS = ['*']
+
+DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+}
+MEDIA_ROOT = BASE_DIR / 'media_test'
+
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
+
+# Inert external credentials so integrations import but never reach the network.
+AZURE_STORAGE_ACCOUNT = ''
+AZURE_TENANT_ID = AZURE_CLIENT_ID = AZURE_CLIENT_SECRET = ''
+GROQ_API_KEY = ''
+ANTHROPIC_API_KEY = ''
+HIBOB_SYNC_API_KEY = 'test-key'
+SERVICEDESK_EMAIL = 'servicedesk@test.local'
+SITE_URL = 'http://testserver'
+EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+
+# Fast hashing in tests.
+PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+```
+
+- [ ] **Step 2: Install the app dependencies (adaptive)**
+
+Run: `python -m pip install -r requirements.txt`
+- If a package that needs a native build fails (most likely `psycopg2` — needs `pg_config`), it is **safe to skip for tests** because `settings_test` uses SQLite. Install the rest instead, e.g. re-run pip after removing/ignoring that line, or `pip install django celery django-celery-beat msal requests nh3 openpyxl whitenoise python-dotenv django-storages msal-extensions`.
+- Repeat until imports resolve (below). This is environment-only setup — nothing here is committed except `settings_test.py`.
+
+- [ ] **Step 3: Verify Django can start and check passes**
+
+Run: `python manage.py check --settings=kdesk.settings_test`
+Expected: `System check identified no issues` (0 silenced). If it fails with `ModuleNotFoundError`, `pip install` the named package and re-run.
+
+- [ ] **Step 4: Verify the test runner works against an existing test**
+
+Run: `python manage.py test tickets.test_broadcast_utils --settings=kdesk.settings_test -v 1`
+Expected: PASS (this suite already exists and needs only `nh3`).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add kdesk/settings_test.py
+git commit -m "test: add standalone settings_test for local test runs (sqlite, eager celery)"
+```
+
+> From here on, every "Run: `python manage.py test ...`" step in this plan uses `--settings=kdesk.settings_test`.
+
+---
+
 ## Task 1: VerificationResult model + migration
 
 **Files:**
