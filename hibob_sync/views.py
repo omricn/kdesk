@@ -491,6 +491,8 @@ def api_provisioning_report(request):
             _send_provisioning_result_notification(
                 req, outcome='failed', failure_reason=result_message, result_log=result_log,
             )
+            from tasks.scheduled import run_sentinel_verification
+            run_sentinel_verification.apply_async(('provisioning', req.id), countdown=60)
     except Exception as exc:
         logger.error('[Provisioning] Post-report actions failed for req #%s: %s', req_id, exc)
 
@@ -1049,6 +1051,8 @@ def api_offboarding_report(request):
         else:
             _post_offboarding_ticket_comment(req, outcome='failed')
             _send_offboarding_notification(req, outcome='failed', result_log=result_log)
+            from tasks.scheduled import run_sentinel_verification
+            run_sentinel_verification.apply_async(('offboarding', req.id), countdown=60)
     except Exception as exc:
         logger.error('[Offboarding] Post-report actions failed for req #%s: %s', req_id, exc)
 

@@ -1641,6 +1641,7 @@ def sweep_stuck_provisioning():
             req.id, req.first_name, req.last_name, req.claimed_at,
         )
         _alert_stuck_provisioning(req)
+        run_sentinel_verification.delay('provisioning', req.id)
     if stuck:
         logger.warning('[Watchdog] Marked %d stuck provisioning request(s) as failed.', len(stuck))
     return len(stuck)
@@ -1683,10 +1684,10 @@ def sentinel_sweep():
     from hibob_sync.models import ProvisioningRequest, OffboardingRequest
     cutoff = timezone.now() - timedelta(days=2)
     n = 0
-    for req in ProvisioningRequest.objects.filter(status='completed', completed_at__gte=cutoff):
+    for req in ProvisioningRequest.objects.filter(status__in=('completed', 'failed'), completed_at__gte=cutoff):
         if not req.verifications.filter(overall__in=('ok', 'remediated', 'escalated')).exists():
             run_sentinel_verification.delay('provisioning', req.id); n += 1
-    for req in OffboardingRequest.objects.filter(status='completed', completed_at__gte=cutoff):
+    for req in OffboardingRequest.objects.filter(status__in=('completed', 'failed'), completed_at__gte=cutoff):
         if not req.verifications.filter(overall__in=('ok', 'remediated', 'escalated')).exists():
             run_sentinel_verification.delay('offboarding', req.id); n += 1
     return n

@@ -121,6 +121,20 @@ class RunSentinelTests(TestCase):
         self.assertEqual(vr.overall, 'escalated')
         esc.assert_called_once()
 
+    def test_failed_request_with_failing_check_escalates(self):
+        from tasks.scheduled import run_sentinel_verification
+        req = self._req()
+        req.status = 'failed'
+        req.save(update_fields=['status'])
+        checks = [{'key': 'entra_user', 'label': 'x', 'status': 'fail', 'detail': 'gone'}]
+        with patch('hibob_sync.sentinel.verify_provisioning_checks', return_value=checks), \
+             patch('tasks.scheduled._sentinel_escalate') as esc, \
+             patch('integrations.graph_client.get_client', return_value=MagicMock()):
+            run_sentinel_verification('provisioning', req.id)
+        vr = req.verifications.first()
+        self.assertEqual(vr.overall, 'escalated')
+        esc.assert_called_once()
+
 
 class OffboardingChecksTests(TestCase):
     def test_termination_tickets_detected(self):
