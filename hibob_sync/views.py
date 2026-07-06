@@ -90,6 +90,9 @@ def hibob_sync_dashboard(request):
         list(ProvisioningRequest.objects.select_related('ticket').all()[:20]),
         parse_provisioning_flow,
     )
+    # Attach the most recent Sentinel verification to each provisioning request (for the badge).
+    for pr in recent_provisioning:
+        pr.latest_verification = pr.verifications.first()   # model Meta ordering = -created_at
     pending_provisioning_count = ProvisioningRequest.objects.filter(
         status__in=['pending', 'claimed', 'review_needed', 'paused']
     ).count()

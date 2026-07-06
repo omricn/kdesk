@@ -513,6 +513,32 @@
                       <i class="bi bi-exclamation-triangle"></i> Manual groups
                     </span>
                   {% endif %}
+                  {% with v=pr.latest_verification %}
+                    {% if v %}
+                    <span class="badge {% if v.overall == 'ok' %}bg-success{% elif v.overall == 'remediated' %}bg-info text-dark{% elif v.overall == 'escalated' %}bg-warning text-dark{% elif v.overall == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}"
+                          role="button" data-bs-toggle="collapse" data-bs-target="#verify-{{ pr.id }}"
+                          title="Sentinel verification">
+                      <i class="bi bi-shield-check me-1"></i>{{ v.get_overall_display }}
+                    </span>
+                    <div class="collapse mt-1" id="verify-{{ pr.id }}">
+                      <ul class="list-unstyled small mb-1">
+                        {% for c in v.checks %}
+                        <li>
+                          {% if c.status == 'pass' %}<i class="bi bi-check-circle-fill text-success"></i>
+                          {% elif c.status == 'fail' %}<i class="bi bi-x-circle-fill text-danger"></i>
+                          {% else %}<i class="bi bi-question-circle-fill text-secondary"></i>{% endif %}
+                          {{ c.label }}{% if c.detail %} <span class="text-muted">- {{ c.detail }}</span>{% endif %}
+                        </li>
+                        {% endfor %}
+                      </ul>
+                      {% if v.remediations %}
+                      <div class="small text-muted"><strong>Auto-fixed:</strong>
+                        {% for r in v.remediations %}{{ r.action }} ({{ r.result }}){% if not forloop.last %}, {% endif %}{% endfor %}
+                      </div>
+                      {% endif %}
+                    </div>
+                    {% endif %}
+                  {% endwith %}
                 </td>
 
                 {# ── Groups cell ── #}
