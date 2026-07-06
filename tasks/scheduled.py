@@ -1684,10 +1684,10 @@ def sentinel_sweep():
     cutoff = timezone.now() - timedelta(days=2)
     n = 0
     for req in ProvisioningRequest.objects.filter(status='completed', completed_at__gte=cutoff):
-        if not req.verifications.filter(overall__in=('ok', 'remediated')).exists():
+        if not req.verifications.filter(overall__in=('ok', 'remediated', 'escalated')).exists():
             run_sentinel_verification.delay('provisioning', req.id); n += 1
     for req in OffboardingRequest.objects.filter(status='completed', completed_at__gte=cutoff):
-        if not req.verifications.filter(overall__in=('ok', 'remediated')).exists():
+        if not req.verifications.filter(overall__in=('ok', 'remediated', 'escalated')).exists():
             run_sentinel_verification.delay('offboarding', req.id); n += 1
     return n
 
@@ -1776,7 +1776,7 @@ def run_sentinel_verification(kind, req_id):
     if 'fail' in statuses:
         vr.overall = 'escalated'
     elif 'unknown' in statuses:
-        vr.overall = 'remediated' if remediations else 'pending'
+        vr.overall = 'pending'
     else:
         vr.overall = 'remediated' if remediations else 'ok'
     vr.save()

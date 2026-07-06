@@ -111,3 +111,23 @@ class RunSentinelTests(TestCase):
         vr = req.verifications.first()
         self.assertEqual(vr.overall, 'escalated')
         esc.assert_called_once()
+
+
+class OffboardingChecksTests(TestCase):
+    def test_termination_tickets_detected(self):
+        from tickets.models import TicketCategory, TicketSubCategory, Ticket
+        from hibob_sync.models import OffboardingRequest
+        from hibob_sync import sentinel
+        cat, _ = TicketCategory.objects.get_or_create(name='IT')
+        for sub in ('Priority', 'Salesforce'):
+            sc, _ = TicketSubCategory.objects.get_or_create(category=cat, name=sub)
+            Ticket.objects.create(title=f'TERMINATE USER - {sub} - Jane Roe', subcategory=sc,
+                                  requester_email='jane@kramerav.com', requester_name='Jane Roe')
+        req = OffboardingRequest.objects.create(
+            employee_email='jane@kramerav.com', employee_name='Jane Roe', status='completed',
+        )
+        class G:
+            def get_user(self, upn): return None  # treated as removed -> pass
+        checks = {c['key']: c for c in sentinel.verify_offboarding_checks(req, G())}
+        self.assertEqual(checks['term_ticket_priority']['status'], 'pass')
+        self.assertEqual(checks['term_ticket_salesforce']['status'], 'pass')

@@ -110,6 +110,9 @@ def hibob_sync_dashboard(request):
         list(OffboardingRequest.objects.select_related('ticket').all()[:20]),
         parse_offboarding_flow,
     )
+    # Attach the most recent Sentinel verification to each offboarding request (for the badge).
+    for ob in recent_offboarding:
+        ob.latest_verification = ob.verifications.first()   # model Meta ordering = -created_at
     pending_offboarding_count = OffboardingRequest.objects.filter(
         status__in=['pending', 'claimed', 'review_needed'],
     ).count()
@@ -565,6 +568,13 @@ def _create_system_tickets(req, work_email):
             cat = TicketCategory.objects.get(name='IT')
             subcat = TicketSubCategory.objects.get(category=cat, name=s['subcat'])
             item, _ = TicketItem.objects.get_or_create(subcategory=subcat, name=s['item'])
+
+            if Ticket.objects.filter(
+                subcategory=subcat, requester_email__iexact=work_email,
+                title__startswith='NEW USER',
+            ).exists():
+                logger.info('[Provisioning] %s ticket already exists for %s — skipping (idempotent).', s['system'], work_email)
+                continue
 
             description = (
                 f'New {s["system"]} user setup required.\n\n'

@@ -99,9 +99,9 @@ def verify_offboarding_checks(req, graph):
         checks.append(_check('account_disabled', 'Account disabled', 'unknown', str(exc)))
 
     full_name = (req.employee_name or '').strip()
-    for system, cat_sub in (('Priority', 'Priority'), ('Salesforce', 'SalesForce')):
+    for system in ('Priority', 'Salesforce'):
         exists = Ticket.objects.filter(
-            subcategory__name=cat_sub,
+            subcategory__name=system,
             title__istartswith='TERMINATE USER',
             title__icontains=full_name,
         ).exists() if full_name else False
