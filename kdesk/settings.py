@@ -224,3 +224,15 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
+# ── Demo mode (portfolio) ─────────────────────────────────────────────────────
+# Set DEMO_MODE=True in .env to bypass Azure SSO and skip Graph API calls.
+# The /demo-login/ URL auto-creates a superuser and logs you in.
+if os.environ.get('DEMO_MODE', 'False') == 'True':
+    LOGIN_URL = '/demo-login/'
+    # Silence Azure/Groq warnings when creds are absent
+    AZURE_TENANT_ID  = AZURE_TENANT_ID  or 'demo'
+    AZURE_CLIENT_ID  = AZURE_CLIENT_ID  or 'demo'
+    AZURE_CLIENT_SECRET = AZURE_CLIENT_SECRET or 'demo'
+    # Disable scheduled email-polling tasks
+    CELERY_BEAT_SCHEDULE = {}
