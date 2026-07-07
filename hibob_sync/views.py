@@ -1019,9 +1019,9 @@ def api_offboarding_report(request):
     result_message = data.get('message', '')
 
     EMPLOYEE_NOT_FOUND_PREFIX = 'EMPLOYEE_NOT_FOUND:'
-    LITIGATION_HOLD_PREFIX = 'LITIGATION_HOLD_UNCLEARED:'
+    LITIGATION_HOLD_UNCLEARED_PREFIX = 'LITIGATION_HOLD_UNCLEARED:'
     is_not_found = isinstance(result_message, str) and result_message.startswith(EMPLOYEE_NOT_FOUND_PREFIX)
-    is_hold_uncleared = isinstance(result_message, str) and result_message.startswith(LITIGATION_HOLD_PREFIX)
+    is_hold_uncleared = isinstance(result_message, str) and result_message.startswith(LITIGATION_HOLD_UNCLEARED_PREFIX)
 
     if is_not_found or is_hold_uncleared:
         new_status = 'review_needed'

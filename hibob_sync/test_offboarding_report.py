@@ -32,7 +32,8 @@ class OffboardingReportStatusTests(TestCase):
 
     @patch('hibob_sync.views._post_offboarding_ticket_comment')
     @patch('hibob_sync.views._send_offboarding_notification')
-    def test_litigation_hold_uncleared_maps_to_review_needed(self, mock_notify, mock_comment):
+    @patch('tasks.scheduled.run_sentinel_verification')
+    def test_litigation_hold_uncleared_maps_to_review_needed(self, mock_sentinel, mock_notify, mock_comment):
         req = self._claimed_req()
         resp = self._post({
             'req_id': req.id,
@@ -46,16 +47,18 @@ class OffboardingReportStatusTests(TestCase):
         mock_notify.assert_called_once()
         self.assertEqual(mock_notify.call_args.kwargs.get('outcome')
                          or mock_notify.call_args.args[1], 'hold_review')
+        mock_sentinel.assert_not_called()
 
     @patch('hibob_sync.views._post_offboarding_ticket_comment')
     @patch('hibob_sync.views._send_offboarding_notification')
     def test_plain_failure_still_maps_to_failed(self, mock_notify, mock_comment):
         req = self._claimed_req()
-        resp = self._post({
-            'req_id': req.id,
-            'success': False,
-            'message': 'Unexpected error: boom',
-        })
+        with patch('tasks.scheduled.run_sentinel_verification'):
+            resp = self._post({
+                'req_id': req.id,
+                'success': False,
+                'message': 'Unexpected error: boom',
+            })
         self.assertEqual(resp.status_code, 200)
         req.refresh_from_db()
         self.assertEqual(req.status, 'failed')
