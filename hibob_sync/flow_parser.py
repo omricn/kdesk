@@ -56,26 +56,35 @@ _PROVISIONING_STAGES = [
     ('completed',      'Completed & reported',            ['Provisioning complete', 'Report submitted']),
 ]
 
+# Patterns match the strings emitted by the production Offboard-Employee.ps1 (see the
+# script's Write-Log calls). Note the offboard flow does NOT run KADSYNC (provisioning
+# only), so there is no kadsync stage here. The 'completed' stage keys on the COMPLETE
+# banner rather than "Report submitted", because that report line is logged AFTER the
+# report POST, so it is never present in the log body stored on the Kdesk side.
 _OFFBOARDING_STAGES = [
-    ('found',          'Employee found in AD',            ['Searching AD for employee', 'Found AD account',
+    ('found',          'Employee found in AD',            ['Looking up employee in AD', 'Found AD user',
                                                            'Employee not found in AD']),
-    ('manager',        'Manager resolved',                ['Searching AD for manager', 'Found manager',
-                                                           "Manager '", 'mailbox delegation']),
-    ('disabled',       'AD account disabled + cleared',   ['Disabled AD account', 'Cleared manager attribute']),
-    ('ad_groups',      'Removed from AD groups',          ['Removed from AD group', 'removing all except',
-                                                           'Failed to remove from AD group']),
-    ('moved_ou',       'Moved to deletion OU',            ['deletion OU']),
-    ('kadsync',        'AD Connect (KADSYNC) delta',      ['AD Connect delta', 'KADSYNC']),
-    ('exo_connect',    'Exchange Online connect',         ['Connecting to Exchange Online', 'Exchange Online connected',
+    ('manager',        'Manager resolved',                ['Looking up manager', 'Found manager',
+                                                           "Manager '", 'delegation will be skipped']),
+    ('disabled',       'AD account disabled + cleared',   ['Disabled AD account', 'Cleared Manager attribute']),
+    ('ad_groups',      'Removed from AD groups',          ['non-primary group membership', 'Removed from group:',
+                                                           'Could not remove from group']),
+    ('moved_ou',       'Moved to deletion OU',            ['Moved to: OU=', 'For Deletion']),
+    ('litigation',     'Litigation hold check',           ['litigation hold', 'Litigation hold', 'LITIGATION HOLD']),
+    ('exo_connect',    'Exchange Online connect',         ['Connected to Exchange Online',
                                                            'Failed to connect to Exchange Online']),
-    ('mailbox_shared', 'Mailbox converted to shared',     ['Converted mailbox to shared', 'Failed to convert mailbox']),
-    ('mailbox_access', 'Manager granted mailbox access',  ['Granted mailbox FullAccess', 'Failed to grant mailbox access']),
-    ('m365_groups',    'Removed from M365 / AAD groups',  ['Removed from M365 group', 'Removed from EXO group',
-                                                           'AAD group membership', 'Failed to remove from M365 group',
-                                                           'Failed to remove from EXO group', 'Failed to enumerate']),
-    ('onedrive',       'Manager granted OneDrive access', ['OneDrive site', 'Granted OneDrive', 'OneDrive delegation',
-                                                           'site admin']),
-    ('completed',      'Completed & reported',            ['Offboarding completed', 'Offboarding complete', 'Report submitted']),
+    ('mailbox_shared', 'Mailbox converted to shared',     ['Converted mailbox to Shared', 'Failed to convert mailbox',
+                                                           'Skipping shared conversion']),
+    ('mailbox_access', 'Manager granted mailbox access',  ['Granted FullAccess', 'Failed to grant mailbox FullAccess']),
+    ('m365_groups',    'Removed from M365 / AAD groups',  ['AAD group membership', 'Removed from AAD group',
+                                                           'Could not remove from AAD group', 'mail-enabled security group',
+                                                           'Removed from mail-enabled group', 'Could not remove from mail-enabled group',
+                                                           'Skipping M365 group removal']),
+    ('onedrive',       'Manager granted OneDrive access', ['OneDrive site collection admin', 'Granted Site Collection Admin',
+                                                           'OneDrive personal site', 'skipping OneDrive access grant',
+                                                           'Failed to grant OneDrive']),
+    ('completed',      'Completed & reported',            ['Offboard-Employee.ps1 COMPLETE', 'Offboarding completed',
+                                                           'Report submitted']),
 ]
 
 

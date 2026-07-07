@@ -114,26 +114,128 @@ class ProvisioningStageTests(unittest.TestCase):
         self.assertEqual(st['m365_groups'], 'warning')
 
 
+# A realistic clean offboarding run using the EXACT strings the production
+# Offboard-Employee.ps1 emits (sanitized names). This is the regression lock that
+# keeps the parser patterns aligned with the script's log output. Note there is no
+# "Report submitted" line: the script logs that only AFTER POSTing the report, so the
+# COMPLETE banner is the last line present in the stored log body.
+CLEAN_OFFBOARD = _log(
+    "[2026-07-01 10:00:00] [INFO] ===== Offboard-Employee.ps1 START (ReqId=42 DryRun=False) =====",
+    "[2026-07-01 10:00:00] [INFO] Employee: jdoe@kramerav.com  Manager: Jane Boss",
+    "[2026-07-01 10:00:00] [INFO] --- Step 2: Looking up employee in AD (jdoe@kramerav.com) ---",
+    "[2026-07-01 10:00:01] [INFO] Found AD user: jdoe@kramerav.com (Enabled=True)",
+    "[2026-07-01 10:00:01] [INFO] --- Step 3: Looking up manager by DisplayName: Jane Boss ---",
+    "[2026-07-01 10:00:01] [INFO] Found manager: jboss@kramerav.com",
+    "[2026-07-01 10:00:01] [INFO] --- Step 4: AD operations (DryRun=False) ---",
+    "[2026-07-01 10:00:01] [INFO] Disabled AD account: jdoe@kramerav.com",
+    "[2026-07-01 10:00:01] [INFO] Cleared Manager attribute.",
+    "[2026-07-01 10:00:01] [INFO] Employee has 3 non-primary group membership(s).",
+    "[2026-07-01 10:00:01] [INFO] Removed from group: All Employees",
+    "[2026-07-01 10:00:02] [INFO] Moved to: OU=Users,OU=Kramer Global For Deletion,OU=Kramer Electronics,DC=kramer,DC=local",
+    "[2026-07-01 10:00:02] [INFO] --- Step 5: Exchange Online operations ---",
+    "[2026-07-01 10:00:12] [INFO] Connected to Exchange Online.",
+    "[2026-07-01 10:00:13] [INFO] No litigation hold on jdoe@kramerav.com - proceeding with conversion",
+    "[2026-07-01 10:00:14] [INFO] Converted mailbox to Shared: jdoe@kramerav.com",
+    "[2026-07-01 10:00:15] [INFO] Granted FullAccess to: jboss@kramerav.com",
+    "[2026-07-01 10:00:15] [INFO] Checking EXO distribution group memberships...",
+    "[2026-07-01 10:00:16] [INFO] Found 0 EXO distribution group membership(s).",
+    "[2026-07-01 10:00:16] [INFO] Disconnected from Exchange Online.",
+    "[2026-07-01 10:00:16] [INFO] --- Step 6: Graph API operations ---",
+    "[2026-07-01 10:00:17] [INFO] Graph token acquired.",
+    "[2026-07-01 10:00:17] [INFO] AAD user ID: abc-123",
+    "[2026-07-01 10:00:18] [INFO] Found 12 AAD group membership(s).",
+    "[2026-07-01 10:00:18] [INFO] Removed from AAD group: Some Cloud Group",
+    "[2026-07-01 10:00:19] [INFO] Removing 2 mail-enabled security group(s) via EXO...",
+    "[2026-07-01 10:00:20] [INFO] Removed from mail-enabled group (EXO): _IL_All_Employees",
+    "[2026-07-01 10:00:21] [INFO] OneDrive drive ID: b!abc",
+    "[2026-07-01 10:00:21] [INFO] OneDrive personal site URL: https://kramer365-my.sharepoint.com/personal/jdoe_kramerav_com",
+    "[2026-07-01 10:00:21] [INFO] --- Step 7: OneDrive site collection admin via SPO ---",
+    "[2026-07-01 10:00:22] [INFO] Certificate exported to temp PFX.",
+    "[2026-07-01 10:00:23] [INFO] Connected to SPO admin: https://kramer365-admin.sharepoint.com",
+    "[2026-07-01 10:00:23] [INFO] Granted Site Collection Admin on OneDrive to jboss@kramerav.com",
+    "[2026-07-01 10:00:23] [INFO] ===== Offboard-Employee.ps1 COMPLETE =====",
+)
+
+
 class OffboardingStageTests(unittest.TestCase):
+    def test_clean_run_all_stages_done_and_overall_ok(self):
+        r = parse_offboarding_flow(CLEAN_OFFBOARD)
+        st = _statuses(r)
+        for key in ('found', 'manager', 'disabled', 'ad_groups', 'moved_ou',
+                    'litigation', 'exo_connect', 'mailbox_shared', 'mailbox_access',
+                    'm365_groups', 'onedrive', 'completed'):
+            self.assertEqual(st.get(key), 'done', f'{key} should be done')
+        self.assertEqual(r.overall, 'ok')
+
+    def test_stage_order_and_no_kadsync(self):
+        keys = [s.key for s in parse_offboarding_flow(CLEAN_OFFBOARD).stages]
+        self.assertEqual(keys, [
+            'found', 'manager', 'disabled', 'ad_groups', 'moved_ou', 'litigation',
+            'exo_connect', 'mailbox_shared', 'mailbox_access', 'm365_groups',
+            'onedrive', 'completed',
+        ])
+        self.assertNotIn('kadsync', keys)
+
     def test_exo_connect_failure_marks_dependent_stages_skipped(self):
         log = _log(
-            "[2026-07-01 10:00:00] [INFO] === Offboarding started for x@kramerav.com ===",
-            "[2026-07-01 10:00:01] [INFO] Found AD account: SamAccountName=x",
-            "[2026-07-01 10:00:02] [INFO] Found manager: m@kramerav.com",
-            "[2026-07-01 10:00:03] [INFO] Disabled AD account: x",
-            "[2026-07-01 10:00:04] [INFO] Removed from AD group: CN=g",
-            "[2026-07-01 10:00:05] [INFO] Moved to deletion OU: OU=del",
-            "[2026-07-01 10:00:06] [WARN] Failed to connect to Exchange Online: boom - EXO steps will be skipped",
-            "[2026-07-01 10:00:07] [INFO] Removed from M365 group: SomeGroup",
+            "[2026-07-01 10:00:00] [INFO] ===== Offboard-Employee.ps1 START (ReqId=7 DryRun=False) =====",
+            "[2026-07-01 10:00:00] [INFO] --- Step 2: Looking up employee in AD (x@kramerav.com) ---",
+            "[2026-07-01 10:00:01] [INFO] Found AD user: x@kramerav.com (Enabled=True)",
+            "[2026-07-01 10:00:01] [INFO] Found manager: m@kramerav.com",
+            "[2026-07-01 10:00:02] [INFO] Disabled AD account: x@kramerav.com",
+            "[2026-07-01 10:00:02] [INFO] Cleared Manager attribute.",
+            "[2026-07-01 10:00:02] [INFO] Employee has 1 non-primary group membership(s).",
+            "[2026-07-01 10:00:02] [INFO] Removed from group: All Employees",
+            "[2026-07-01 10:00:03] [INFO] Moved to: OU=Users,OU=Kramer Global For Deletion,OU=Kramer Electronics,DC=kramer,DC=local",
+            "[2026-07-01 10:00:03] [WARN] Failed to connect to Exchange Online: boom - EXO steps will be skipped.",
+            "[2026-07-01 10:00:04] [INFO] Graph token acquired.",
+            "[2026-07-01 10:00:04] [INFO] AAD user ID: abc",
+            "[2026-07-01 10:00:05] [INFO] Found 4 AAD group membership(s).",
+            "[2026-07-01 10:00:05] [INFO] Removed from AAD group: SomeGroup",
+            "[2026-07-01 10:00:06] [INFO] --- Step 7: OneDrive site collection admin via SPO ---",
+            "[2026-07-01 10:00:07] [INFO] Granted Site Collection Admin on OneDrive to m@kramerav.com",
         )
-        r = parse_offboarding_flow(log)
-        st = _statuses(r)
+        st = _statuses(parse_offboarding_flow(log))
         self.assertEqual(st['exo_connect'], 'warning')
+        self.assertEqual(st['litigation'], 'skipped')     # EXO down, so hold never checked
         self.assertEqual(st['mailbox_shared'], 'skipped')
         self.assertEqual(st['mailbox_access'], 'skipped')
         self.assertEqual(st['m365_groups'], 'done')
-        self.assertEqual(st['onedrive'], 'not_reached')
-        self.assertEqual(r.overall, 'warning')
+        self.assertEqual(st['onedrive'], 'done')
+        self.assertEqual(parse_offboarding_flow(log).overall, 'warning')
+
+    def test_litigation_hold_uncleared_gates_365_but_onedrive_still_runs(self):
+        log = _log(
+            "[2026-07-01 10:00:00] [INFO] ===== Offboard-Employee.ps1 START (ReqId=8 DryRun=False) =====",
+            "[2026-07-01 10:00:00] [INFO] --- Step 2: Looking up employee in AD (x@kramerav.com) ---",
+            "[2026-07-01 10:00:01] [INFO] Found AD user: x@kramerav.com (Enabled=True)",
+            "[2026-07-01 10:00:01] [INFO] Found manager: m@kramerav.com",
+            "[2026-07-01 10:00:02] [INFO] Disabled AD account: x@kramerav.com",
+            "[2026-07-01 10:00:02] [INFO] Cleared Manager attribute.",
+            "[2026-07-01 10:00:02] [INFO] Employee has 1 non-primary group membership(s).",
+            "[2026-07-01 10:00:02] [INFO] Removed from group: All Employees",
+            "[2026-07-01 10:00:03] [INFO] Moved to: OU=Users,OU=Kramer Global For Deletion,OU=Kramer Electronics,DC=kramer,DC=local",
+            "[2026-07-01 10:00:13] [INFO] Connected to Exchange Online.",
+            "[2026-07-01 10:00:14] [WARN] LITIGATION HOLD ENABLED on x@kramerav.com - handling before shared conversion",
+            "[2026-07-01 10:00:14] [WARN] Disabling litigation hold on x@kramerav.com",
+            "[2026-07-01 10:15:14] [ERROR] Litigation hold did NOT clear within 15 min",
+            "[2026-07-01 10:15:14] [WARN] Skipping shared conversion, mailbox delegation, and EXO group removal - litigation hold not cleared",
+            "[2026-07-01 10:15:15] [INFO] Graph token acquired.",
+            "[2026-07-01 10:15:15] [INFO] AAD user ID: abc",
+            "[2026-07-01 10:15:16] [INFO] Found 4 AAD group membership(s).",
+            "[2026-07-01 10:15:16] [WARN] Skipping M365 group removal - litigation hold not cleared",
+            "[2026-07-01 10:15:17] [INFO] OneDrive personal site URL: https://kramer365-my.sharepoint.com/personal/x_kramerav_com",
+            "[2026-07-01 10:15:17] [INFO] --- Step 7: OneDrive site collection admin via SPO ---",
+            "[2026-07-01 10:15:18] [INFO] Granted Site Collection Admin on OneDrive to m@kramerav.com",
+            "[2026-07-01 10:15:18] [INFO] ===== Offboard-Employee.ps1 COMPLETE =====",
+        )
+        st = _statuses(parse_offboarding_flow(log))
+        self.assertEqual(st['litigation'], 'failed')        # ERROR: hold did not clear
+        self.assertEqual(st['mailbox_shared'], 'warning')   # WARN: skipping conversion
+        self.assertEqual(st['m365_groups'], 'warning')      # WARN: skipping group removal
+        self.assertEqual(st['onedrive'], 'done')            # OneDrive runs regardless
+        self.assertEqual(st['completed'], 'done')
+        self.assertEqual(parse_offboarding_flow(log).overall, 'failed')
 
 
 # Real-world shape: the KAPPIT agent reported the log as a PowerShell object, so
