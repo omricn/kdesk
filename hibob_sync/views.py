@@ -1019,9 +1019,11 @@ def api_offboarding_report(request):
     result_message = data.get('message', '')
 
     EMPLOYEE_NOT_FOUND_PREFIX = 'EMPLOYEE_NOT_FOUND:'
+    LITIGATION_HOLD_PREFIX = 'LITIGATION_HOLD_UNCLEARED:'
     is_not_found = isinstance(result_message, str) and result_message.startswith(EMPLOYEE_NOT_FOUND_PREFIX)
+    is_hold_uncleared = isinstance(result_message, str) and result_message.startswith(LITIGATION_HOLD_PREFIX)
 
-    if is_not_found:
+    if is_not_found or is_hold_uncleared:
         new_status = 'review_needed'
     else:
         new_status = 'completed' if success else 'failed'
@@ -1041,6 +1043,9 @@ def api_offboarding_report(request):
         if is_not_found:
             _post_offboarding_ticket_comment(req, outcome='not_found')
             _send_offboarding_notification(req, outcome='not_found')
+        elif is_hold_uncleared:
+            _post_offboarding_ticket_comment(req, outcome='hold_review')
+            _send_offboarding_notification(req, outcome='hold_review')
         elif success:
             _post_offboarding_ticket_comment(req, outcome='success')
             _send_offboarding_notification(req, outcome='success')
@@ -1160,6 +1165,16 @@ def _post_offboarding_ticket_comment(req, outcome='success'):
                 f'Searched by email: {req.employee_email}\n'
                 f'Please verify the account manually and handle offboarding steps if needed.\n'
             )
+        elif outcome == 'hold_review':
+            body = (
+                f'Offboarding partially completed — LITIGATION HOLD could not be cleared in time.\n'
+                f'Account: {req.employee_email}\n'
+                f'AD account disabled and moved to deletion OU. The mailbox was NOT converted to '
+                f'shared and 365 groups were NOT removed, because the litigation hold had not '
+                f'finished clearing.\n'
+                f'Action: once the hold-removal has propagated, re-run offboarding for this '
+                f'employee from the Kdesk offboarding dashboard.\n'
+            )
         else:
             body = (
                 f'Offboarding script failed for: {req.employee_email}\n'
@@ -1194,6 +1209,15 @@ def _send_offboarding_notification(req, outcome='success', result_log=''):
             header_title = 'Offboarding Blocked — Employee Not Found'
             greeting     = (f'Hi Kdesk Team,<br><br>The AD account for <strong>{display_name}</strong> '
                             f'was not found by email address. Manual action may be required.')
+        elif outcome == 'hold_review':
+            subject      = f'Offboarding Needs Review — Litigation Hold ({req.employee_email})'
+            header_color = '#fd7e14'
+            header_title = 'Offboarding Paused — Litigation Hold Not Cleared'
+            greeting     = (f'Hi Kdesk Team,<br><br>The offboarding of <strong>{display_name}</strong> '
+                            f'completed the AD steps, but the mailbox litigation hold did not clear in '
+                            f'time, so the shared-mailbox conversion and 365 group removal were skipped. '
+                            f'Once the hold-removal has propagated, re-run offboarding for this employee '
+                            f'from the dashboard.')
         else:
             subject      = f'Offboarding FAILED — {req.employee_name or req.employee_email}'
             header_color = '#dc3545'
